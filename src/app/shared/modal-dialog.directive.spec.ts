@@ -6,7 +6,7 @@ import { ModalDialogDirective } from './modal-dialog.directive';
 @Component({
   imports: [ModalDialogDirective],
   template: `
-    <dialog [cerebroModal]="mode" (opened)="openedCount.set(openedCount() + 1)" (dismiss)="dismissed.set(dismissed() + 1)">
+    <dialog [cerebroModal]="mode" [dismissible]="dismissible()" (opened)="openedCount.set(openedCount() + 1)" (dismiss)="dismissed.set(dismissed() + 1)">
       <button type="button">Inside</button>
     </dialog>
   `,
@@ -14,6 +14,7 @@ import { ModalDialogDirective } from './modal-dialog.directive';
 })
 class HostComponent {
   mode: '' | 'manual' = '';
+  readonly dismissible = signal(true);
   readonly openedCount = signal(0);
   readonly dismissed = signal(0);
   readonly modal = viewChild.required(ModalDialogDirective);
@@ -81,5 +82,20 @@ describe('ModalDialogDirective', () => {
     expect(host.dismissed()).toBe(0);
     dialog.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 20, clientY: 20 }));
     expect(host.dismissed()).toBe(1);
+  });
+
+  it('ignores dismiss requests and undoes forced closes while not dismissible', async () => {
+    const { fixture, host, dialog } = await render();
+    host.dismissible.set(false);
+    await fixture.whenStable();
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    expect(host.dismissed()).toBe(0);
+    // Chrome closes the dialog itself after a second Escape.
+    dialog.removeAttribute('open');
+    dialog.dispatchEvent(new Event('close'));
+    expect(dialog.open).toBe(true);
+    host.modal().close();
+    expect(dialog.open).toBe(false);
+    expect(host.openedCount()).toBe(1);
   });
 });

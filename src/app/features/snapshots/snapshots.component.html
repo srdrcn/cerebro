@@ -5,7 +5,7 @@
       <p class="page-subtitle">Back up indices to a repository and restore them when you need them.</p>
     </div>
     @if (repositories().length > 0) {
-      <div class="page-header__actions snapshots-actions">
+      <div class="page-header__actions">
         <div class="context-picker">
           <label class="visually-hidden" for="snapshot-repository">Repository</label>
           <i class="bi bi-database" aria-hidden="true"></i>
@@ -125,9 +125,9 @@
               @if (snapshots(); as list) {
                 <span class="count-label">
                   @if (filtersActive()) {
-                    <strong>{{ visible().length }}</strong> of {{ pluralize(list.length, 'snapshot') }}
+                    <strong>{{ visible().length | num }}</strong> of {{ list.length | num }} {{ list.length | plural: 'snapshot' }}
                   } @else {
-                    <strong>{{ list.length }}</strong> {{ list.length === 1 ? 'snapshot' : 'snapshots' }}
+                    <strong>{{ list.length | num }}</strong> {{ list.length | plural: 'snapshot' }}
                   }
                 </span>
               }
@@ -306,7 +306,7 @@
             <cerebro-empty
               icon="bi-exclamation-triangle"
               heading="Could not load snapshots"
-              [text]="'The cluster did not return the snapshots of ' + repository() + '. The repository may be unreachable from the nodes.'"
+              [text]="snapshotsError() ?? 'The cluster did not return the snapshots of ' + repository() + '. The repository may be unreachable from the nodes.'"
             >
               <button type="button" class="btn btn-sm" (click)="retrySnapshots()">
                 <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
@@ -336,7 +336,7 @@
                   name="repository"
                   class="select"
                   [class.is-invalid]="createSubmitted() && !!repositoryError()"
-                  [attr.aria-invalid]="createSubmitted() && !!repositoryError()"
+                  [attr.aria-invalid]="createSubmitted() && repositoryError() ? true : null"
                   [attr.aria-describedby]="createSubmitted() && repositoryError() ? 'create-repository-error' : null"
                   [ngModel]="createRepository()"
                   (ngModelChange)="createRepository.set($event)"
@@ -346,7 +346,9 @@
                   }
                 </select>
                 @if (createSubmitted() && repositoryError(); as error) {
-                  <p id="create-repository-error" class="field-error">{{ error }}</p>
+                  <p id="create-repository-error" class="field-error">
+                    <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+                  </p>
                 }
               </div>
 
@@ -361,7 +363,7 @@
                     autocomplete="off"
                     spellcheck="false"
                     [class.is-invalid]="showNameError()"
-                    [attr.aria-invalid]="showNameError()"
+                    [attr.aria-invalid]="showNameError() ? true : null"
                     [attr.aria-describedby]="showNameError() ? 'create-name-error' : 'create-name-hint'"
                     [ngModel]="createName()"
                     (ngModelChange)="createName.set($event)"
@@ -377,7 +379,9 @@
                   </button>
                 </div>
                 @if (showNameError()) {
-                  <p id="create-name-error" class="field-error">{{ nameError() }}</p>
+                  <p id="create-name-error" class="field-error">
+                    <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ nameError() }}
+                  </p>
                 } @else {
                   <p id="create-name-hint" class="field-hint">Lowercase, unique in the repository. Date math like <code>&lt;nightly-&#123;now/d&#125;&gt;</code> works too.</p>
                 }
@@ -403,6 +407,7 @@
                     [(selected)]="createSelected"
                     label="Indices to include in the snapshot"
                     emptyText="The cluster has no indices."
+                    [errorId]="createSubmitted() && selectionError() ? 'create-selection-error' : null"
                   >
                     @if (specialCount() > 0) {
                       <div class="checklist-option">
@@ -420,7 +425,9 @@
                     }
                   </cerebro-index-checklist>
                   @if (createSubmitted() && selectionError(); as error) {
-                    <p class="field-error" role="alert">{{ error }}</p>
+                    <p id="create-selection-error" class="field-error" role="alert">
+                      <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+                    </p>
                   }
                 }
               </div>
@@ -471,7 +478,7 @@
       <cerebro-empty
         icon="bi-exclamation-triangle"
         heading="Could not load snapshot repositories"
-        text="The cluster did not answer the repositories request."
+        [text]="landingError() ?? 'The cluster did not answer the repositories request.'"
       >
         <button type="button" class="btn btn-sm" (click)="load()">
           <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again

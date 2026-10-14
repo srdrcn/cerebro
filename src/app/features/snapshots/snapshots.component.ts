@@ -19,11 +19,12 @@ import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { formatDuration, formatRelative, formatTimestamp, pluralize, sortByName } from '../../core/format';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { PagerComponent, clampPage, pageSlice } from '../../shared/pager.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
@@ -96,7 +97,9 @@ interface RestoreTarget {
     FormsModule,
     IndexChecklistComponent,
     MenuComponent,
+    NumberPipe,
     PagerComponent,
+    PluralPipe,
     RouterLink,
     SearchInputComponent,
     SnapshotRestoreComponent,
@@ -120,11 +123,15 @@ export class SnapshotsComponent {
   // Repositories and cluster indices.
   readonly landing = signal<SnapshotLandingData | undefined>(undefined);
   readonly landingFailed = signal(false);
+  /** Why the last landing request failed, as Elasticsearch put it. */
+  readonly landingError = signal<string | undefined>(undefined);
   readonly repository = signal('');
 
   // Snapshots of the selected repository.
   readonly snapshots = signal<readonly SnapshotRecord[] | undefined>(undefined);
   readonly snapshotsFailed = signal(false);
+  /** Why the last snapshot-list request failed, as Elasticsearch put it. */
+  readonly snapshotsError = signal<string | undefined>(undefined);
   readonly now = signal(Date.now());
   readonly deleting = signal<ReadonlySet<string>>(new Set());
 
@@ -353,6 +360,7 @@ export class SnapshotsComponent {
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
+        this.landingError.set(readableReason(error));
         this.landingFailed.set(true);
         this.alerts.error(failureMessage('Could not load snapshot repositories', error), error);
       }
@@ -376,6 +384,7 @@ export class SnapshotsComponent {
       this.applySnapshots(repository, snapshots);
     } catch (error: unknown) {
       if (sequence === this.snapshotSequence && repository === this.repository()) {
+        this.snapshotsError.set(readableReason(error));
         this.snapshotsFailed.set(true);
         this.alerts.error(failureMessage(`Could not load the snapshots of ${repository}`, error), error);
       }

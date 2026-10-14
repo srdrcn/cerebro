@@ -2,39 +2,6 @@
   display: block;
 }
 
-.overrides-summary {
-  gap: var(--space-2);
-}
-
-.override-pill {
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 11px 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  background: var(--surface);
-  color: var(--text-2);
-  font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-.override-pill strong {
-  color: var(--text);
-  font-weight: 620;
-}
-
-.override-dot--persistent {
-  background: var(--blue);
-  box-shadow: 0 0 0 3px var(--blue-soft);
-}
-
-.override-dot--transient {
-  background: var(--purple);
-  box-shadow: 0 0 0 3px var(--purple-soft);
-}
-
 .transient-callout {
   align-items: center;
   margin-bottom: var(--space-4);

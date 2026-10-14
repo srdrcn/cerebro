@@ -5,15 +5,9 @@
       <p class="page-subtitle">Dynamic settings apply to the whole cluster immediately, without a restart.</p>
     </div>
     @if (rows()) {
-      <div class="page-header__actions overrides-summary" role="group" aria-label="Explicitly set settings">
-        <span class="override-pill">
-          <span class="dot override-dot--persistent" aria-hidden="true"></span>
-          <strong>{{ overrides().persistent }}</strong> persistent
-        </span>
-        <span class="override-pill">
-          <span class="dot override-dot--transient" aria-hidden="true"></span>
-          <strong>{{ overrides().transient }}</strong> transient
-        </span>
+      <div class="page-header__actions" role="group" aria-label="Explicitly set settings">
+        <span class="badge badge-lg badge-blue tabular">{{ overrides().persistent | num }} persistent</span>
+        <span class="badge badge-lg badge-purple tabular">{{ overrides().transient | num }} transient</span>
       </div>
     }
   </header>
@@ -23,7 +17,7 @@
       <div class="callout callout-warning transient-callout" role="note">
         <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
         <div class="transient-callout__text">
-          <strong>{{ transientSettings().length === 1 ? '1 transient setting is' : transientSettings().length + ' transient settings are' }} active.</strong>
+          <strong>{{ pluralize(transientSettings().length, 'transient setting') }} {{ transientSettings().length | plural: 'is' : 'are' }} active.</strong>
           Transient settings are deprecated and are cleared on a full cluster restart; consider saving them as
           persistent settings instead.
         </div>
@@ -56,7 +50,7 @@
       <cerebro-empty
         icon="bi-exclamation-triangle"
         heading="Could not load cluster settings"
-        text="The cluster did not answer the cluster settings request."
+        [text]="loadError() ?? 'The cluster did not answer the cluster settings request.'"
       >
         <button type="button" class="btn btn-sm" (click)="retry()">
           <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again

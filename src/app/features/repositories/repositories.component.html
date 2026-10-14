@@ -20,9 +20,9 @@
           @if (repositories(); as all) {
             <span class="count-label">
               @if (query() && all.length > filterThreshold) {
-                <strong>{{ views().length }}</strong> of {{ pluralize(all.length, 'repository', 'repositories') }}
+                <strong>{{ views().length | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'repository' : 'repositories' }}
               } @else {
-                <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'repository' : 'repositories' }}
+                <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'repository' : 'repositories' }}
               }
             </span>
           }
@@ -113,7 +113,7 @@
         <cerebro-empty
           icon="bi-exclamation-triangle"
           heading="Could not load repositories"
-          text="The cluster did not answer the repositories request."
+          [text]="loadError() ?? 'The cluster did not answer the repositories request.'"
           [compact]="true"
         >
           <button type="button" class="btn btn-sm" (click)="load()">
@@ -178,22 +178,26 @@
               placeholder="e.g. nightly-backups"
               autocomplete="off"
               spellcheck="false"
-              [class.is-invalid]="(submitted() || name() !== '') && !!nameError()"
-              [attr.aria-invalid]="(submitted() || name() !== '') && !!nameError()"
-              aria-describedby="repository-name-help"
+              [class.is-invalid]="showNameError()"
+              [attr.aria-invalid]="showNameError() ? true : null"
+              [attr.aria-describedby]="showNameError() ? 'repository-name-error' : 'repository-name-hint'"
               [ngModel]="name()"
               (ngModelChange)="setName($event)"
             />
-            <p id="repository-name-help" [class]="(submitted() || name() !== '') && nameError() ? 'field-error' : 'field-hint'">
-              @if ((submitted() || name() !== '') && nameError(); as error) {
-                {{ error }}
-              } @else if (updateMode()) {
+            @if (showNameError()) {
+              <p id="repository-name-error" class="field-error">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ nameError() }}
+              </p>
+            } @else if (updateMode()) {
+              <p id="repository-name-hint" class="field-hint">
                 <i class="bi bi-info-circle" aria-hidden="true"></i>
                 A repository with this name exists; saving updates it. Change the name to register a copy.
-              } @else {
+              </p>
+            } @else {
+              <p id="repository-name-hint" class="field-hint">
                 Used in API paths such as <code>_snapshot/{{ name().trim() || 'name' }}</code>.
-              }
-            </p>
+              </p>
+            }
           </div>
 
           <fieldset class="type-fieldset">
@@ -221,7 +225,9 @@
               }
             </div>
             @if (submitted() && typeError(); as error) {
-              <p id="repository-type-error" class="field-error">{{ error }}</p>
+              <p id="repository-type-error" class="field-error">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+              </p>
             }
           </fieldset>
 
@@ -323,6 +329,9 @@
                     autocomplete="off"
                     spellcheck="false"
                     [attr.aria-label]="'Name of additional setting ' + (index + 1)"
+                    [class.is-invalid]="invalidExtraId() === extra.id"
+                    [attr.aria-invalid]="invalidExtraId() === extra.id ? true : null"
+                    [attr.aria-describedby]="invalidExtraId() === extra.id ? 'repository-extras-error' : null"
                     [ngModel]="extra.key"
                     (ngModelChange)="updateExtra(extra.id, { key: $event })"
                   />
@@ -349,7 +358,9 @@
                 </div>
               }
               @if (extrasError(); as error) {
-                <p class="field-error">{{ error }}</p>
+                <p id="repository-extras-error" class="field-error">
+                  <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+                </p>
               }
             </section>
 

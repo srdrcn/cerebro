@@ -12,6 +12,10 @@ import { Directive, ElementRef, afterNextRender, inject, input, output } from '@
  *
  * Dialogs that stay rendered and open on demand use `cerebroModal="manual"`
  * with the exported `open()` / `close()` (`#modal="cerebroModal"`).
+ *
+ * `[dismissible]="false"` (for example while a request runs) ignores Escape
+ * and the backdrop, and reopens the dialog when the browser closes it anyway
+ * (Chrome does after a second Escape without a click in between).
  */
 @Directive({
   selector: 'dialog[cerebroModal]',
@@ -19,13 +23,17 @@ import { Directive, ElementRef, afterNextRender, inject, input, output } from '@
   host: {
     '(cancel)': 'onCancel($event)',
     '(click)': 'onClick($event)',
+    '(close)': 'onClose()',
   },
 })
 export class ModalDialogDirective {
   private readonly dialog = inject<ElementRef<HTMLDialogElement>>(ElementRef).nativeElement;
+  private closing = false;
 
   /** `"manual"` keeps the dialog closed until `open()` is called. */
   readonly mode = input<'' | 'auto' | 'manual'>('', { alias: 'cerebroModal' });
+
+  readonly dismissible = input(true);
 
   /** Escape was pressed or the backdrop was clicked. */
   readonly dismiss = output<void>();
@@ -50,13 +58,24 @@ export class ModalDialogDirective {
 
   close(): void {
     if (this.dialog.open) {
+      this.closing = true;
       this.dialog.close();
+      this.closing = false;
     }
   }
 
   onCancel(event: Event): void {
     event.preventDefault();
-    this.dismiss.emit();
+    if (this.dismissible()) {
+      this.dismiss.emit();
+    }
+  }
+
+  /** A close that did not come from `close()` was forced by the browser. */
+  onClose(): void {
+    if (!this.closing && !this.dismissible() && this.dialog.isConnected) {
+      this.dialog.showModal();
+    }
   }
 
   /** Clicks on the dialog element itself outside its box hit the backdrop. */
@@ -70,7 +89,7 @@ export class ModalDialogDirective {
       event.clientX <= rect.right &&
       event.clientY >= rect.top &&
       event.clientY <= rect.bottom;
-    if (!inside) {
+    if (!inside && this.dismissible()) {
       this.dismiss.emit();
     }
   }

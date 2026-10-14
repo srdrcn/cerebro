@@ -1114,6 +1114,11 @@
   box-shadow: 0 0 0 3px var(--gray-soft);
 }
 
+.dot-accent {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .dot-pulse {
   animation: pulse 1.8s ease-in-out infinite;
 }

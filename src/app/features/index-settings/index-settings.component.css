@@ -40,10 +40,6 @@
 }
 
 @media (max-width: 760px) {
-  .page-header__actions {
-    width: 100%;
-  }
-
   .index-title {
     font-size: var(--text-lg);
   }

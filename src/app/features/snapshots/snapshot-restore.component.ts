@@ -1,8 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  ElementRef,
-  afterNextRender,
   computed,
   inject,
   input,
@@ -15,6 +13,8 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { elasticsearchReason, failureMessage } from '../../core/errors';
 import { formatTimestamp, pluralize } from '../../core/format';
+import { PluralPipe } from '../../shared/format.pipes';
+import { ModalDialogDirective } from '../../shared/modal-dialog.directive';
 import { ChecklistOption, IndexChecklistComponent } from './index-checklist.component';
 import { SnapshotRecord, buildRestoreSnapshotPayload, defaultRestoreForm } from './snapshots.models';
 import {
@@ -36,7 +36,7 @@ import {
  */
 @Component({
   selector: 'cerebro-snapshot-restore',
-  imports: [FormsModule, IndexChecklistComponent],
+  imports: [FormsModule, IndexChecklistComponent, ModalDialogDirective, PluralPipe],
   templateUrl: './snapshot-restore.component.html',
   styleUrl: './snapshot-restore.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -56,7 +56,7 @@ export class SnapshotRestoreComponent {
   readonly closed = output<void>();
   readonly restored = output<string>();
 
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly modal = viewChild.required(ModalDialogDirective);
   private readonly checklist = viewChild.required(IndexChecklistComponent);
 
   private readonly defaults = defaultRestoreForm();
@@ -193,16 +193,11 @@ export class SnapshotRestoreComponent {
 
   readonly pluralize = pluralize;
 
-  constructor() {
-    afterNextRender(() => {
-      this.selected.set(new Set(this.indexNames()));
-      const dialog = this.dialog().nativeElement;
-      if (!dialog.open) {
-        dialog.showModal();
-      }
-      void this.loadIndexStatus();
-      void this.loadAliases();
-    });
+  /** The dialog opened: select every index and fetch what the warnings need. */
+  onOpened(): void {
+    this.selected.set(new Set(this.indexNames()));
+    void this.loadIndexStatus();
+    void this.loadAliases();
   }
 
   /**
@@ -253,36 +248,13 @@ export class SnapshotRestoreComponent {
     this.renameReplacement.set('');
   }
 
+  /** Close button, Cancel, Escape or the backdrop; never while the restore request runs. */
   close(): void {
     if (this.restoring()) {
       return;
     }
-    const dialog = this.dialog().nativeElement;
-    if (dialog.open) {
-      dialog.close();
-    }
+    this.modal().close();
     this.closed.emit();
-  }
-
-  onCancel(event: Event): void {
-    event.preventDefault();
-    this.close();
-  }
-
-  onBackdropClick(event: MouseEvent): void {
-    const dialog = this.dialog().nativeElement;
-    if (event.target !== dialog) {
-      return;
-    }
-    const rect = dialog.getBoundingClientRect();
-    const inside =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-    if (!inside) {
-      this.close();
-    }
   }
 
   async restore(): Promise<void> {

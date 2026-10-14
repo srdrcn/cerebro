@@ -11,11 +11,12 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import {
   ClusterSettingsResponse,
   buildClusterSavePayload,
@@ -72,7 +73,7 @@ const ADD_SUGGESTIONS: readonly string[] = [
 
 @Component({
   selector: 'cerebro-cluster-settings',
-  imports: [EmptyStateComponent, SettingsEditorComponent, SettingsSkeletonComponent],
+  imports: [EmptyStateComponent, NumberPipe, PluralPipe, SettingsEditorComponent, SettingsSkeletonComponent],
   templateUrl: './cluster-settings.component.html',
   styleUrl: './cluster-settings.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -85,11 +86,14 @@ export class ClusterSettingsComponent implements PendingChangesAware {
   private readonly connection = inject(ConnectionService);
 
   readonly grouping = GROUPING;
+  readonly pluralize = pluralize;
   readonly addSuggestions = ADD_SUGGESTIONS;
   readonly rows = signal<readonly SettingRow[] | undefined>(undefined);
   readonly drafts = signal<SettingDrafts>({});
   readonly errors = signal<SettingErrors>({});
   readonly failed = signal(false);
+  /** Why the settings could not be loaded, as Elasticsearch put it. */
+  readonly loadError = signal<string | undefined>(undefined);
   readonly saving = signal(false);
 
   readonly overrides = computed(() => summarizeOverrides(this.rows() ?? []));
@@ -141,6 +145,7 @@ export class ClusterSettingsComponent implements PendingChangesAware {
       this.drafts.update((drafts) => pruneDrafts(rows, drafts));
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
+        this.loadError.set(readableReason(error));
         this.failed.set(true);
         this.alerts.error(failureMessage('Could not load cluster settings', error), error);
       }

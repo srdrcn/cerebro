@@ -36,9 +36,9 @@
       <div class="settings-toolbar__end">
         <span class="count-label" aria-live="polite">
           @if (filtering()) {
-            <strong>{{ visibleRows().length }}</strong> of {{ pluralize(counts().total, 'setting') }}
+            <strong>{{ visibleRows().length | num }}</strong> of {{ counts().total | num }} {{ counts().total | plural: 'setting' }}
           } @else {
-            <strong>{{ visibleRows().length }}</strong> {{ visibleRows().length === 1 ? 'setting' : 'settings' }}
+            <strong>{{ visibleRows().length | num }}</strong> {{ visibleRows().length | plural: 'setting' }}
           }
         </span>
         <button
@@ -88,18 +88,20 @@
               type="text"
               class="input input-mono"
               [id]="id + '-add-name'"
-              [class.is-invalid]="addAttempted() && newNameError()"
+              [class.is-invalid]="addAttempted() && !!newNameError()"
               [attr.list]="suggestions().length > 0 ? id + '-add-suggestions' : null"
               [value]="newName()"
               [placeholder]="addPlaceholder()"
               [attr.aria-invalid]="addAttempted() && newNameError() ? true : null"
-              [attr.aria-describedby]="id + '-add-name-hint'"
+              [attr.aria-describedby]="addAttempted() && newNameError() ? id + '-add-name-error' : id + '-add-name-hint'"
               autocomplete="off"
               spellcheck="false"
               (input)="newName.set(newNameField.value)"
             />
             @if (addAttempted() && newNameError(); as error) {
-              <p class="field-error" [id]="id + '-add-name-hint'">{{ error }}</p>
+              <p class="field-error" [id]="id + '-add-name-error'">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+              </p>
             } @else if (newNameMatch(); as match) {
               <p class="field-hint" [id]="id + '-add-name-hint'">
                 Already listed, currently <code>{{ match.value || '""' }}</code>: adding edits it.
@@ -117,7 +119,7 @@
               type="text"
               class="input input-mono"
               [id]="id + '-add-value'"
-              [class.is-invalid]="addAttempted() && newValueError()"
+              [class.is-invalid]="addAttempted() && !!newValueError()"
               [value]="newValue()"
               [attr.aria-invalid]="addAttempted() && newValueError() ? true : null"
               [attr.aria-describedby]="addAttempted() && newValueError() ? id + '-add-value-error' : null"
@@ -126,7 +128,9 @@
               (input)="newValue.set(newValueField.value)"
             />
             @if (addAttempted() && newValueError(); as error) {
-              <p class="field-error" [id]="id + '-add-value-error'">{{ error }}</p>
+              <p class="field-error" [id]="id + '-add-value-error'">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+              </p>
             }
           </div>
           <div class="add-setting__actions">
@@ -432,7 +436,7 @@
             >
               <span class="truncate">{{ entry.group.shortTitle }}</span>
               @if (entry.pending > 0) {
-                <span class="settings-toc__dot" [title]="pluralize(entry.pending, 'pending change')"></span>
+                <span class="dot dot-accent dot-sm" [title]="pluralize(entry.pending, 'pending change')"></span>
               }
               <span class="settings-toc__count">{{ entry.items.length }}</span>
             </button>

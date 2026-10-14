@@ -54,8 +54,6 @@ export type IndexResolution =
   | { readonly kind: 'multiple'; readonly indices: readonly string[] }
   | { readonly kind: 'missing' };
 
-export type IndexHealth = 'green' | 'yellow' | 'red' | 'unknown';
-
 export type DetailTab =
   | 'overview'
   | 'mappings'

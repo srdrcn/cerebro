@@ -93,8 +93,7 @@
   font-size: 0.95em;
 }
 
-.field-hint .bi {
-  margin-right: 2px;
+.field-hint > .bi {
   color: var(--blue-text);
 }
 

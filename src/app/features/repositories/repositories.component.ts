@@ -13,10 +13,11 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { elasticsearchReason, failureMessage } from '../../core/errors';
-import { matchesText, pluralize } from '../../core/format';
+import { elasticsearchReason, failureMessage, readableReason } from '../../core/errors';
+import { matchesText } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import {
@@ -62,7 +63,7 @@ const FILTER_THRESHOLD = 6;
 
 @Component({
   selector: 'cerebro-repositories',
-  imports: [EmptyStateComponent, FormsModule, MenuComponent, RouterLink, SearchInputComponent],
+  imports: [EmptyStateComponent, FormsModule, MenuComponent, NumberPipe, PluralPipe, RouterLink, SearchInputComponent],
   templateUrl: './repositories.component.html',
   styleUrl: './repositories.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -77,10 +78,11 @@ export class RepositoriesComponent {
 
   readonly filterThreshold = FILTER_THRESHOLD;
   readonly showsSettingKey = showsSettingKey;
-  readonly pluralize = pluralize;
 
   readonly repositories = signal<readonly RepositoryRecord[] | undefined>(undefined);
   readonly failed = signal(false);
+  /** Why the repositories could not be loaded, as Elasticsearch put it. */
+  readonly loadError = signal<string | undefined>(undefined);
   readonly query = signal('');
   readonly deleting = signal<ReadonlySet<string>>(new Set());
 
@@ -130,8 +132,19 @@ export class RepositoriesComponent {
   );
 
   readonly nameError = computed(() => validateRepositoryName(this.name()));
+  /** Name errors show once submitted, or live once something was typed. */
+  readonly showNameError = computed(() => (this.submitted() || this.name() !== '') && !!this.nameError());
   readonly typeError = computed(() => (this.type() ? null : 'Choose where the snapshots are stored'));
   readonly extrasError = computed(() => validateExtraSettings(this.type(), this.extras()));
+  /** The first additional setting that makes the list invalid. */
+  readonly invalidExtraId = computed(() => {
+    if (!this.extrasError()) {
+      return null;
+    }
+    const extras = this.extras();
+    const type = this.type();
+    return extras.find((_, index) => validateExtraSettings(type, extras.slice(0, index + 1)) !== null)?.id ?? null;
+  });
   readonly valid = computed(() => !this.nameError() && !this.typeError() && !this.extrasError());
 
   readonly payload = computed<RepositoryPayload | null>(() => {
@@ -193,6 +206,7 @@ export class RepositoriesComponent {
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
+        this.loadError.set(readableReason(error));
         this.failed.set(true);
         this.alerts.error(failureMessage('Could not load snapshot repositories', error), error);
       }
@@ -399,11 +413,9 @@ export class RepositoriesComponent {
       document.querySelector<HTMLInputElement>('input[name="repository-type"]')?.focus();
       return;
     }
-    // The first additional setting that makes the list invalid.
-    const extras = this.extras();
-    const culprit = extras.find((_, index) => validateExtraSettings(this.type(), extras.slice(0, index + 1)) !== null);
-    if (culprit) {
-      document.getElementById(`repository-extra-key-${culprit.id}`)?.focus();
+    const culprit = this.invalidExtraId();
+    if (culprit !== null) {
+      document.getElementById(`repository-extra-key-${culprit}`)?.focus();
     }
   }
 

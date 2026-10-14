@@ -1,4 +1,3 @@
-import { sortByName } from '../../core/format';
 import { SettingRow, settingValueToString } from '../../shared/settings-editor/settings-editor.models';
 import {
   DYNAMIC_INDEX_SETTINGS,
@@ -142,19 +141,4 @@ export function buildIndexSettingRows(group: IndexSettingsGroupResponse, closed 
         ...(!editable && lock ? { lockReason: lock.reason, lockLabel: lock.label } : {}),
       };
     });
-}
-
-export interface IndexOptionGroups {
-  readonly regular: readonly string[];
-  /** Dot-prefixed system and hidden indices, listed last. */
-  readonly system: readonly string[];
-}
-
-/** Splits the index picker options into regular and dot-prefixed indices. */
-export function groupIndexOptions(names: readonly string[]): IndexOptionGroups {
-  const sorted = sortByName(names);
-  return {
-    regular: sorted.filter((name) => !name.startsWith('.')),
-    system: sorted.filter((name) => name.startsWith('.')),
-  };
 }

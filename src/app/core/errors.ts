@@ -1,4 +1,5 @@
 import { ClusterApiError } from './api-envelope';
+import { sentence } from './format';
 import { isRecord } from './json';
 
 const MAX_DEPTH = 6;
@@ -15,6 +16,12 @@ const MAX_DEPTH = 6;
  */
 export function elasticsearchReason(error: unknown): string | null {
   return reasonOf(error, 0);
+}
+
+/** The reason as a sentence of its own ("No such index [logs]"), for error states. */
+export function readableReason(error: unknown): string | undefined {
+  const reason = elasticsearchReason(error);
+  return reason ? sentence(reason) : undefined;
 }
 
 /** "Could not delete index: no such index [logs]", or just the action. */

@@ -291,7 +291,7 @@ describe('closed indices and summary', () => {
   it('derives the health from stats, then from shards', () => {
     expect(indexHealth(detail(), [])).toBe('green');
     const noStats = detail({ stats: null });
-    expect(indexHealth(noStats, [])).toBe('unknown');
+    expect(indexHealth(noStats, [])).toBe('gray');
     expect(indexHealth(noStats, shardRows([catRow()]))).toBe('green');
     expect(indexHealth(noStats, shardRows([catRow(), catRow({ prirep: 'r', state: 'UNASSIGNED' })]))).toBe('yellow');
     expect(indexHealth(noStats, shardRows([catRow({ state: 'UNASSIGNED' })]))).toBe('red');

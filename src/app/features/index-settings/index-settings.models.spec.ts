@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildIndexSettingRows,
-  groupIndexOptions,
   indexMetadata,
   indexSettingKind,
   isClosedIndex,
@@ -110,14 +109,5 @@ describe('resolveIndexSettings', () => {
     });
     expect(resolveIndexSettings({ b: {}, a: {} }, 'logs')).toEqual({ kind: 'multiple', indices: ['a', 'b'] });
     expect(resolveIndexSettings({}, 'logs')).toEqual({ kind: 'missing' });
-  });
-});
-
-describe('groupIndexOptions', () => {
-  it('sorts indices and lists dot-prefixed ones separately', () => {
-    expect(groupIndexOptions(['orders', '.kibana', 'customers', 'orders'])).toEqual({
-      regular: ['customers', 'orders'],
-      system: ['.kibana'],
-    });
   });
 });

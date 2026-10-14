@@ -285,6 +285,41 @@ describe('SnapshotRestoreComponent', () => {
     expect(closed).not.toHaveBeenCalled();
     expect(component.restoring()).toBe(false);
   });
+  it('cannot be dismissed while the restore request runs', async () => {
+    api();
+    const fixture = await render();
+    const component = fixture.componentInstance;
+    const closed = vi.fn();
+    component.closed.subscribe(closed);
+    let finish: (value: unknown) => void = () => undefined;
+    post.mockImplementation((path: string) =>
+      path === 'snapshots/restore' ? new Promise((resolve) => (finish = resolve)) : Promise.resolve([]),
+    );
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector('dialog') as HTMLDialogElement;
+    expect(dialog.open).toBe(true);
+
+    const restoring = component.restore();
+    expect(component.restoring()).toBe(true);
+    await fixture.whenStable();
+    const cancel = new Event('cancel', { cancelable: true });
+    dialog.dispatchEvent(cancel);
+    component.close();
+
+    expect(cancel.defaultPrevented).toBe(true);
+    expect(closed).not.toHaveBeenCalled();
+    expect(dialog.open).toBe(true);
+
+    // Chrome closes the dialog anyway after a second, non-cancelable cancel.
+    dialog.close();
+    dialog.dispatchEvent(new Event('close'));
+    expect(dialog.open).toBe(true);
+    expect(closed).not.toHaveBeenCalled();
+
+    finish({ accepted: true });
+    await restoring;
+    expect(closed).toHaveBeenCalledOnce();
+    expect(dialog.open).toBe(false);
+  });
 });
 
 describe('IndexChecklistComponent', () => {

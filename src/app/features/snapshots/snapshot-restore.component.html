@@ -1,10 +1,11 @@
 <dialog
-  #dialog
+  cerebroModal
   class="dialog restore-dialog"
   aria-labelledby="restore-title"
   aria-describedby="restore-subtitle"
-  (cancel)="onCancel($event)"
-  (click)="onBackdropClick($event)"
+  (opened)="onOpened()"
+  [dismissible]="!restoring()"
+  (dismiss)="close()"
 >
   <form class="restore-form" novalidate (ngSubmit)="restore()" (keydown.enter)="preventImplicitSubmit($event)">
     <header class="dialog__header">
@@ -48,16 +49,19 @@
           label="Indices to restore"
           emptyText="This snapshot does not contain any index."
           [maxHeight]="300"
+          [errorId]="submitted() && selectionError() ? 'restore-selection-error' : null"
         />
         @if (submitted() && selectionError(); as error) {
-          <p class="field-error" role="alert">{{ error }}</p>
+          <p id="restore-selection-error" class="field-error" role="alert">
+            <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+          </p>
         }
         @if (conflicts().length > 0) {
           <div class="callout callout-warning restore-callout" role="status">
             <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
             <div>
               <strong>{{ pluralize(conflicts().length, 'index', 'indices') }} already
-              {{ conflicts().length === 1 ? 'exists' : 'exist' }} as an open index.</strong>
+              {{ conflicts().length | plural: 'exists' : 'exist' }} as an open index.</strong>
               Restoring over an open index fails. Close or delete it first, or rename the restored indices.
               @if (!renaming()) {
                 <button type="button" class="link-button" (click)="usePrefix()">Restore as restored-*</button>
@@ -70,8 +74,8 @@
             <i class="bi bi-info-circle" aria-hidden="true"></i>
             <div>
               {{ pluralize(replacements().length, 'closed index', 'closed indices') }} with the same name
-              {{ replacements().length === 1 ? 'is' : 'are' }} replaced by the restored
-              {{ replacements().length === 1 ? 'copy' : 'copies' }}.
+              {{ replacements().length | plural: 'is' : 'are' }} replaced by the restored
+              {{ replacements().length | plural: 'copy' : 'copies' }}.
             </div>
           </div>
         }
@@ -101,13 +105,15 @@
               autocomplete="off"
               spellcheck="false"
               [class.is-invalid]="!!patternError()"
-              [attr.aria-invalid]="!!patternError()"
+              [attr.aria-invalid]="patternError() ? true : null"
               [attr.aria-describedby]="patternError() ? 'restore-pattern-error' : 'restore-pattern-hint'"
               [ngModel]="renamePattern()"
               (ngModelChange)="renamePattern.set($event)"
             />
             @if (patternError(); as error) {
-              <p id="restore-pattern-error" class="field-error">{{ error }}</p>
+              <p id="restore-pattern-error" class="field-error">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+              </p>
             } @else {
               <p id="restore-pattern-hint" class="field-hint">Regular expression matched against each index name.</p>
             }
@@ -127,13 +133,15 @@
               autocomplete="off"
               spellcheck="false"
               [class.is-invalid]="showReplacementError()"
-              [attr.aria-invalid]="showReplacementError()"
+              [attr.aria-invalid]="showReplacementError() ? true : null"
               [attr.aria-describedby]="showReplacementError() ? 'restore-replacement-error' : 'restore-replacement-hint'"
               [ngModel]="renameReplacement()"
               (ngModelChange)="renameReplacement.set($event)"
             />
             @if (showReplacementError()) {
-              <p id="restore-replacement-error" class="field-error">{{ replacementError() }}</p>
+              <p id="restore-replacement-error" class="field-error">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ replacementError() }}
+              </p>
             } @else if (replacementError()) {
               <p id="restore-replacement-hint" class="field-hint">Required with a pattern: Elasticsearch only renames when both are set.</p>
             } @else {

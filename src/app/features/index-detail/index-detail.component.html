@@ -7,16 +7,10 @@
           <span class="truncate" [title]="name()">{{ name() }}</span>
           @if (detail()) {
             <span class="index-badges">
-              @switch (health()) {
-                @case ('green') {
-                  <span class="badge badge-lg badge-green"><span class="dot dot-green" aria-hidden="true"></span> Green</span>
-                }
-                @case ('yellow') {
-                  <span class="badge badge-lg badge-yellow"><span class="dot dot-yellow" aria-hidden="true"></span> Yellow</span>
-                }
-                @case ('red') {
-                  <span class="badge badge-lg badge-red"><span class="dot dot-red" aria-hidden="true"></span> Red</span>
-                }
+              @if (health() !== 'gray') {
+                <span [class]="'badge badge-lg badge-' + health()">
+                  <span [class]="'dot dot-sm dot-' + health()" aria-hidden="true"></span> {{ healthLabel(health()) }}
+                </span>
               }
               @switch (settings()?.openState) {
                 @case ('closed') {
@@ -63,38 +57,7 @@
       }
     </div>
     <div class="page-header__actions">
-      <div class="context-picker">
-        <label class="visually-hidden" for="index-detail-picker">Index</label>
-        <i class="bi bi-database" aria-hidden="true"></i>
-        <select
-          #picker
-          id="index-detail-picker"
-          class="select"
-          [disabled]="indices() === undefined && !index()"
-          (change)="pick(picker)"
-        >
-          <option value="" [selected]="!index()">
-            {{ indicesFailed() ? 'Indices unavailable' : indices() === undefined ? 'Loading indices…' : 'Choose an index…' }}
-          </option>
-          @if (options().extra) {
-            <option [value]="options().extra" [selected]="true">{{ options().extra }}</option>
-          }
-          @if (options().regular.length > 0) {
-            <optgroup label="Indices">
-              @for (option of options().regular; track option) {
-                <option [value]="option" [selected]="option === index()">{{ option }}</option>
-              }
-            </optgroup>
-          }
-          @if (options().system.length > 0) {
-            <optgroup label="System and hidden indices">
-              @for (option of options().system; track option) {
-                <option [value]="option" [selected]="option === index()">{{ option }}</option>
-              }
-            </optgroup>
-          }
-        </select>
-      </div>
+      <cerebro-index-picker #picker inputId="index-detail-picker" [index]="index()" (picked)="navigate($event)" />
       @if (detail(); as current) {
         <a class="btn" routerLink="/index_settings" [queryParams]="linkParams({ index: current.name })">
           <i class="bi bi-sliders" aria-hidden="true"></i> Edit settings
@@ -144,13 +107,13 @@
   @switch (state()) {
     @case ('idle') {
       <div class="card">
-        @if (indicesFailed()) {
-          <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load indices" text="The cluster did not answer the request for its index list.">
-            <button type="button" class="btn btn-sm" (click)="retryIndices()">
+        @if (picker.failed()) {
+          <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load indices" [text]="picker.loadError() ?? 'The cluster did not answer the request for its index list.'">
+            <button type="button" class="btn btn-sm" (click)="picker.retry()">
               <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
             </button>
           </cerebro-empty>
-        } @else if (indices(); as all) {
+        } @else if (picker.indices(); as all) {
           @if (all.length === 0) {
             <cerebro-empty icon="bi-database" heading="No indices yet" text="This cluster does not have any index to inspect.">
               <a class="btn btn-sm btn-primary" routerLink="/create" [queryParams]="connection.hostQuery()">
@@ -164,7 +127,7 @@
               text="Pick an index in the list above to see its settings, mappings, statistics, shards and aliases, or jump straight to one of these."
             >
               <div class="quick-picks">
-                @for (option of quickPicks(); track option) {
+                @for (option of picker.groups().regular.slice(0, quickPicks); track option) {
                   <button type="button" class="chip-toggle mono" (click)="navigate(option)">{{ option }}</button>
                 }
               </div>
@@ -186,7 +149,7 @@
     @case ('missing') {
       <div class="card">
         <cerebro-empty icon="bi-question-circle" heading="Index not found" [text]="'No index or alias named “' + index() + '” exists on this cluster.'">
-          <button type="button" class="btn btn-sm" (click)="focusPicker()">Choose another index</button>
+          <button type="button" class="btn btn-sm" (click)="picker.focus()">Choose another index</button>
           <button type="button" class="btn btn-sm btn-ghost" (click)="retry()">
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
           </button>
@@ -253,7 +216,7 @@
               <div class="stat__value">
                 {{ totals.primaries ?? '–' }}<span class="stat__unit">pri</span>
                 <span class="stat__times" aria-hidden="true">×</span>
-                {{ totals.replicas ?? '–' }}<span class="stat__unit">{{ totals.replicas === 1 ? 'replica' : 'replicas' }}</span>
+                {{ totals.replicas ?? '–' }}<span class="stat__unit">{{ totals.replicas | plural: 'replica' }}</span>
               </div>
               <div class="stat__meta">
                 {{ pluralize(shardSummary().total, 'copy', 'copies') }}
@@ -312,7 +275,7 @@
                       @if (life.error) {
                         <span class="badge badge-red" title="The lifecycle policy stopped on an error">error</span>
                       } @else {
-                        <span class="dot dot-green" title="Managed by a lifecycle policy" aria-hidden="true"></span>
+                        <span class="dot dot-green dot-sm" title="Managed by a lifecycle policy" aria-hidden="true"></span>
                         <span class="visually-hidden">(managed)</span>
                       }
                     }
@@ -367,7 +330,7 @@
                           <dt>Created</dt>
                           <dd>
                             @if (meta.createdAt) {
-                              {{ meta.createdAt | date: 'medium' }} <span class="text-muted text-sm">· {{ age(meta.createdAt) }}</span>
+                              {{ formatTimestamp(meta.createdAt.getTime()) }} <span class="text-muted text-sm">· {{ age(meta.createdAt) }}</span>
                             } @else {
                               –
                             }
@@ -539,9 +502,9 @@
                   <span class="spacer"></span>
                   <span class="count-label">
                     @if (mappingQuery().trim()) {
-                      <strong>{{ visibleFields().length }}</strong> matching {{ visibleFields().length === 1 ? 'entry' : 'entries' }}
+                      <strong>{{ visibleFields().length | num }}</strong> matching {{ visibleFields().length | plural: 'entry' : 'entries' }}
                     } @else {
-                      <strong>{{ leafFieldCount() }}</strong> {{ leafFieldCount() === 1 ? 'field' : 'fields' }}
+                      <strong>{{ leafFieldCount() | num }}</strong> {{ leafFieldCount() | plural: 'field' }}
                     }
                   </span>
                   <button type="button" class="btn btn-sm" (click)="showMappingsJson()">
@@ -618,9 +581,9 @@
                   <span class="spacer"></span>
                   <span class="count-label">
                     @if (settingsQuery().trim()) {
-                      <strong>{{ visibleSettings().length | num }}</strong> of {{ pluralize(flatSettings().length, 'setting') }}
+                      <strong>{{ visibleSettings().length | num }}</strong> of {{ flatSettings().length | num }} {{ flatSettings().length | plural: 'setting' }}
                     } @else {
-                      <strong>{{ flatSettings().length | num }}</strong> {{ flatSettings().length === 1 ? 'setting' : 'settings' }}
+                      <strong>{{ flatSettings().length | num }}</strong> {{ flatSettings().length | plural: 'setting' }}
                     }
                   </span>
                   <a class="btn btn-sm" routerLink="/index_settings" [queryParams]="linkParams({ index: current.name })">
@@ -744,9 +707,9 @@
                     <span class="spacer"></span>
                     <span class="count-label">
                       @if (shardFilter() !== 'all') {
-                        <strong>{{ visibleShards().length | num }}</strong> of {{ pluralize(shards().length, 'copy', 'copies') }}
+                        <strong>{{ visibleShards().length | num }}</strong> of {{ shards().length | num }} {{ shards().length | plural: 'copy' : 'copies' }}
                       } @else {
-                        <strong>{{ shards().length | num }}</strong> {{ shards().length === 1 ? 'copy' : 'copies' }}
+                        <strong>{{ shards().length | num }}</strong> {{ shards().length | plural: 'copy' : 'copies' }}
                       }
                     </span>
                     <button type="button" class="btn btn-sm" (click)="showShardsJson()">
@@ -861,7 +824,7 @@
               <!-- ================= Aliases ================= -->
               @case ('aliases') {
                 <div class="panel-toolbar">
-                  <span class="count-label"><strong>{{ aliases().length | num }}</strong> {{ aliases().length === 1 ? 'alias' : 'aliases' }}</span>
+                  <span class="count-label"><strong>{{ aliases().length | num }}</strong> {{ aliases().length | plural: 'alias' : 'aliases' }}</span>
                   <span class="spacer"></span>
                   <a class="btn btn-sm" routerLink="/aliases" [queryParams]="connection.hostQuery()">
                     <i class="bi bi-pencil" aria-hidden="true"></i> Manage aliases
@@ -1049,7 +1012,7 @@
                               <div class="kv-row">
                                 <dt>{{ time.label }}</dt>
                                 <dd [title]="time.at.toISOString()">
-                                  {{ time.at | date: 'MMM d, HH:mm:ss' }} <span class="text-muted text-sm">· {{ age(time.at) }}</span>
+                                  {{ formatTimestamp(time.at.getTime(), { seconds: true }) }} <span class="text-muted text-sm">· {{ age(time.at) }}</span>
                                 </dd>
                               </div>
                             }

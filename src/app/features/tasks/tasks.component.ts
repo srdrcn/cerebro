@@ -15,8 +15,8 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { ClusterApiError } from '../../core/api-envelope';
-import { elasticsearchReason, failureMessage } from '../../core/errors';
-import { formatDuration, pluralize, sentence } from '../../core/format';
+import { failureMessage, readableReason } from '../../core/errors';
+import { formatDuration, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
@@ -163,8 +163,7 @@ export class TasksComponent {
         // A failed background refresh keeps the last list on screen.
         if (this.tasks() === undefined) {
           this.failed.set(true);
-          const reason = elasticsearchReason(error);
-          this.loadError.set(reason ? sentence(reason) : undefined);
+          this.loadError.set(readableReason(error));
         }
         this.alerts.error(failureMessage('Could not load tasks', error), error);
       }

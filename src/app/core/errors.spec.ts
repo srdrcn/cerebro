@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ClusterApiError } from './api-envelope';
-import { elasticsearchReason, failureMessage } from './errors';
+import { elasticsearchReason, failureMessage, readableReason } from './errors';
 
 describe('elasticsearchReason', () => {
   it('prefers the root cause over the generic top level reason', () => {
@@ -50,5 +50,12 @@ describe('failureMessage', () => {
       'Could not delete index: no such index [logs]',
     );
     expect(failureMessage('Could not delete index', null)).toBe('Could not delete index');
+  });
+});
+
+describe('readableReason', () => {
+  it('capitalizes the reason or returns undefined', () => {
+    expect(readableReason({ error: { reason: 'no such index [logs]' } })).toBe('No such index [logs]');
+    expect(readableReason(null)).toBeUndefined();
   });
 });

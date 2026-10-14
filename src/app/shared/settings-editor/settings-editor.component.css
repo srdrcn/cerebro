@@ -419,14 +419,6 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
-.settings-toc__dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
 /* ---- Responsive ---- */
 
 @media (max-width: 1180px) {

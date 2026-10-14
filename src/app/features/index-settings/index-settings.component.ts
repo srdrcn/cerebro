@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  ElementRef,
   computed,
   effect,
   inject,
@@ -17,11 +16,12 @@ import { ClusterApiError } from '../../core/api-envelope';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { formatTimestamp, pluralize } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { IndexPickerComponent } from '../../shared/index-picker.component';
 import { SettingsEditorComponent } from '../../shared/settings-editor/settings-editor.component';
 import {
   GroupingOptions,
@@ -40,7 +40,6 @@ import {
   IndexMetadata,
   IndexSettingsResponse,
   buildIndexSettingRows,
-  groupIndexOptions,
   indexMetadata,
   resolveIndexSettings,
 } from './index-settings.models';
@@ -81,7 +80,7 @@ const ADD_SUGGESTIONS: readonly string[] = [
 
 @Component({
   selector: 'cerebro-index-settings',
-  imports: [EmptyStateComponent, RouterLink, SettingsEditorComponent, SettingsSkeletonComponent],
+  imports: [EmptyStateComponent, IndexPickerComponent, RouterLink, SettingsEditorComponent, SettingsSkeletonComponent],
   templateUrl: './index-settings.component.html',
   styleUrl: './index-settings.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -103,9 +102,6 @@ export class IndexSettingsComponent implements PendingChangesAware {
     initialValue: '',
   });
 
-  readonly indices = signal<readonly string[] | undefined>(undefined);
-  /** The index list could not be loaded (as opposed to the cluster having none). */
-  readonly indicesFailed = signal(false);
   readonly state = signal<LoadState>('idle');
   readonly rows = signal<readonly SettingRow[] | undefined>(undefined);
   readonly metadata = signal<IndexMetadata | undefined>(undefined);
@@ -117,45 +113,22 @@ export class IndexSettingsComponent implements PendingChangesAware {
   readonly drafts = signal<SettingDrafts>({});
   readonly errors = signal<SettingErrors>({});
   readonly saving = signal(false);
+  /** Why the settings could not be loaded, as Elasticsearch put it. */
+  readonly loadError = signal<string | undefined>(undefined);
 
-  readonly options = computed(() => {
-    const groups = groupIndexOptions(this.indices() ?? []);
-    const index = this.index();
-    const known = groups.regular.includes(index) || groups.system.includes(index);
-    return { ...groups, extra: index && !known ? index : '' };
-  });
-  readonly quickPicks = computed(() => this.options().regular.slice(0, QUICK_PICKS));
+  readonly quickPicks = QUICK_PICKS;
   readonly overridden = computed(() => (this.rows() ?? []).filter((row) => row.origin === 'index').length);
   readonly pending = computed(() => pendingChanges(this.rows() ?? [], this.drafts()));
 
-  private readonly picker = viewChild<ElementRef<HTMLSelectElement>>('picker');
+  private readonly picker = viewChild(IndexPickerComponent);
   private loadSequence = 0;
-  private indicesSequence = 0;
   /** Cluster the rows and drafts belong to. */
   private loadedHost: string | undefined;
-  /** Cluster the index list belongs to. */
-  private indicesHost: string | undefined;
   private lastResponse = '';
   /** A Back/Forward switch to another index waits for the discard dialog. */
   private confirmingSwitch = false;
 
   constructor() {
-    effect(() => {
-      this.refreshService.tick();
-      const host = this.connection.host();
-      untracked(() => {
-        if (host !== this.indicesHost) {
-          this.indicesHost = host;
-          this.indicesSequence++;
-          this.indices.set(undefined);
-          this.indicesFailed.set(false);
-        }
-        if (host) {
-          void this.loadIndices();
-        }
-      });
-    });
-
     effect(() => {
       this.refreshService.tick();
       const index = this.index();
@@ -177,28 +150,6 @@ export class IndexSettingsComponent implements PendingChangesAware {
         }
       });
     });
-  }
-
-  async loadIndices(): Promise<void> {
-    const sequence = ++this.indicesSequence;
-    try {
-      const indices = await this.api.post<readonly string[]>('commons/indices');
-      if (sequence === this.indicesSequence) {
-        this.indices.set(indices);
-        this.indicesFailed.set(false);
-      }
-    } catch (error: unknown) {
-      // A failed background refresh keeps the list that is already shown.
-      if (sequence === this.indicesSequence && this.indices() === undefined) {
-        this.indicesFailed.set(true);
-        this.alerts.error(failureMessage('Could not load indices', error), error);
-      }
-    }
-  }
-
-  retryIndices(): void {
-    this.indicesFailed.set(false);
-    void this.loadIndices();
   }
 
   /**
@@ -245,6 +196,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
       } else {
         // Keep showing the last good values when a background refresh fails.
         if (this.state() !== 'ready') {
+          this.loadError.set(readableReason(error));
           this.state.set('error');
         }
         this.alerts.error(failureMessage(`Could not load the settings of ${index}`, error), error);
@@ -260,15 +212,14 @@ export class IndexSettingsComponent implements PendingChangesAware {
     }
   }
 
-  async pick(select: HTMLSelectElement): Promise<void> {
-    const next = select.value;
+  async pick(next: string): Promise<void> {
     if (next === this.index()) {
       return;
     }
     if (this.pending().length > 0) {
       const confirmed = await this.confirmDiscardDrafts('will be lost.', 'Discard and switch');
       if (!confirmed) {
-        select.value = this.index();
+        this.picker()?.revert();
         return;
       }
       this.drafts.set({});
@@ -289,10 +240,6 @@ export class IndexSettingsComponent implements PendingChangesAware {
       return true;
     }
     return this.confirmDiscardDrafts('will be lost if you leave this page.', 'Discard changes');
-  }
-
-  focusPicker(): void {
-    this.picker()?.nativeElement.focus();
   }
 
   review(changes: readonly PendingChange[]): void {
@@ -370,11 +317,13 @@ export class IndexSettingsComponent implements PendingChangesAware {
           void this.load(index);
         }
       } else {
+        // A new entry rather than a replaced one: after Back, the history
+        // looks as before (the edited index is the latest entry again) and
+        // another Back asks again instead of leaving the page.
         await this.router.navigate([], {
           relativeTo: this.route,
           queryParams: { index: this.loadedIndex() || null },
           queryParamsHandling: 'merge',
-          replaceUrl: true,
         });
       }
     } finally {

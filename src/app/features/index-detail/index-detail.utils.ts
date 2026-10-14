@@ -1,4 +1,5 @@
 import { formatBytes, formatDuration, formatNumber, humanize, matchesText, pluralize } from '../../core/format';
+import { HealthTone, healthTone } from '../../core/health';
 import { isRecord } from '../../core/json';
 import {
   AliasDetail,
@@ -9,7 +10,6 @@ import {
   IlmExplainResponse,
   IndexDetail,
   IndexDetailResponse,
-  IndexHealth,
   IndexOpenState,
   IndexOperation,
   IndexOperationDefinition,
@@ -256,13 +256,14 @@ export function isClosed(detail: IndexDetail): boolean {
 
 /* ---- Health and summary --------------------------------------------------- */
 
-export function indexHealth(detail: IndexDetail, shards: readonly ShardRow[]): IndexHealth {
-  const reported = detail.stats?.health;
-  if (reported === 'green' || reported === 'yellow' || reported === 'red') {
+/** The reported health, or one derived from the shard copies ("gray" when unknown). */
+export function indexHealth(detail: IndexDetail, shards: readonly ShardRow[]): HealthTone {
+  const reported = healthTone(detail.stats?.health);
+  if (reported !== 'gray') {
     return reported;
   }
   if (shards.length === 0) {
-    return 'unknown';
+    return 'gray';
   }
   if (shards.some((row) => row.primary && row.state === 'unassigned')) {
     return 'red';

@@ -31,6 +31,7 @@ export interface ChecklistOption {
 @Component({
   selector: 'cerebro-index-checklist',
   imports: [SearchInputComponent],
+  host: { '[class.is-invalid]': '!!errorId()' },
   template: `
     <div class="checklist__toolbar">
       <!-- The checklist lives inside create/restore forms: Enter in the
@@ -69,6 +70,8 @@ export interface ChecklistOption {
             <input
               type="checkbox"
               [checked]="selected().has(option.name)"
+              [attr.aria-invalid]="errorId() ? true : null"
+              [attr.aria-describedby]="errorId()"
               (change)="toggle(option.name)"
             />
             <span class="checklist__text">
@@ -116,6 +119,10 @@ export interface ChecklistOption {
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background: var(--surface);
+    }
+
+    :host(.is-invalid) {
+      border-color: var(--red);
     }
 
     .checklist__toolbar {
@@ -211,6 +218,8 @@ export class IndexChecklistComponent {
   readonly label = input('Indices');
   readonly emptyText = input('There is nothing to select.');
   readonly maxHeight = input(240);
+  /** Id of the field error that applies to the selection; marks the checkboxes invalid. */
+  readonly errorId = input<string | null>(null);
 
   readonly query = signal('');
 

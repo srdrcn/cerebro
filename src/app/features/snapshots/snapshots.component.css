@@ -264,12 +264,6 @@
   }
 }
 
-@media (max-width: 760px) {
-  .snapshots-actions {
-    width: 100%;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .spin {
     animation: none;

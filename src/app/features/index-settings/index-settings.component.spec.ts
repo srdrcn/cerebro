@@ -59,11 +59,7 @@ describe('IndexSettingsComponent', () => {
   it('lists the pending edits when switching index with the picker', async () => {
     const target = component();
     target.drafts.set({ 'index.number_of_replicas': { value: '2', scope: 'persistent' } });
-    const select = document.createElement('select');
-    select.append(new Option('customers', 'customers'));
-    select.value = 'customers';
-
-    await target.pick(select);
+    await target.pick('customers');
 
     expect(dialogs.confirm).toHaveBeenCalledWith(
       expect.objectContaining({ confirmLabel: 'Discard and switch', items: ['index.number_of_replicas'] }),

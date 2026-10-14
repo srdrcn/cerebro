@@ -1,4 +1,4 @@
-import { matchesText } from '../../core/format';
+import { formatDate, matchesText } from '../../core/format';
 import { isRecord } from '../../core/json';
 import { validateResourceName } from '../../core/names';
 import { SnapshotRecord, SnapshotState } from './snapshots.models';
@@ -177,14 +177,13 @@ export function summarizeSnapshots(snapshots: readonly SnapshotRecord[]): Snapsh
   };
 }
 
-function twoDigits(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
 /** `snapshot-2026.10.14-1530` in local time. */
 export function suggestSnapshotName(date: Date, prefix = 'snapshot'): string {
-  const day = `${date.getFullYear()}.${twoDigits(date.getMonth() + 1)}.${twoDigits(date.getDate())}`;
-  return `${prefix}-${day}-${twoDigits(date.getHours())}${twoDigits(date.getMinutes())}`.toLowerCase();
+  // "snapshot-2026.10.14-1530". The name is an Elasticsearch resource name, so it is built
+  // here and does not follow the display format of formatTimestamp.
+  const day = formatDate(date.getTime()).replace(/-/g, '.');
+  const time = [date.getHours(), date.getMinutes()].map((part) => String(part).padStart(2, '0')).join('');
+  return `${prefix}-${day}-${time}`.toLowerCase();
 }
 
 /** Appends `-2`, `-3`, … until the name is not taken. */

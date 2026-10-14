@@ -26,10 +26,6 @@
   letter-spacing: 0;
 }
 
-.index-badges .dot {
-  margin-right: 2px;
-}
-
 .index-meta {
   display: flex;
   flex-wrap: wrap;
@@ -116,11 +112,6 @@
 .detail-tabs > button {
   flex: none;
   height: 46px;
-}
-
-.detail-tabs .dot {
-  width: 7px;
-  height: 7px;
 }
 
 .tab-panel {
@@ -696,7 +687,6 @@ tr.is-multi .field-name {
   }
 
   .page-header__actions {
-    width: 100%;
     justify-content: flex-start;
   }
 

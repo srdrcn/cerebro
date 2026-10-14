@@ -41,55 +41,24 @@
       }
     </div>
     <div class="page-header__actions">
-      <div class="context-picker">
-        <label class="visually-hidden" for="index-settings-picker">Index</label>
-        <i class="bi bi-database" aria-hidden="true"></i>
-        <select
-          #picker
-          id="index-settings-picker"
-          class="select"
-          [disabled]="indices() === undefined && !index()"
-          (change)="pick(picker)"
-        >
-          <option value="" [selected]="!index()">
-            {{ indicesFailed() ? 'Indices unavailable' : indices() === undefined ? 'Loading indices…' : 'Choose an index…' }}
-          </option>
-          @if (options().extra) {
-            <option [value]="options().extra" [selected]="true">{{ options().extra }}</option>
-          }
-          @if (options().regular.length > 0) {
-            <optgroup label="Indices">
-              @for (name of options().regular; track name) {
-                <option [value]="name" [selected]="name === index()">{{ name }}</option>
-              }
-            </optgroup>
-          }
-          @if (options().system.length > 0) {
-            <optgroup label="System and hidden indices">
-              @for (name of options().system; track name) {
-                <option [value]="name" [selected]="name === index()">{{ name }}</option>
-              }
-            </optgroup>
-          }
-        </select>
-      </div>
+      <cerebro-index-picker #picker inputId="index-settings-picker" [index]="loadedIndex()" (picked)="pick($event)" />
     </div>
   </header>
 
   @switch (state()) {
     @case ('idle') {
       <div class="card">
-        @if (indicesFailed()) {
+        @if (picker.failed()) {
           <cerebro-empty
             icon="bi-exclamation-triangle"
             heading="Could not load indices"
-            text="The cluster did not answer the request for its index list."
+            [text]="picker.loadError() ?? 'The cluster did not answer the request for its index list.'"
           >
-            <button type="button" class="btn btn-sm" (click)="retryIndices()">
+            <button type="button" class="btn btn-sm" (click)="picker.retry()">
               <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
             </button>
           </cerebro-empty>
-        } @else if (indices(); as all) {
+        } @else if (picker.indices(); as all) {
           @if (all.length === 0) {
             <cerebro-empty
               icon="bi-database"
@@ -107,7 +76,7 @@
               text="Pick an index in the list above to view and edit its settings, or jump straight to one of these."
             >
               <div class="quick-picks">
-                @for (name of quickPicks(); track name) {
+                @for (name of picker.groups().regular.slice(0, quickPicks); track name) {
                   <button type="button" class="chip-toggle mono" (click)="navigate(name)">{{ name }}</button>
                 }
               </div>
@@ -128,7 +97,7 @@
           heading="Index not found"
           [text]="'No index or alias named “' + index() + '” exists on this cluster.'"
         >
-          <button type="button" class="btn btn-sm" (click)="focusPicker()">Choose another index</button>
+          <button type="button" class="btn btn-sm" (click)="picker.focus()">Choose another index</button>
           <button type="button" class="btn btn-sm btn-ghost" (click)="retry()">
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
           </button>
@@ -155,7 +124,7 @@
         <cerebro-empty
           icon="bi-exclamation-triangle"
           heading="Could not load index settings"
-          [text]="'The cluster did not answer the settings request for “' + index() + '”.'"
+          [text]="loadError() ?? 'The cluster did not answer the settings request for “' + index() + '”.'"
         >
           <button type="button" class="btn btn-sm" (click)="retry()">
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again

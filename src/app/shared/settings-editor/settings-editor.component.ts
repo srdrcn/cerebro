@@ -20,6 +20,7 @@ import { DialogService } from '../../core/dialog.service';
 import { pluralize } from '../../core/format';
 import { readPreference, writePreference } from '../../core/preferences';
 import { EmptyStateComponent } from '../empty-state.component';
+import { NumberPipe, PluralPipe } from '../format.pipes';
 import { SearchInputComponent } from '../search-input.component';
 import {
   GroupingOptions,
@@ -81,7 +82,7 @@ const SPY_OFFSET_PX = 160;
  */
 @Component({
   selector: 'cerebro-settings-editor',
-  imports: [EmptyStateComponent, SearchInputComponent],
+  imports: [EmptyStateComponent, NumberPipe, PluralPipe, SearchInputComponent],
   templateUrl: './settings-editor.component.html',
   styleUrl: './settings-editor.component.css',
   host: {

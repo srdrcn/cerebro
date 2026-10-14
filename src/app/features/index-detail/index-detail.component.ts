@@ -1,4 +1,4 @@
-import { DatePipe, JsonPipe } from '@angular/common';
+import { JsonPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -20,11 +20,13 @@ import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { elasticsearchReason, failureMessage } from '../../core/errors';
-import { formatRelative, pluralize, sentence } from '../../core/format';
+import { failureMessage, readableReason } from '../../core/errors';
+import { formatRelative, formatTimestamp, pluralize } from '../../core/format';
+import { healthLabel } from '../../core/health';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { BytesPipe, NumberPipe } from '../../shared/format.pipes';
+import { BytesPipe, NumberPipe, PluralPipe } from '../../shared/format.pipes';
+import { IndexPickerComponent } from '../../shared/index-picker.component';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { createSort } from '../../shared/sort-state';
@@ -79,7 +81,17 @@ const QUICK_PICKS = 8;
 
 @Component({
   selector: 'cerebro-index-detail',
-  imports: [BytesPipe, DatePipe, EmptyStateComponent, JsonPipe, MenuComponent, NumberPipe, RouterLink, SearchInputComponent],
+  imports: [
+    BytesPipe,
+    EmptyStateComponent,
+    IndexPickerComponent,
+    JsonPipe,
+    MenuComponent,
+    NumberPipe,
+    PluralPipe,
+    RouterLink,
+    SearchInputComponent,
+  ],
   templateUrl: './index-detail.component.html',
   styleUrl: './index-detail.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -106,8 +118,6 @@ export class IndexDetailComponent {
     initialValue: 'overview' as DetailTab,
   });
 
-  readonly indices = signal<readonly string[] | undefined>(undefined);
-  readonly indicesFailed = signal(false);
   readonly state = signal<LoadState>('idle');
   readonly detail = signal<IndexDetail | undefined>(undefined);
   readonly candidates = signal<readonly string[]>([]);
@@ -126,14 +136,7 @@ export class IndexDetailComponent {
     descendingFirst: (field) => field === 'docs' || field === 'size',
   });
 
-  readonly options = computed(() => {
-    const sorted = [...new Set(this.indices() ?? [])].sort((left, right) => left.localeCompare(right));
-    const regular = sorted.filter((name) => !name.startsWith('.'));
-    const system = sorted.filter((name) => name.startsWith('.'));
-    const index = this.index();
-    return { regular, system, extra: index && !sorted.includes(index) ? index : '' };
-  });
-  readonly quickPicks = computed(() => this.options().regular.slice(0, QUICK_PICKS));
+  readonly quickPicks = QUICK_PICKS;
 
   readonly name = computed(() => this.detail()?.name ?? this.index());
   readonly shards = computed(() => shardRows(this.detail()?.shards ?? null));
@@ -143,7 +146,7 @@ export class IndexDetailComponent {
   });
   readonly health = computed(() => {
     const detail = this.detail();
-    return detail ? indexHealth(detail, this.shards()) : 'unknown';
+    return detail ? indexHealth(detail, this.shards()) : 'gray';
   });
   readonly summary = computed(() => {
     const detail = this.detail();
@@ -192,13 +195,10 @@ export class IndexDetailComponent {
 
   readonly problemShards = computed(() => this.shards().filter((row) => row.state !== 'started').length);
 
-  private readonly picker = viewChild<ElementRef<HTMLSelectElement>>('picker');
   private readonly tablist = viewChild<ElementRef<HTMLElement>>('tablist');
   private loadSequence = 0;
-  private indicesSequence = 0;
   private loadedIndex = '';
   private loadedHost: string | undefined;
-  private indicesHost: string | undefined;
   private lastResponse = '';
   private lastLifecycle = '';
   private ilmRaw: unknown = undefined;
@@ -210,24 +210,10 @@ export class IndexDetailComponent {
   readonly shardTone = shardStateTone;
   readonly pluralize = pluralize;
   readonly settingHint = settingHint;
+  readonly healthLabel = healthLabel;
+  readonly formatTimestamp = formatTimestamp;
 
   constructor() {
-    effect(() => {
-      this.refreshService.tick();
-      const host = this.connection.host();
-      untracked(() => {
-        if (host !== this.indicesHost) {
-          this.indicesHost = host;
-          this.indicesSequence++;
-          this.indices.set(undefined);
-          this.indicesFailed.set(false);
-        }
-        if (host) {
-          void this.loadIndices();
-        }
-      });
-    });
-
     // Keep the selected tab visible in the horizontally scrolling tab strip.
     afterRenderEffect(() => {
       const tab = this.tab();
@@ -255,27 +241,6 @@ export class IndexDetailComponent {
         }
       });
     });
-  }
-
-  async loadIndices(): Promise<void> {
-    const sequence = ++this.indicesSequence;
-    try {
-      const indices = await this.api.post<readonly string[]>('commons/indices');
-      if (sequence === this.indicesSequence) {
-        this.indices.set(indices);
-        this.indicesFailed.set(false);
-      }
-    } catch (error: unknown) {
-      if (sequence === this.indicesSequence && this.indices() === undefined) {
-        this.indicesFailed.set(true);
-        this.alerts.error('Could not load the index list', error);
-      }
-    }
-  }
-
-  retryIndices(): void {
-    this.indicesFailed.set(false);
-    void this.loadIndices();
   }
 
   /** Background refreshes keep the current view until the answer arrives. */
@@ -361,20 +326,12 @@ export class IndexDetailComponent {
     this.refreshService.refresh();
   }
 
-  pick(select: HTMLSelectElement): void {
-    this.navigate(select.value);
-  }
-
   navigate(index: string): void {
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { index: index || null },
       queryParamsHandling: 'merge',
     });
-  }
-
-  focusPicker(): void {
-    this.picker()?.nativeElement.focus();
   }
 
   selectTab(tab: DetailTab): void {
@@ -552,10 +509,4 @@ export class IndexDetailComponent {
     this.shardFilter.set('all');
     this.state.set(index ? 'loading' : 'idle');
   }
-}
-
-/** The Elasticsearch reason of a failure as a sentence of its own. */
-function readableReason(error: unknown): string | undefined {
-  const reason = elasticsearchReason(error);
-  return reason ? sentence(reason) : undefined;
 }
