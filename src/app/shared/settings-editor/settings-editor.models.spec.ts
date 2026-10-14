@@ -234,7 +234,7 @@ describe('save errors', () => {
   it('rewrites Java enum errors', () => {
     expect(
       friendlyReason('No enum constant org.elasticsearch.cluster.routing.allocation.decider.Allocation.SOMETIMES'),
-    ).toBe('[sometimes] is not one of the accepted values.');
+    ).toBe('[sometimes] is not one of the accepted values');
     expect(friendlyReason('anything else')).toBe('anything else');
   });
 
@@ -277,7 +277,7 @@ describe('save errors', () => {
     });
     const change: PendingChange = { name: 'cluster.routing.allocation.enable', from: 'all', to: 'sometimes', scope: 'persistent' };
     expect(settingErrorsFor(enumError, [change])).toEqual({
-      'cluster.routing.allocation.enable': { message: '[sometimes] is not one of the accepted values.', value: 'sometimes' },
+      'cluster.routing.allocation.enable': { message: '[sometimes] is not one of the accepted values', value: 'sometimes' },
     });
   });
 });

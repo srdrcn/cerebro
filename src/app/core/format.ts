@@ -74,13 +74,27 @@ export function formatDuration(milliseconds: number | null | undefined): string 
   return rest > 0 ? `${amount}${label} ${rest}${next[0]}` : `${amount}${label}`;
 }
 
+/** The noun alone: "node" for 1, "nodes" otherwise (for labels that style the number). */
+export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
+  return count === 1 ? singular : pluralForm;
+}
+
 /** "1 node", "3 nodes", "1,204 shards". */
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${formatNumber(count)} ${count === 1 ? singular : plural}`;
+export function pluralize(count: number, singular: string, pluralForm = `${singular}s`): string {
+  return `${formatNumber(count)} ${plural(count, singular, pluralForm)}`;
 }
 
 function pad(value: number): string {
   return String(value).padStart(2, '0');
+}
+
+/** Local date "2026-10-14". */
+export function formatDate(milliseconds: number | null | undefined): string {
+  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {
+    return '–';
+  }
+  const date = new Date(milliseconds);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /** Local "2026-10-14 15:54", or "2026-10-14 15:54:10" with `seconds`. */
@@ -93,10 +107,7 @@ export function formatTimestamp(
   }
   const date = new Date(milliseconds);
   const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-    (options.seconds ? `${time}:${pad(date.getSeconds())}` : time)
-  );
+  return `${formatDate(milliseconds)} ${options.seconds ? `${time}:${pad(date.getSeconds())}` : time}`;
 }
 
 const RELATIVE_UNITS: readonly (readonly [string, number])[] = DURATION_UNITS.slice(0, -1);

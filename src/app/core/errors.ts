@@ -1,3 +1,4 @@
+import { ClusterApiError } from './api-envelope';
 import { isRecord } from './json';
 
 const MAX_DEPTH = 6;
@@ -9,7 +10,8 @@ const MAX_DEPTH = 6;
  * an Elasticsearch error body (`{ error: { root_cause, caused_by, reason } }`),
  * a plain string or an `Error`. The root cause is preferred over generic
  * wrappers such as "failed to create repository", and parser positions such
- * as "[1:40] " are removed.
+ * as "[1:40] " are removed. HTML error pages (a proxy or a server that is not
+ * Elasticsearch) and the generic `ClusterApiError` message are not reasons.
  */
 export function elasticsearchReason(error: unknown): string | null {
   return reasonOf(error, 0);
@@ -26,7 +28,8 @@ function reasonOf(value: unknown, depth: number): string | null {
     return null;
   }
   if (typeof value === 'string') {
-    return value.replace(/^\[\d+:\d+\]\s*/, '').trim() || null;
+    const text = value.replace(/^\[\d+:\d+\]\s*/, '').trim();
+    return text && !/^<(!doctype|html|head|body)\b/i.test(text) ? text : null;
   }
   if (!isRecord(value) && !(value instanceof Error)) {
     return null;
@@ -45,5 +48,7 @@ function reasonOf(value: unknown, depth: number): string | null {
       return reason;
     }
   }
-  return value instanceof Error && value.message ? value.message : null;
+  return value instanceof Error && !(value instanceof ClusterApiError) && value.message
+    ? value.message
+    : null;
 }

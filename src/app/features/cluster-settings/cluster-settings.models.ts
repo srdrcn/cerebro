@@ -1,5 +1,5 @@
 import { DYNAMIC_CLUSTER_SETTINGS, DYNAMIC_CLUSTER_SETTING_PATTERNS } from './cluster-settings.catalog';
-import { PendingChange, SettingRow, settingValueToString } from './settings-editor.models';
+import { PendingChange, SettingRow, settingValueToString } from '../../shared/settings-editor/settings-editor.models';
 
 type SettingValues = Record<string, string>;
 

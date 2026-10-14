@@ -15,9 +15,9 @@
         </h1>
         @if (metadata(); as meta) {
           <div class="index-meta">
-            @if (resolvedIndex() && resolvedIndex() !== index()) {
-              <span class="tag" [title]="index() + ' resolves to ' + resolvedIndex()">
-                <span class="tag-key">via</span><span class="mono">{{ index() }}</span>
+            @if (resolvedIndex() && resolvedIndex() !== loadedIndex()) {
+              <span class="tag" [title]="loadedIndex() + ' resolves to ' + resolvedIndex()">
+                <span class="tag-key">via</span><span class="mono">{{ loadedIndex() }}</span>
               </span>
             }
             @if (meta.uuid) {
@@ -27,7 +27,7 @@
             }
             @if (meta.createdAt) {
               <span class="tag" [title]="meta.createdAt.toISOString()">
-                <span class="tag-key">created</span><span>{{ meta.createdAt | date: 'medium' }}</span>
+                <span class="tag-key">created</span><span>{{ formatTimestamp(meta.createdAt.getTime()) }}</span>
               </span>
             }
             <span class="tag">

@@ -5,7 +5,7 @@ import {
   isDynamicClusterSetting,
   summarizeOverrides,
 } from './cluster-settings.models';
-import { pendingChanges } from './settings-editor.models';
+import { pendingChanges } from '../../shared/settings-editor/settings-editor.models';
 
 describe('cluster settings models', () => {
   it('uses transient values over persistent ones over defaults', () => {

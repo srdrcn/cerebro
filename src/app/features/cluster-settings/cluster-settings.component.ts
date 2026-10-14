@@ -11,6 +11,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
@@ -21,8 +22,8 @@ import {
   buildClusterSettingRows,
   summarizeOverrides,
 } from './cluster-settings.models';
-import { SettingsEditorComponent } from './settings-editor.component';
-import { SettingsSkeletonComponent } from './settings-skeleton.component';
+import { SettingsEditorComponent } from '../../shared/settings-editor/settings-editor.component';
+import { SettingsSkeletonComponent } from '../../shared/settings-editor/settings-skeleton.component';
 import {
   GroupingOptions,
   PendingChange,
@@ -33,7 +34,7 @@ import {
   pruneDrafts,
   settingErrorsFor,
   withoutSavedDrafts,
-} from './settings-editor.models';
+} from '../../shared/settings-editor/settings-editor.models';
 
 const GROUPING: GroupingOptions = {
   generalTitle: 'Other settings',
@@ -141,7 +142,7 @@ export class ClusterSettingsComponent implements PendingChangesAware {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Could not load cluster settings', error);
+        this.alerts.error(failureMessage('Could not load cluster settings', error), error);
       }
     }
   }
@@ -205,7 +206,7 @@ export class ClusterSettingsComponent implements PendingChangesAware {
       this.drafts.update((drafts) => withoutSavedDrafts(drafts, changes));
     } catch (error: unknown) {
       this.errors.set(settingErrorsFor(error, changes));
-      this.alerts.error('Could not save cluster settings', error);
+      this.alerts.error(failureMessage('Could not save cluster settings', error), error);
     } finally {
       this.saving.set(false);
     }

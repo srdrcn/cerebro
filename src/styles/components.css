@@ -449,8 +449,16 @@
 }
 
 .input.is-invalid,
+.select.is-invalid,
 .textarea.is-invalid {
   border-color: var(--red);
+}
+
+.input.is-invalid:focus,
+.select.is-invalid:focus,
+.textarea.is-invalid:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px var(--red);
 }
 
 .input-sm,
@@ -525,6 +533,11 @@
 .field-error {
   color: var(--red-text);
   font-size: var(--text-sm);
+}
+
+.field-error > .bi,
+.field-hint > .bi {
+  margin-right: 3px;
 }
 
 .input-group {
@@ -757,7 +770,7 @@
   transition: all var(--duration-fast) ease;
 }
 
-.chip-toggle:hover {
+.chip-toggle:hover:not(:disabled) {
   color: var(--text);
 }
 
@@ -765,6 +778,11 @@
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
   background: var(--accent-soft);
   color: var(--accent-text);
+}
+
+.chip-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .chip-toggle .count {
@@ -1098,6 +1116,13 @@
 
 .dot-pulse {
   animation: pulse 1.8s ease-in-out infinite;
+}
+
+/* Small dot inside a badge, e.g. "Unsaved changes". */
+.dot-sm {
+  width: 6px;
+  height: 6px;
+  box-shadow: none;
 }
 
 .method {
@@ -1870,6 +1895,10 @@ kbd,
 @media (max-width: 760px) {
   .context-picker {
     flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .page-header__actions:has(.context-picker) {
     width: 100%;
   }
 

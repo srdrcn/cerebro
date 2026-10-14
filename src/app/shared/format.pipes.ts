@@ -4,6 +4,7 @@ import {
   formatCompact,
   formatDuration,
   formatNumber,
+  plural,
 } from '../core/format';
 
 @Pipe({ name: 'bytes' })
@@ -31,5 +32,13 @@ export class CompactNumberPipe implements PipeTransform {
 export class DurationPipe implements PipeTransform {
   transform(value: number | null | undefined): string {
     return formatDuration(value);
+  }
+}
+
+/** The noun for a count: `{{ n | plural: 'stream' }}`, `{{ n | plural: 'index' : 'indices' }}`. */
+@Pipe({ name: 'plural' })
+export class PluralPipe implements PipeTransform {
+  transform(count: number | null | undefined, singular: string, pluralForm?: string): string {
+    return plural(count ?? 0, singular, pluralForm);
   }
 }

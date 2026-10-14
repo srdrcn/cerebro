@@ -37,13 +37,15 @@ src/
 | `ClipboardService` | `copy(text, onSuccess?, onFailure?)`. |
 | `ClusterStatusService` | Cluster health/name polled by the shell; also sets the document title and favicon. |
 | `ThemeService` | `preference()`, `resolved()`, `set()`, `cycle()`. |
-| `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `formatTimestamp`, `formatRelative`, `pluralize`, `sentence`, `humanize`, `severity`, `clampPercent`, `matchesText` (regex-or-substring filter), `sortByName`. |
-| `errors.ts` | `elasticsearchReason(error)` extracts the most specific readable reason from a `ClusterApiError`, an Elasticsearch error body, a string or an `Error`; `failureMessage(action, error)` builds "Could not delete index: no such index [logs]". |
+| `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `formatDate`, `formatTimestamp`, `formatRelative`, `pluralize` ("3 nodes"), `plural` (the noun alone, for labels that style the number), `sentence`, `humanize`, `severity`, `clampPercent`, `matchesText` (regex-or-substring filter), `sortByName`. |
+| `errors.ts` | `elasticsearchReason(error)` extracts the most specific readable reason from a `ClusterApiError`, an Elasticsearch error body, a string or an `Error` (HTML error pages are ignored); `failureMessage(action, error)` builds "Could not delete index: no such index [logs]". |
+| `health.ts` | `healthTone(status)` (`green` / `yellow` / `red` / `gray`, case-insensitive) and `healthLabel(status)` for Elasticsearch health colours. |
 | `json.ts` | `isRecord`, `stringList` for defensive parsing of Elasticsearch responses. |
-| `names.ts` | `validateResourceName(name, noun)` and the invalid character lists for index, template, policy and pipeline names. |
+| `names.ts` | `validateResourceName(name, noun)` (template, snapshot and repository names) and the invalid character lists for resource and index names. ILM policy and pipeline ids follow their own rules in their features. |
 | `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
 | `pending-changes.guard.ts` | `PendingChangesAware` (`confirmDiscard()`) and the `confirmDiscardPendingChanges` route guard. |
 | `preferences.ts` | best-effort `localStorage` helpers for per-browser UI preferences; writes return `false` when the browser refused them. |
+| `save-mode.ts` | `saveMode(name, selected, existing)` → `create` / `update` / `overwrite` / `copy` for editors that save under a typed name. |
 
 ### Shared components (`src/app/shared`)
 
@@ -56,7 +58,9 @@ src/
 | `<cerebro-meter>` | Usage bar: `[value]` (percent), `warn`/`danger` thresholds, `small`, `label`. |
 | `<cerebro-pager>` | "1–20 of 143" + previous/next: `[page] [pageSize] [total] noun (pageChange)`; helpers `clampPage()` and `pageSlice()`. |
 | `createSort()` | Sortable table state from `shared/sort-state.ts`: `sortBy`, `isActive`, `ariaSort` and `icon` for `.sort-button` headers. |
-| Pipes | `bytes`, `num`, `compact`, `duration` (from `shared/format.pipes`). |
+| `dialog[cerebroModal]` | `ModalDialogDirective` for page-owned native dialogs: opens as a modal after the first render (`(opened)` to focus a field), turns Escape and backdrop clicks into `(dismiss)` so the page decides whether to close. `cerebroModal="manual"` + `open()` / `close()` for dialogs that stay rendered. |
+| `<cerebro-settings-editor>` | Settings table with filter, inline editing, pending changes and add-setting form, shared by cluster and index settings (`shared/settings-editor/`). |
+| Pipes | `bytes`, `num`, `compact`, `duration`, `plural` (`{{ n \| plural: 'index' : 'indices' }}`) from `shared/format.pipes`. |
 
 ### Component conventions
 
@@ -98,6 +102,9 @@ light and dark themes** and down to phone width.
    while the request is in flight, with `.is-loading`); submitting an invalid
    form shows `.field-error` messages and moves focus to the first invalid
    field. Errors of a field may also show live once the user has edited it.
+   Field errors read as one sentence without a final period, start with
+   `<i class="bi bi-exclamation-circle" aria-hidden="true"></i>`, and are tied
+   to the control with `aria-describedby` and `aria-invalid`.
 7. Pages that hold unsaved edits implement `PendingChangesAware` and their
    route declares `canDeactivate: [confirmDiscardPendingChanges]`; closing the
    tab is covered with a `beforeunload` handler while edits are pending.
@@ -131,13 +138,29 @@ light and dark themes** and down to phone width.
     <div class="card">
       <div class="card-header">
         <div class="toolbar"><cerebro-search [(value)]="query" placeholder="Filter" /></div>
-        <span class="count-label"><strong>12</strong> items</span>
+        <span class="count-label"><strong>{{ total() | num }}</strong> {{ total() | plural: 'item' }}</span>
       </div>
       <div class="table-wrap"><table class="data-table">…</table></div>
     </div>
     <aside class="card">…</aside>
   </div>
 </section>
+```
+
+Count labels read "12 items", and "3 of 12 items" only while a filter is
+active. A card header with an icon tile:
+
+```html
+<div class="card-header">
+  <div class="row min-w-0">
+    <span class="card-icon" aria-hidden="true"><i class="bi bi-layers"></i></span>
+    <div class="min-w-0">
+      <h2 class="card-title">Title</h2>
+      <p class="card-subtitle">Short description</p>
+    </div>
+  </div>
+  <button type="button" class="btn btn-sm">Action</button>
+</div>
 ```
 
 ### Class reference
@@ -158,7 +181,8 @@ light and dark themes** and down to phone width.
   `.btn-group`; `.link-button` for inline text actions.
 * Forms: `.field` > `.field-label` + control + `.field-hint` / `.field-error`;
   controls `.input`, `.select`, `.textarea`, sizes `.input-sm`/`.select-sm`,
-  `.input-mono`, `.is-invalid`; `.check` (checkbox/radio label wrapper) with
+  `.input-mono` (resource names, with an "e.g. …" placeholder), `.is-invalid`
+  (inputs, selects and textareas); `.check` (checkbox/radio label wrapper) with
   `.check-description`; `.switch`; `.segmented` (+ `.segmented-sm`, buttons with
   `aria-pressed` / `.is-active`); `.chip-toggle[aria-pressed]` for filter
   chips; `.input-group` for icon inputs.
@@ -174,7 +198,8 @@ light and dark themes** and down to phone width.
   `button[aria-selected]`.
 * Indicators: `.badge` + `-green` | `-yellow` | `-red` | `-blue` | `-purple` |
   `-accent` | `-outline`, `.badge-lg`, `.badge-uppercase`; `.tag` (with
-  `.tag-key`); `.dot` + `-green` | `-yellow` | `-red` | `-gray`, `.dot-pulse`;
+  `.tag-key`); `.dot` + `-green` | `-yellow` | `-red` | `-gray`, `.dot-pulse`,
+  `.dot-sm` (inside a badge, e.g. "Unsaved changes");
   `.method` + `.method-GET|POST|PUT|DELETE|HEAD`; `kbd`/`.kbd`; `.spinner`
   (`-lg`); `.skeleton`; `.count-label`; `.toolbar`, `.toolbar-divider`.
 

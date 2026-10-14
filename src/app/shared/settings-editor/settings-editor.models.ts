@@ -297,13 +297,13 @@ const SETTING_NAME = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+$/;
 /** Why a typed setting name cannot be used, if it cannot. */
 export function settingNameError(name: string): string | undefined {
   if (name === '') {
-    return 'Enter the name of the setting.';
+    return 'Enter the name of the setting';
   }
   if (/\s/.test(name)) {
-    return 'Setting names cannot contain spaces.';
+    return 'Setting names cannot contain spaces';
   }
   if (!SETTING_NAME.test(name)) {
-    return 'Use a dotted name made of letters, digits, “_” and “-”.';
+    return 'Use a dotted name made of letters, digits, “_” and “-”';
   }
   return undefined;
 }
@@ -437,7 +437,7 @@ export function buildFlatSettingsPayload(
 export function friendlyReason(reason: string): string {
   const enumValue = /^No enum constant (?:[\w$]+\.)+([\w$]+)$/.exec(reason.trim());
   if (enumValue) {
-    return `[${enumValue[1]?.toLowerCase()}] is not one of the accepted values.`;
+    return `[${enumValue[1]?.toLowerCase()}] is not one of the accepted values`;
   }
   return reason;
 }

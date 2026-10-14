@@ -1,5 +1,5 @@
 import { sortByName } from '../../core/format';
-import { SettingRow, settingValueToString } from '../cluster-settings/settings-editor.models';
+import { SettingRow, settingValueToString } from '../../shared/settings-editor/settings-editor.models';
 import {
   DYNAMIC_INDEX_SETTINGS,
   DYNAMIC_INDEX_SETTING_PATTERNS,

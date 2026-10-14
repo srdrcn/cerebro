@@ -3,12 +3,14 @@ import {
   clampPercent,
   formatBytes,
   formatCompact,
+  formatDate,
   formatDuration,
   formatNumber,
   formatRelative,
   formatTimestamp,
   humanize,
   matchesText,
+  plural,
   pluralize,
   sentence,
   severity,
@@ -65,6 +67,8 @@ describe('format helpers', () => {
     expect(pluralize(0, 'node')).toBe('0 nodes');
     expect(pluralize(1204, 'shard')).toBe('1,204 shards');
     expect(pluralize(2, 'index', 'indices')).toBe('2 indices');
+    expect(plural(1, 'stream')).toBe('stream');
+    expect(plural(4, 'index', 'indices')).toBe('indices');
   });
 
   it('formats local timestamps and relative times', () => {
@@ -72,6 +76,8 @@ describe('format helpers', () => {
     expect(formatTimestamp(time)).toBe('2026-10-14 15:04');
     expect(formatTimestamp(time, { seconds: true })).toBe('2026-10-14 15:04:09');
     expect(formatTimestamp(null)).toBe('–');
+    expect(formatDate(time)).toBe('2026-10-14');
+    expect(formatDate(undefined)).toBe('–');
     expect(formatRelative(time - 30_000, time)).toBe('just now');
     expect(formatRelative(time - 5 * 60_000, time)).toBe('5m ago');
     expect(formatRelative(time + 2 * 3_600_000, time)).toBe('in 2h');

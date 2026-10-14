@@ -19,8 +19,8 @@ import {
 import { DialogService } from '../../core/dialog.service';
 import { pluralize } from '../../core/format';
 import { readPreference, writePreference } from '../../core/preferences';
-import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { SearchInputComponent } from '../../shared/search-input.component';
+import { EmptyStateComponent } from '../empty-state.component';
+import { SearchInputComponent } from '../search-input.component';
 import {
   GroupingOptions,
   PendingChange,
@@ -238,12 +238,19 @@ export class SettingsEditorComponent {
     }
     const existing = this.newNameMatch();
     if (existing && !existing.editable) {
-      return `${name} is ${(existing.lockLabel ?? 'read-only').toLowerCase()} and cannot be changed here.`;
+      return `${name} is ${(existing.lockLabel ?? 'read-only').toLowerCase()} and cannot be changed here`;
     }
     return undefined;
   });
-  readonly newValueError = computed(() => (this.newValue().trim() === '' ? 'Enter a value.' : undefined));
-  readonly addPlaceholder = computed(() => this.addSuggestions()[0] ?? 'setting.name');
+  readonly newValueError = computed(() => (this.newValue().trim() === '' ? 'Enter a value' : undefined));
+  /** The shortest suggestion without the optional prefix, so the example fits the field. */
+  readonly addPlaceholder = computed(() => {
+    const prefix = this.grouping().stripPrefix ?? '';
+    const [example] = this.addSuggestions()
+      .map((name) => (prefix && name.startsWith(prefix) ? name.slice(prefix.length) : name))
+      .sort((left, right) => left.length - right.length);
+    return `e.g. ${example ?? 'cluster.routing.allocation.enable'}`;
+  });
   readonly suggestions = computed(() => {
     const listed = this.rowsByName();
     const drafts = this.drafts();

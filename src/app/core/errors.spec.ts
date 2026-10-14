@@ -30,6 +30,13 @@ describe('elasticsearchReason', () => {
     expect(elasticsearchReason(new Error('offline'))).toBe('offline');
   });
 
+  it('ignores HTML error pages and the generic request failure message', () => {
+    expect(elasticsearchReason(new ClusterApiError(502, '<!DOCTYPE html><html><body>Bad gateway</body></html>'))).toBeNull();
+    expect(elasticsearchReason('<html><head></head></html>')).toBeNull();
+    expect(elasticsearchReason(new ClusterApiError(500, { status: 500 }))).toBeNull();
+    expect(failureMessage('Could not load nodes', new ClusterApiError(500, null))).toBe('Could not load nodes');
+  });
+
   it('returns null when there is nothing readable', () => {
     expect(elasticsearchReason(undefined)).toBeNull();
     expect(elasticsearchReason({ status: 0 })).toBeNull();
