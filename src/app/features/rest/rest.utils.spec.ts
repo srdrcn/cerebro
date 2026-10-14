@@ -10,7 +10,6 @@ import {
   draftForStorage,
   formatEditorBody,
   formatElapsed,
-  autocompleteDefinitions,
   getAutocompleteOptions,
   getPathSuggestions,
   historyBody,
@@ -325,12 +324,14 @@ describe('autocomplete helpers', () => {
   });
 
   it('only suggests paths that answer with JSON', () => {
-    for (const definition of autocompleteDefinitions()) {
-      expect(definition).not.toContain('hot_threads');
-      if (definition.startsWith('_cat/')) {
-        expect(definition).toContain('format=json');
-      }
+    const catOptions = ['_cat/', '_cat/r', '_cat/t'].flatMap((path) =>
+      getAutocompleteOptions([], path),
+    );
+    expect(catOptions.length).toBeGreaterThan(10);
+    for (const option of catOptions) {
+      expect(option).toContain('format=json');
     }
+    expect(getAutocompleteOptions([], '_nodes/')).toEqual(['_nodes/stats']);
   });
 
   it('offers index names next to API roots on an empty path', () => {

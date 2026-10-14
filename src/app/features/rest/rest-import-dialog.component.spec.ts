@@ -91,20 +91,23 @@ describe('RestImportDialogComponent', () => {
     expect(element(fixture).querySelector('dialog')?.hasAttribute('open')).toBe(false);
   });
 
-  it('disables the import when only conflicts would be skipped', async () => {
+  it('keeps the saved versions when only conflicts would be skipped', async () => {
     const fixture = await render(plan({ added: [], incoming: [saved('Health')], identical: [], invalid: 0 }));
     const confirmed = vi.fn();
     fixture.componentInstance.confirmed.subscribe(confirmed);
 
     expect(fixture.componentInstance.importCount()).toBe(0);
-    expect(submitButton(fixture).disabled).toBe(true);
-    expect(submitButton(fixture).textContent?.trim()).toBe('Nothing to import');
-    fixture.componentInstance.confirm();
-    expect(confirmed).not.toHaveBeenCalled();
+    expect(submitButton(fixture).disabled).toBe(false);
+    expect(submitButton(fixture).textContent?.trim()).toBe('Keep saved versions');
 
     fixture.componentInstance.strategy.set('overwrite');
     await fixture.whenStable();
-    expect(submitButton(fixture).disabled).toBe(false);
+    expect(submitButton(fixture).textContent?.trim()).toBe('Import 1 request');
+
+    fixture.componentInstance.strategy.set('skip');
+    await fixture.whenStable();
+    submitButton(fixture).click();
+    expect(confirmed).toHaveBeenCalledWith('skip');
   });
 
   it('lists a few conflicting names and counts the rest', async () => {

@@ -16,6 +16,7 @@ import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage } from '../../core/errors';
 import { pluralize } from '../../core/format';
+import { INVALID_INDEX_NAME_CHARACTERS } from '../../core/names';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { MenuComponent } from '../../shared/menu.component';
@@ -310,6 +311,7 @@ export class CreateIndexComponent {
   }
 
   readonly pluralize = pluralize;
+  readonly invalidNameCharacters = INVALID_INDEX_NAME_CHARACTERS.join(' ');
 
   insertExample(): void {
     this.body.set(EXAMPLE_INDEX_BODY);

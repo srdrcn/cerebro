@@ -14,6 +14,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiError } from '../../core/api-envelope';
 import { ConnectionService } from '../../core/connection.service';
 import { elasticsearchReason } from '../../core/errors';
+import { isRecord } from '../../core/json';
 import { RecentHostsService } from '../../core/recent-hosts.service';
 import { ThemeService } from '../../core/theme.service';
 import { LogoComponent } from '../../shared/logo.component';
@@ -200,7 +201,9 @@ export class ConnectComponent implements OnInit {
   }
 
   private describeFailure(host: string, status: number, body: unknown): string {
-    const reason = elasticsearchReason(body);
+    // Only a JSON body carries an Elasticsearch reason; text and HTML pages
+    // (a proxy or a server that is not Elasticsearch) fall back to the status.
+    const reason = isRecord(body) ? elasticsearchReason(body) : null;
     return reason
       ? `${host} responded with ${status}: ${reason}`
       : `${host} responded with an unexpected status (${status}).`;

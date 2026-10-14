@@ -51,7 +51,7 @@
         </div>
         <div class="stat">
           <div class="stat__label"><i class="bi bi-clock-history" aria-hidden="true"></i> Latest event</div>
-          <div class="stat__value" [title]="absolute(summary().lastEvent)">{{ summary().lastEvent === null ? '–' : relative(summary().lastEvent) }}</div>
+          <div class="stat__value" [attr.title]="absolute(summary().lastEvent)">{{ summary().lastEvent === null ? '–' : relative(summary().lastEvent) }}</div>
           <div class="stat__meta" title="Newest @timestamp across the streams">newest &#64;timestamp</div>
         </div>
       </div>
@@ -71,7 +71,11 @@
             </label>
           </div>
           <span class="count-label">
-            <strong>{{ rows().length }}</strong> of {{ scopedRows().length }} {{ scopedRows().length === 1 ? 'stream' : 'streams' }}
+            @if (query().trim()) {
+              <strong>{{ rows().length | num }}</strong> of {{ pluralize(scopedRows().length, 'stream') }}
+            } @else {
+              <strong>{{ scopedRows().length | num }}</strong> {{ scopedRows().length === 1 ? 'stream' : 'streams' }}
+            }
           </span>
         </div>
 
@@ -82,18 +86,18 @@
                 <tr>
                   <th scope="col" class="ds-expand-col"><span class="visually-hidden">Expand</span></th>
                   @for (column of [columns.name, columns.health, columns.indices]; track column.field) {
-                    <th scope="col" [class.num]="column.numeric" [attr.aria-sort]="ariaSort(column.field)">
-                      <button type="button" class="sort-button" [class.is-active]="sortField() === column.field" (click)="sortBy(column.field)">
-                        {{ column.label }} <i class="bi" [class]="'bi ' + sortIcon(column.field)" aria-hidden="true"></i>
+                    <th scope="col" [class.num]="column.numeric" [attr.aria-sort]="sort.ariaSort(column.field)">
+                      <button type="button" class="sort-button" [class.is-active]="sort.isActive(column.field)" (click)="sort.sortBy(column.field)">
+                        {{ column.label }} <i class="bi" [class]="'bi ' + sort.icon(column.field)" aria-hidden="true"></i>
                       </button>
                     </th>
                   }
                   <th scope="col">Index template</th>
                   <th scope="col">Lifecycle</th>
                   @for (column of [columns.size, columns.lastEvent]; track column.field) {
-                    <th scope="col" [class.num]="column.numeric" [attr.aria-sort]="ariaSort(column.field)">
-                      <button type="button" class="sort-button" [class.is-active]="sortField() === column.field" (click)="sortBy(column.field)">
-                        {{ column.label }} <i class="bi" [class]="'bi ' + sortIcon(column.field)" aria-hidden="true"></i>
+                    <th scope="col" [class.num]="column.numeric" [attr.aria-sort]="sort.ariaSort(column.field)">
+                      <button type="button" class="sort-button" [class.is-active]="sort.isActive(column.field)" (click)="sort.sortBy(column.field)">
+                        {{ column.label }} <i class="bi" [class]="'bi ' + sort.icon(column.field)" aria-hidden="true"></i>
                       </button>
                     </th>
                   }
@@ -200,7 +204,7 @@
                     <td class="num ds-nowrap">{{ row.sizeBytes | bytes }}</td>
                     <td>
                       @if (row.lastEvent !== null) {
-                        <span class="ds-time" [title]="absolute(row.lastEvent)">{{ relative(row.lastEvent) }}</span>
+                        <span class="ds-time" [attr.title]="absolute(row.lastEvent)">{{ relative(row.lastEvent) }}</span>
                       } @else {
                         <span class="text-muted" title="No documents yet">–</span>
                       }
@@ -273,21 +277,19 @@
             </table>
           </div>
         } @else {
-          <div class="ds-empty">
-            @if (linkedMissing() && missingMessage(); as missing) {
-              <cerebro-empty icon="bi-water" [heading]="missing.heading" [text]="missing.text">
-                <button type="button" class="btn btn-sm" (click)="resetFilters()">Show all data streams</button>
-              </cerebro-empty>
-            } @else if (query().trim()) {
-              <cerebro-empty icon="bi-funnel" heading="No matching data streams" text="No stream name, template or lifecycle policy matches this filter.">
-                <button type="button" class="btn btn-sm" (click)="resetFilters()">Clear filter</button>
-              </cerebro-empty>
-            } @else {
-              <cerebro-empty icon="bi-eye-slash" heading="Only hidden or system streams" text="This cluster only has hidden or system data streams.">
-                <button type="button" class="btn btn-sm" (click)="showInternal.set(true)">Show them</button>
-              </cerebro-empty>
-            }
-          </div>
+          @if (linkedMissing() && missingMessage(); as missing) {
+            <cerebro-empty icon="bi-water" [heading]="missing.heading" [text]="missing.text">
+              <button type="button" class="btn btn-sm" (click)="resetFilters()">Show all data streams</button>
+            </cerebro-empty>
+          } @else if (query().trim()) {
+            <cerebro-empty icon="bi-funnel" heading="No matching data streams" text="No stream name, template or lifecycle policy matches this filter.">
+              <button type="button" class="btn btn-sm" (click)="resetFilters()">Clear filter</button>
+            </cerebro-empty>
+          } @else {
+            <cerebro-empty icon="bi-eye-slash" heading="Only hidden or system streams" text="This cluster only has hidden or system data streams.">
+              <button type="button" class="btn btn-sm" (click)="showInternal.set(true)">Show them</button>
+            </cerebro-empty>
+          }
         }
       </div>
     }

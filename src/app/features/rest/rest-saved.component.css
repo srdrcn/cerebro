@@ -65,29 +65,17 @@
   margin-left: 3px;
 }
 
-/* List */
+/* List: row border and selected state come from the shared .list-item. */
 
 .saved-item {
   position: relative;
-  display: flex;
-  align-items: center;
   gap: 2px;
-  padding-right: var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 var(--space-2) 0 0;
   transition: background var(--duration-fast) ease;
 }
 
-.saved-item:last-child {
-  border-bottom: 0;
-}
-
-.saved-item:hover {
+.saved-item:not(.is-selected):hover {
   background: var(--surface-hover);
-}
-
-.saved-item.is-selected {
-  background: var(--accent-soft);
-  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .saved-item__main {

@@ -94,7 +94,7 @@
                   Started <i class="bi" [class]="'bi ' + sort.icon('start')" aria-hidden="true"></i>
                 </button>
               </th>
-              <th scope="col"  [attr.aria-sort]="sort.ariaSort('running')">
+              <th scope="col" [attr.aria-sort]="sort.ariaSort('running')">
                 <button type="button" class="sort-button" [class.is-active]="sort.isActive('running')" (click)="sort.sortBy('running')">
                   Running <i class="bi" [class]="'bi ' + sort.icon('running')" aria-hidden="true"></i>
                 </button>

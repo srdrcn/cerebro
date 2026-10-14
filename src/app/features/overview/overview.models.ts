@@ -96,14 +96,6 @@ export interface OverviewIndexFilter {
   readonly ascending: boolean;
 }
 
-export interface OverviewNodeFilter {
-  readonly name: string;
-  readonly data: boolean;
-  readonly master: boolean;
-  readonly ingest: boolean;
-  readonly coordinating: boolean;
-}
-
 export type IndexOperation =
   | 'open'
   | 'close'

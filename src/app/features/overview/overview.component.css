@@ -940,6 +940,13 @@ cerebro-overview .ov-loading {
     margin-left: 0;
   }
 
+  /* 24px minimum touch targets (WCAG 2.5.8). */
+  cerebro-overview .node-name,
+  cerebro-overview .index-head__name {
+    min-height: 24px;
+    padding-block: 3px;
+  }
+
   cerebro-overview .node-metrics {
     gap: 7px 10px;
   }

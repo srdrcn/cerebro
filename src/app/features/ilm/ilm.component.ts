@@ -666,8 +666,4 @@ export class IlmComponent implements PendingChangesAware {
   formatAge(row: ExplainRow): string {
     return row.ageMillis === null ? row.age ?? '–' : formatDuration(row.ageMillis);
   }
-
-  isHidden(index: string): boolean {
-    return index.startsWith('.');
-  }
 }

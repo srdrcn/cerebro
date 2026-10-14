@@ -161,9 +161,6 @@ export class RestSavedStore {
     if (parseSavedList(document.requests, Date.now()).requests.length !== next.length) {
       return false;
     }
-    const text = JSON.stringify(document);
-    writePreference(SAVED_REQUESTS_KEY, text);
-    // The preference helpers swallow quota errors: check the write landed.
-    return readPreference(SAVED_REQUESTS_KEY) === text;
+    return writePreference(SAVED_REQUESTS_KEY, JSON.stringify(document));
   }
 }

@@ -1,3 +1,4 @@
+import { matchesText } from '../../core/format';
 import {
   BackingIndexRow,
   DataStream,
@@ -146,46 +147,55 @@ export function isInternal(row: StreamRow): boolean {
   return row.hidden || row.system || row.name.startsWith('.');
 }
 
+/**
+ * Streams whose name, index template or ILM policy matches `query` (regex or
+ * substring, like every filter of the app). A literal substring always
+ * matches, so a `?name=` link to a name with regex characters still finds it.
+ */
 export function filterRows(rows: readonly StreamRow[], query: string, showInternal: boolean): StreamRow[] {
-  const needle = query.trim().toLocaleLowerCase();
+  const raw = query.trim();
+  const needle = raw.toLocaleLowerCase();
+  const matches = (value: string | null): boolean =>
+    value !== null && (value.toLocaleLowerCase().includes(needle) || matchesText(value, raw));
   return rows.filter(
     (row) =>
       (showInternal || !isInternal(row)) &&
-      (!needle ||
-        row.name.toLocaleLowerCase().includes(needle) ||
-        (row.template?.toLocaleLowerCase().includes(needle) ?? false) ||
-        (row.lifecycle.kind === 'ilm' && row.lifecycle.policy.toLocaleLowerCase().includes(needle))),
+      (!raw ||
+        matches(row.name) ||
+        matches(row.template) ||
+        (row.lifecycle.kind === 'ilm' && matches(row.lifecycle.policy))),
   );
 }
 
-function compareNullable(left: number | null, right: number | null): number {
-  if (left === right) return 0;
-  if (left === null) return -1;
-  if (right === null) return 1;
-  return left - right;
+/** Missing sizes and times (`null`) always go last, in both directions. */
+function nullRank(left: number | null, right: number | null): number {
+  return Number(left === null) - Number(right === null);
 }
 
+/** Stable sort; missing values always go last, ties fall back to the name. */
 export function sortRows(rows: readonly StreamRow[], field: StreamSortField, reverse: boolean): StreamRow[] {
   const direction = reverse ? -1 : 1;
   return [...rows].sort((left, right) => {
     let result: number;
     switch (field) {
       case 'health':
-        result = HEALTH_RANK[left.health] - HEALTH_RANK[right.health];
+        result = (HEALTH_RANK[left.health] - HEALTH_RANK[right.health]) * direction;
         break;
       case 'indices':
-        result = left.indexCount - right.indexCount;
+        result = (left.indexCount - right.indexCount) * direction;
         break;
       case 'size':
-        result = compareNullable(left.sizeBytes, right.sizeBytes);
+        result =
+          nullRank(left.sizeBytes, right.sizeBytes) || ((left.sizeBytes ?? 0) - (right.sizeBytes ?? 0)) * direction;
         break;
       case 'lastEvent':
-        result = compareNullable(left.lastEvent, right.lastEvent);
+        result =
+          nullRank(left.lastEvent, right.lastEvent) || ((left.lastEvent ?? 0) - (right.lastEvent ?? 0)) * direction;
         break;
       default:
         result = 0;
     }
-    return result * direction || left.name.localeCompare(right.name);
+    return result || left.name.localeCompare(right.name) * (field === 'name' ? direction : 1);
   });
 }
 
@@ -216,41 +226,6 @@ export function nextBackingIndex(name: string, generation: number, now: number):
   const pad = (value: number): string => String(value).padStart(2, '0');
   const day = `${date.getUTCFullYear()}.${pad(date.getUTCMonth() + 1)}.${pad(date.getUTCDate())}`;
   return `.ds-${name}-${day}-${String(generation + 1).padStart(6, '0')}`;
-}
-
-const RELATIVE_UNITS: readonly (readonly [string, number])[] = [
-  ['y', 31_536_000_000],
-  ['mo', 2_592_000_000],
-  ['d', 86_400_000],
-  ['h', 3_600_000],
-  ['m', 60_000],
-];
-
-/** "just now", "5m ago", "3h ago", "2d ago" (or "in 5m" for clock skew). */
-export function formatRelative(milliseconds: number | null | undefined, now: number): string {
-  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {
-    return '–';
-  }
-  const delta = now - milliseconds;
-  const distance = Math.abs(delta);
-  const unit = RELATIVE_UNITS.find(([, size]) => distance >= size);
-  if (!unit) {
-    return 'just now';
-  }
-  const amount = `${Math.floor(distance / unit[1])}${unit[0]}`;
-  return delta >= 0 ? `${amount} ago` : `in ${amount}`;
-}
-
-export function formatTimestamp(milliseconds: number | null | undefined): string {
-  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {
-    return '';
-  }
-  const date = new Date(milliseconds);
-  const pad = (value: number): string => String(value).padStart(2, '0');
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -285,42 +260,29 @@ export function linkedStreamMissing(
 
 /**
  * Copy for a `?name=` link to a stream Elasticsearch did not list. The list
- * comes from `GET /_data_stream` without `expand_wildcards=all`, so hidden and
- * system streams (e.g. `ilm-history-7`, `.logs-deprecation.*`) are absent even
- * though they exist: do not claim the stream was deleted.
+ * includes hidden and system streams, so the stream is gone or the link was
+ * made for another cluster.
  */
 export function missingStreamMessage(name: string): { readonly heading: string; readonly text: string } {
-  const heading = `Data stream “${name}” is not listed`;
-  if (name.startsWith('.')) {
-    return {
-      heading,
-      text:
-        'Elasticsearch did not list it. Names starting with a dot are usually hidden or system streams, ' +
-        'which this page cannot list yet. It may also have been deleted.',
-    };
-  }
   return {
-    heading,
-    text:
-      'Elasticsearch did not list it. It may have been deleted, it may be a hidden or system stream ' +
-      'that this page cannot list yet, or the link points to another cluster.',
+    heading: `Data stream “${name}” not found`,
+    text: 'This cluster has no data stream with this name. It may have been deleted, or the link points to another cluster.',
   };
 }
 
 /**
  * Expanded rows after a `?name=` link changes from `previous` to `next`: the
- * row opened by the previous link collapses (unless `keepPrevious`, i.e. the
- * user toggled it themselves) and the new linked row opens. Rows the user
- * expanded by hand stay open.
+ * row opened by the previous link collapses and the new linked row opens.
+ * Rows the user expanded by hand stay open (the component passes `null` as
+ * `previous` once the user toggled the linked row).
  */
 export function relinkExpanded(
   current: ReadonlySet<string>,
   previous: string | null,
   next: string | null,
-  keepPrevious = false,
 ): Set<string> {
   const expanded = new Set(current);
-  if (previous !== null && previous !== next && !keepPrevious) {
+  if (previous !== null && previous !== next) {
     expanded.delete(previous);
   }
   if (next !== null) {

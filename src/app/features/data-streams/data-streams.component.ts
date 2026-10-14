@@ -14,11 +14,14 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
+import { formatRelative, formatTimestamp, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { BytesPipe, NumberPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
+import { createSort } from '../../shared/sort-state';
 import {
   DataStream,
   DataStreamStats,
@@ -27,12 +30,9 @@ import {
   StreamRow,
   StreamSortField,
 } from './data-streams.models';
-import { failureMessage, pluralize } from '../index-templates/index-templates.utils';
 import {
   buildRows,
   filterRows,
-  formatRelative,
-  formatTimestamp,
   healthDescription,
   isInternal,
   keepsStreamLink,
@@ -70,6 +70,7 @@ export class DataStreamsComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   readonly connection = inject(ConnectionService);
+  readonly pluralize = pluralize;
 
   readonly streams = signal<readonly DataStream[] | undefined>(undefined);
   readonly stats = signal<DataStreamStats | null>(null);
@@ -79,8 +80,8 @@ export class DataStreamsComponent {
 
   readonly query = signal('');
   readonly showInternal = signal(false);
-  readonly sortField = signal<StreamSortField>('name');
-  readonly reverse = signal(false);
+  // Numbers and recency are most useful largest / newest / worst first.
+  readonly sort = createSort<StreamSortField>('name', { descendingFirst: (field) => field !== 'name' });
   readonly expanded = signal<ReadonlySet<string>>(new Set());
   readonly busy = signal<ReadonlyMap<string, RowAction>>(new Map());
   /** Stream named by the `?name=` deep link while the search box still shows it. */
@@ -98,7 +99,7 @@ export class DataStreamsComponent {
   readonly internalCount = computed(() => this.allRows().filter((row) => isInternal(row)).length);
   readonly scopedRows = computed(() => this.allRows().filter((row) => this.showInternal() || !isInternal(row)));
   readonly rows = computed(() =>
-    sortRows(filterRows(this.allRows(), this.query(), this.showInternal()), this.sortField(), this.reverse()),
+    sortRows(filterRows(this.allRows(), this.query(), this.showInternal()), this.sort.field(), this.sort.reverse()),
   );
   readonly summary = computed(() => summarize(this.scopedRows()));
   readonly statsMissing = computed(() => this.streams() !== undefined && this.stats() === null);
@@ -192,30 +193,6 @@ export class DataStreamsComponent {
     }
   }
 
-  sortBy(field: StreamSortField): void {
-    if (this.sortField() === field) {
-      this.reverse.update((value) => !value);
-    } else {
-      this.sortField.set(field);
-      // Numbers and recency are most useful largest / newest / worst first.
-      this.reverse.set(field !== 'name');
-    }
-  }
-
-  ariaSort(field: StreamSortField): 'ascending' | 'descending' | 'none' {
-    if (this.sortField() !== field) {
-      return 'none';
-    }
-    return this.reverse() ? 'descending' : 'ascending';
-  }
-
-  sortIcon(field: StreamSortField): string {
-    if (this.sortField() !== field) {
-      return 'bi-arrow-down-up';
-    }
-    return this.reverse() ? 'bi-arrow-down' : 'bi-arrow-up';
-  }
-
   isExpanded(name: string): boolean {
     return this.expanded().has(name);
   }
@@ -244,8 +221,9 @@ export class DataStreamsComponent {
     return formatRelative(time, this.now());
   }
 
-  absolute(time: number | null): string {
-    return formatTimestamp(time);
+  /** Exact local time for a tooltip; no tooltip without a time. */
+  absolute(time: number | null): string | null {
+    return time === null ? null : formatTimestamp(time, { seconds: true });
   }
 
   healthTitle(row: StreamRow): string {
@@ -307,7 +285,7 @@ export class DataStreamsComponent {
         `This permanently deletes the data stream and its ${indices} listed below, including every document stored in them. ` +
         `It cannot be undone. A new document sent to ${row.name} would create an empty stream again.`,
       items: row.backingIndices.map((index) => index.name),
-      confirmLabel: count === 1 ? 'Delete stream and 1 index' : `Delete stream and ${count} indices`,
+      confirmLabel: `Delete stream and ${pluralize(count, 'index', 'indices')}`,
       tone: 'danger',
     });
     if (!confirmed) {

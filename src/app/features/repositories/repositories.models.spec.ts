@@ -119,7 +119,7 @@ describe('repository validation', () => {
     expect(validateRepositoryName('Backups-2')).toBeNull();
     expect(validateRepositoryName('')).toMatch(/Enter/);
     expect(validateRepositoryName('my repo')).toMatch(/spaces/);
-    expect(validateRepositoryName('_hidden')).toMatch(/start with "_"/);
+    expect(validateRepositoryName('_hidden')).toBeNull();
     expect(validateRepositoryName('a#b')).toMatch(/"#"/);
     expect(validateRepositoryName('a/b,c')).toBe('Repository names cannot contain "/", ","');
   });

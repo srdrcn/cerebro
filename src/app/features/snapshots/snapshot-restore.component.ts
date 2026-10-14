@@ -13,7 +13,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
-import { elasticsearchReason } from '../../core/errors';
+import { elasticsearchReason, failureMessage } from '../../core/errors';
 import { formatTimestamp, pluralize } from '../../core/format';
 import { ChecklistOption, IndexChecklistComponent } from './index-checklist.component';
 import { SnapshotRecord, buildRestoreSnapshotPayload, defaultRestoreForm } from './snapshots.models';
@@ -319,7 +319,7 @@ export class SnapshotRestoreComponent {
       this.close();
     } catch (error: unknown) {
       this.failure.set(elasticsearchReason(error) ?? 'Elasticsearch rejected the restore request.');
-      this.alerts.error(`Could not restore snapshot ${name}`, error);
+      this.alerts.error(failureMessage(`Could not restore snapshot ${name}`, error), error);
     } finally {
       this.restoring.set(false);
     }

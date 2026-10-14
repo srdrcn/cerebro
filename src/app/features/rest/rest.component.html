@@ -403,8 +403,8 @@
           />
           @if (history(); as all) {
             <span class="count-label">
-              @if (historyQuery()) {
-                <strong>{{ visibleHistory().length }}</strong> of {{ all.length }}
+              @if (historyQuery().trim()) {
+                <strong>{{ visibleHistory().length }}</strong> of {{ pluralize(all.length, 'request') }}
               } @else {
                 <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'request' : 'requests' }}
               }
@@ -424,7 +424,7 @@
                 <button type="button" class="btn btn-sm" (click)="historyQuery.set('')">Clear filter</button>
               </cerebro-empty>
             } @else {
-              <ul class="list history-list" aria-label="Previous requests">
+              <ul class="list" aria-label="Previous requests">
                 @for (entry of visibleHistory(); track $index) {
                   <li>
                     <button
@@ -450,8 +450,8 @@
           } @else if (historyFailed()) {
             <cerebro-empty
               icon="bi-exclamation-triangle"
-              heading="History could not be loaded"
-              text="Cerebro could not read the saved requests."
+              heading="Could not load history"
+              text="Cerebro could not read the request history."
             >
               <button type="button" class="btn btn-sm" (click)="loadHistory()">
                 <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
@@ -472,7 +472,6 @@
       >
         <cerebro-rest-saved
           [modKey]="modKey"
-          [canSaveCurrent]="canSave()"
           [dirty]="linkedDirty()"
           (load)="loadSaved($event)"
           (rename)="openRenameDialog($event)"
@@ -484,7 +483,7 @@
 
     <!-- Response -->
     <section #responsePane class="card pane response-pane" aria-labelledby="rest-response-title" [attr.aria-busy]="sending()">
-      <div class="pane-header response-header">
+      <div class="pane-header">
         <div class="response-header__main">
           <h2 id="rest-response-title" class="response-title">Response</h2>
           @if (response(); as result) {
@@ -498,7 +497,7 @@
             </span>
             @if (result.status !== null) {
               <span class="response-meta tabular">
-                <span class="response-meta__time" title="Round-trip time through Cerebro"><i class="bi bi-stopwatch" aria-hidden="true"></i> {{ elapsedLabel(result.elapsedMs) }}</span>
+                <span title="Round-trip time through Cerebro"><i class="bi bi-stopwatch" aria-hidden="true"></i> {{ elapsedLabel(result.elapsedMs) }}</span>
                 <span class="response-meta__size" title="Response size"><i class="bi bi-file-earmark-text" aria-hidden="true"></i> {{ result.bytes | bytes }}</span>
               </span>
             }

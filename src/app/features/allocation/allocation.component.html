@@ -44,7 +44,7 @@
           [attr.max]="formShardCount() > 0 ? formShardCount() - 1 : null"
           [class.is-invalid]="submitted() && !!formIndex() && !!formError()"
           [attr.aria-invalid]="submitted() && !!formIndex() && !!formError()"
-          [attr.aria-describedby]="submitted() && formError() ? 'alloc-form-error' : null"
+          [attr.aria-describedby]="submitted() && !!formIndex() && formError() ? 'alloc-form-error' : null"
           [ngModel]="formShard()"
           (ngModelChange)="setShard($event)"
         />

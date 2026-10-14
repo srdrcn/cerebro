@@ -19,6 +19,7 @@ import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
 import { formatDuration, formatRelative, formatTimestamp, pluralize, sortByName } from '../../core/format';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
@@ -353,7 +354,7 @@ export class SnapshotsComponent {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.landingFailed.set(true);
-        this.alerts.error('Could not load snapshot repositories', error);
+        this.alerts.error(failureMessage('Could not load snapshot repositories', error), error);
       }
     }
   }
@@ -376,7 +377,7 @@ export class SnapshotsComponent {
     } catch (error: unknown) {
       if (sequence === this.snapshotSequence && repository === this.repository()) {
         this.snapshotsFailed.set(true);
-        this.alerts.error(`Could not load the snapshots of ${repository}`, error);
+        this.alerts.error(failureMessage(`Could not load the snapshots of ${repository}`, error), error);
       }
     }
   }
@@ -525,7 +526,7 @@ export class SnapshotsComponent {
         await this.loadSnapshots(repository);
       }
     } catch (error: unknown) {
-      this.alerts.error(`Could not delete snapshot ${name}`, error);
+      this.alerts.error(failureMessage(`Could not delete snapshot ${name}`, error), error);
     } finally {
       this.deleting.update((keys) => {
         const next = new Set(keys);
@@ -575,7 +576,7 @@ export class SnapshotsComponent {
         await this.loadSnapshots(repository);
       }
     } catch (error: unknown) {
-      this.alerts.error(`Could not create snapshot ${name}`, error);
+      this.alerts.error(failureMessage(`Could not create snapshot ${name}`, error), error);
     } finally {
       this.creating.set(false);
     }

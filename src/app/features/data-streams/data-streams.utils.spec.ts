@@ -4,8 +4,6 @@ import {
   backingIndexRows,
   buildRows,
   filterRows,
-  formatRelative,
-  formatTimestamp,
   healthDescription,
   healthLabel,
   healthTone,
@@ -160,6 +158,15 @@ describe('filter, sort and summary', () => {
     expect(filterRows(rows, 'events-policy', false).map((row) => row.name)).toEqual(['app-events-web']);
   });
 
+  it('accepts regular expressions like every filter, and literal names', () => {
+    expect(filterRows(rows, '^app-.*-w', false).map((row) => row.name)).toEqual(['app-events-web', 'app-events-worker']);
+    expect(filterRows(rows, 'worker$', false).map((row) => row.name)).toEqual(['app-events-worker']);
+    // The query reaches the regex unchanged: lowercasing would turn \S into \s.
+    expect(filterRows(rows, '\\S+-WORKER', false).map((row) => row.name)).toEqual(['app-events-worker']);
+    const [plus] = buildRows([{ name: 'a+b' }], null);
+    expect(filterRows([plus!], 'a+b', false)).toHaveLength(1);
+  });
+
   it('sorts by every column with the name as tie breaker', () => {
     expect(sortRows(rows, 'name', false).map((row) => row.name)).toEqual([
       '.logs-deprecation.elasticsearch-default',
@@ -169,7 +176,17 @@ describe('filter, sort and summary', () => {
     expect(sortRows(rows, 'health', true).map((row) => row.health)).toEqual(['red', 'yellow', 'green']);
     expect(sortRows(rows, 'indices', true)[0]?.name).toBe('app-events-web');
     expect(sortRows(rows, 'size', true).map((row) => row.sizeBytes)).toEqual([20_792, 11_050, null]);
-    expect(sortRows(rows, 'lastEvent', false).map((row) => row.lastEvent)).toEqual([null, null, 2_000]);
+    expect(sortRows(rows, 'lastEvent', false).map((row) => row.lastEvent)).toEqual([2_000, null, null]);
+    expect(sortRows(rows, 'name', true).map((row) => row.name)).toEqual([
+      'app-events-worker',
+      'app-events-web',
+      '.logs-deprecation.elasticsearch-default',
+    ]);
+  });
+
+  it('puts missing sizes and times last in both directions', () => {
+    expect(sortRows(rows, 'size', false).map((row) => row.sizeBytes)).toEqual([11_050, 20_792, null]);
+    expect(sortRows(rows, 'lastEvent', true).map((row) => row.lastEvent)).toEqual([2_000, null, null]);
   });
 
   it('summarizes the visible streams', () => {
@@ -186,21 +203,6 @@ describe('formatting', () => {
   it('shortens backing index names', () => {
     expect(shortIndexName('.ds-app-events-web-2026.10.14-000002', 'app-events-web')).toBe('2026.10.14-000002');
     expect(shortIndexName('restored-index', 'app-events-web')).toBe('restored-index');
-  });
-
-  it('formats relative times', () => {
-    const now = 10 * 86_400_000;
-    expect(formatRelative(now - 10_000, now)).toBe('just now');
-    expect(formatRelative(now - 5 * 60_000, now)).toBe('5m ago');
-    expect(formatRelative(now - 3 * 3_600_000, now)).toBe('3h ago');
-    expect(formatRelative(now - 2 * 86_400_000, now)).toBe('2d ago');
-    expect(formatRelative(now + 5 * 60_000, now)).toBe('in 5m');
-    expect(formatRelative(null, now)).toBe('–');
-  });
-
-  it('formats absolute times in local time', () => {
-    expect(formatTimestamp(new Date(2026, 9, 14, 9, 5, 7).getTime())).toBe('2026-10-14 09:05:07');
-    expect(formatTimestamp(null)).toBe('');
   });
 });
 
@@ -241,14 +243,13 @@ describe('deep links', () => {
     expect(linkedStreamMissing([], 'app-events-web', true)).toBe(true);
   });
 
-  it('does not claim an unlisted linked stream was deleted', () => {
-    const plain = missingStreamMessage('ilm-history-7');
-    expect(plain.heading).toBe('Data stream “ilm-history-7” is not listed');
-    expect(plain.text).toContain('hidden or system stream');
-    expect(plain.text).toContain('may have been deleted');
-    const dotted = missingStreamMessage('.logs-deprecation.elasticsearch-default');
-    expect(dotted.heading).toContain('.logs-deprecation.elasticsearch-default');
-    expect(dotted.text).toMatch(/^Elasticsearch did not list it\. Names starting with a dot/);
+  it('explains a linked stream that is not listed', () => {
+    // Hidden and system streams are listed too, so the stream is gone or the link is for another cluster.
+    const message = missingStreamMessage('ilm-history-7');
+    expect(message.heading).toBe('Data stream “ilm-history-7” not found');
+    expect(message.text).toContain('may have been deleted');
+    expect(message.text).toContain('another cluster');
+    expect(message.text).not.toContain('hidden');
   });
 
   it('collapses the row opened by the previous link when a new link arrives', () => {
@@ -261,8 +262,6 @@ describe('deep links', () => {
     expect([...second].sort()).toEqual(['app-events-worker', 'metrics']);
     // A plain link without ?name= collapses the linked row too.
     expect([...relinkExpanded(second, 'app-events-worker', null)]).toEqual(['metrics']);
-    // Rows the user toggled themselves stay open.
-    expect([...relinkExpanded(second, 'app-events-worker', null, true)].sort()).toEqual(['app-events-worker', 'metrics']);
     // Re-linking the same stream keeps it open.
     expect([...relinkExpanded(second, 'app-events-worker', 'app-events-worker')].sort()).toEqual([
       'app-events-worker',

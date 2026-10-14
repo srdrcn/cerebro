@@ -18,6 +18,7 @@ import { elasticsearchReason } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe } from '../../shared/format.pipes';
 import { PagerComponent, clampPage, pageSlice } from '../../shared/pager.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { createSort } from '../../shared/sort-state';
@@ -66,7 +67,7 @@ interface CatFailure {
 
 @Component({
   selector: 'cerebro-cat',
-  imports: [EmptyStateComponent, FormsModule, PagerComponent, RouterLink, SearchInputComponent],
+  imports: [EmptyStateComponent, FormsModule, NumberPipe, PagerComponent, RouterLink, SearchInputComponent],
   templateUrl: './cat.component.html',
   styleUrl: './cat.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

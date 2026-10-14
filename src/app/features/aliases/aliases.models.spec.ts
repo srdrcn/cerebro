@@ -156,7 +156,8 @@ describe('alias draft validation', () => {
   it('applies the Elasticsearch naming rules', () => {
     expect(aliasNameError('_hidden')).toBe('An alias cannot start with _, - or +.');
     expect(aliasNameError('..')).toBe('An alias cannot be named "." or "..".');
-    expect(aliasNameError('a b,c')).toBe('An alias cannot contain spaces.');
+    expect(aliasNameError('a b')).toBe('An alias cannot contain spaces.');
+    expect(aliasNameError('a b,c')).toBe('An alias cannot contain spaces, ",".');
     expect(aliasNameError('a,b#c')).toBe('An alias cannot contain ",", "#".');
     expect(aliasNameError('tenant:1')).toBe('An alias cannot contain ":".');
     expect(aliasNameError('x'.repeat(256))).toBe('An alias name cannot be longer than 255 bytes.');

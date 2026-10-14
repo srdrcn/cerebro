@@ -1,3 +1,5 @@
+import { isRecord } from '../../core/json';
+
 export const CAT_APIS = [
   'aliases',
   'allocation',
@@ -344,10 +346,7 @@ export function asCatRows(value: unknown): readonly CatRow[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.filter(
-    (row): row is CatRow =>
-      typeof row === 'object' && row !== null && !Array.isArray(row),
-  );
+  return value.filter((row): row is CatRow => isRecord(row));
 }
 
 export function catCellText(value: unknown): string {

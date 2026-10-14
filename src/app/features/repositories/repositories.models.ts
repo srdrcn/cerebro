@@ -210,8 +210,9 @@ export function normalizeRepositorySettings(
 }
 
 /**
- * Mirrors the repository name rules of Elasticsearch: the shared invalid
- * characters, but unlike index or snapshot names upper case is allowed.
+ * Mirrors the repository name rules of Elasticsearch: no whitespace and none
+ * of the shared invalid characters. Unlike index or snapshot names, upper case
+ * and a leading "_" are allowed.
  */
 export function validateRepositoryName(value: string): string | null {
   const name = value.trim();
@@ -220,9 +221,6 @@ export function validateRepositoryName(value: string): string | null {
   }
   if (/\s/.test(name)) {
     return 'Repository names cannot contain spaces';
-  }
-  if (name.startsWith('_')) {
-    return 'Repository names cannot start with "_"';
   }
   const invalid = invalidCharacters(name);
   return invalid.length > 0

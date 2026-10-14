@@ -357,6 +357,6 @@ describe('SnapshotsComponent', () => {
     expect(target.landing()).toBeDefined();
     expect(target.snapshotsFailed()).toBe(true);
     expect(target.snapshots()).toBeUndefined();
-    expect(alerts.error).toHaveBeenCalledWith('Could not load the snapshots of alpha', expect.any(ClusterApiError));
+    expect(alerts.error).toHaveBeenCalledWith('Could not load the snapshots of alpha: missing', expect.any(ClusterApiError));
   });
 });

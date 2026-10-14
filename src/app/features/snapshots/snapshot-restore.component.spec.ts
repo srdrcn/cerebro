@@ -280,7 +280,7 @@ describe('SnapshotRestoreComponent', () => {
 
     await component.restore();
 
-    expect(alerts.error).toHaveBeenCalledWith('Could not restore snapshot nightly', expect.any(Error));
+    expect(alerts.error).toHaveBeenCalledWith('Could not restore snapshot nightly: cannot restore', expect.any(Error));
     expect(component.failure()).toBe('cannot restore');
     expect(closed).not.toHaveBeenCalled();
     expect(component.restoring()).toBe(false);

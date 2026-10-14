@@ -1,4 +1,4 @@
-<section class="page page--wide overview" aria-labelledby="overview-title">
+<section class="page page--wide" aria-labelledby="overview-title">
   <header class="page-header">
     <div class="page-header__text">
       <h1 id="overview-title" class="page-title">Overview</h1>
@@ -133,26 +133,9 @@
       <div class="callout callout-warning ov-callout" role="status">
         <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
         <div class="ov-callout__body">
-          <strong>
-            @if (counts().unassigned > 0) {
-              {{ counts().unassigned }} unassigned
-            }
-            @if (counts().unassigned > 0 && (counts().relocating > 0 || counts().initializing > 0)) {
-              ·
-            }
-            @if (counts().relocating > 0) {
-              {{ counts().relocating }} relocating
-            }
-            @if (counts().relocating > 0 && counts().initializing > 0) {
-              ·
-            }
-            @if (counts().initializing > 0) {
-              {{ counts().initializing }} initializing
-            }
-            {{ counts().unassigned + counts().relocating + counts().initializing === 1 ? 'shard' : 'shards' }}
-          </strong>
+          <strong>{{ activityLabel() }}</strong>
           <span class="ov-callout__text">
-            {{ affectedCount() }} {{ affectedCount() === 1 ? 'index is' : 'indices are' }} affected.
+            {{ pluralize(affectedCount(), 'index is', 'indices are') }} affected.
           </span>
         </div>
         <div class="ov-callout__actions">
@@ -252,7 +235,7 @@
               <i class="bi bi-chevron-down ov-chevron" aria-hidden="true"></i>
             </ng-container>
             <div class="menu-label">
-              All {{ filteredIndices().length }} filtered {{ filteredIndices().length === 1 ? 'index' : 'indices' }}
+              All {{ pluralize(filteredIndices().length, 'filtered index', 'filtered indices') }}
             </div>
             @for (operation of bulkOperations; track operation) {
               @let hint = bulkHint(operation);
@@ -304,7 +287,6 @@
           <div class="ov-map-wrap" [class.is-scroll]="layout().scroll">
             <table
               class="shard-map"
-              [class.is-expanded]="expanded()"
               [class.is-relocating]="!!selected()"
               [style.width.px]="tableWidth()"
               aria-label="Shard allocation by node and index"
@@ -321,8 +303,14 @@
               <thead>
                 <tr>
                   <th scope="col" class="map-corner">
-                    <span class="stat__label">Nodes</span>
-                    <span class="map-corner__count">{{ nodes().length }} of {{ dataNodeCount() }} data</span>
+                    <span class="section-label">Nodes</span>
+                    <span class="map-corner__count">
+                      @if (nodeName().trim()) {
+                        {{ nodes().length }} of {{ pluralize(dataNodeCount(), 'data node') }}
+                      } @else {
+                        {{ pluralize(dataNodeCount(), 'data node') }}
+                      }
+                    </span>
                   </th>
                   @for (column of columns(); track column.index.name) {
                     <th
@@ -439,7 +427,7 @@
                         <span class="node-avatar is-warning" aria-hidden="true"><i class="bi bi-exclamation-triangle"></i></span>
                         <div class="min-w-0">
                           <div class="node-name-text">Unassigned</div>
-                          <div class="node-host">{{ overview.unassigned_shards }} {{ overview.unassigned_shards === 1 ? 'shard' : 'shards' }}</div>
+                          <div class="node-host">{{ pluralize(overview.unassigned_shards, 'shard') }}</div>
                         </div>
                       </div>
                     </th>

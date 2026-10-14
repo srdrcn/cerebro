@@ -45,7 +45,7 @@
             } @else if (nameCheck().warning; as warning) {
               <p class="field-hint text-warning"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ warning }}</p>
             } @else {
-              <p class="field-hint">Lowercase, without spaces or <span class="mono">\ / * ? " &lt; &gt; | , # :</span></p>
+              <p class="field-hint">Lowercase, without spaces or <span class="mono">{{ invalidNameCharacters }}</span></p>
             }
           </div>
         </div>

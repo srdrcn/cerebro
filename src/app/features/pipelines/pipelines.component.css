@@ -41,12 +41,6 @@
   padding: 10px var(--space-4);
 }
 
-.pipeline-item .list-item__icon {
-  width: 30px;
-  height: 30px;
-  font-size: 14px;
-}
-
 .pipeline-item:disabled {
   cursor: default;
 }

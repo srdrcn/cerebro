@@ -13,6 +13,7 @@ import {
   describeShard,
   filterOverviewIndices,
   hasShardActivity,
+  shardActivityLabel,
   healthLabel,
   healthTone,
   escapeRegExp,
@@ -25,6 +26,7 @@ import {
   nodeRoleIcons,
   normalizeOverview,
   operationConfirmation,
+  operationFailure,
   operationSuccess,
   operationTargets,
   pageOfIndex,
@@ -351,6 +353,8 @@ describe('overview helpers', () => {
     ).toBe(10);
     expect(hasShardActivity({ unassigned: 0, relocating: 0, initializing: 1 })).toBe(true);
     expect(hasShardActivity({ unassigned: 0, relocating: 0, initializing: 0 })).toBe(false);
+    expect(shardActivityLabel({ unassigned: 0, relocating: 0, initializing: 1 })).toBe('1 initializing shard');
+    expect(shardActivityLabel({ unassigned: 1200, relocating: 1, initializing: 0 })).toBe('1,200 unassigned · 1 relocating shards');
     expect(pageOfIndex([index('a'), index('b'), index('c')], 'c', 2)).toBe(2);
     expect(pageOfIndex([index('a')], 'z', 2)).toBeUndefined();
   });
@@ -383,6 +387,9 @@ describe('overview helpers', () => {
     expect(operationConfirmation('merge', ['a']).tone).toBe('warning');
     expect(operationSuccess('refresh', ['a', 'b', 'c'])).toBe('3 indices refreshed');
     expect(operationSuccess('close', ['products'])).toBe('Index products closed');
+    expect(operationFailure('close', ['products'])).toBe('Could not close index products');
+    expect(operationFailure('merge', ['a', 'b'])).toBe('Could not force merge 2 indices');
+    expect(operationFailure('cache', ['a', 'b', 'c'])).toBe('Could not clear the cache of 3 indices');
   });
 
   it('leaves closed indices out of operations that fail on them', () => {

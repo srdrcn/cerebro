@@ -103,7 +103,7 @@ const MAX_LISTED_CONFLICTS = 8;
 
         <footer class="dialog__footer">
           <button type="button" class="btn" (click)="close()">Cancel</button>
-          <button type="submit" class="btn btn-primary" [disabled]="importCount() === 0">
+          <button type="submit" class="btn btn-primary">
             <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>
             {{ submitLabel() }}
           </button>
@@ -216,7 +216,7 @@ export class RestImportDialogComponent {
   );
   readonly submitLabel = computed(() => {
     const count = this.importCount();
-    return count === 0 ? 'Nothing to import' : `Import ${pluralize(count, 'request')}`;
+    return count === 0 ? 'Keep saved versions' : `Import ${pluralize(count, 'request')}`;
   });
 
   constructor() {
@@ -228,10 +228,8 @@ export class RestImportDialogComponent {
     });
   }
 
+  /** With nothing to add, confirming keeps the saved versions (the page says so). */
   confirm(): void {
-    if (this.importCount() === 0) {
-      return;
-    }
     this.confirmed.emit(this.strategy());
     this.close();
   }

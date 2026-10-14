@@ -1,4 +1,5 @@
-import { formatBytes, formatCompact, matchesText } from '../../core/format';
+import { formatBytes, formatCompact, formatNumber, matchesText, pluralize, sentence } from '../../core/format';
+import { isInternalAttribute } from '../../core/node-attributes';
 import {
   IndexOperation,
   IndexOperationPath,
@@ -6,7 +7,6 @@ import {
   OverviewIndex,
   OverviewIndexFilter,
   OverviewNode,
-  OverviewNodeFilter,
   OverviewShard,
   RawOverviewData,
   RawOverviewIndex,
@@ -17,7 +17,7 @@ import {
 export const UNASSIGNED = 'unassigned';
 
 /** Fills the fields the backend omits for legacy closed indices. */
-export function normalizeIndex(index: RawOverviewIndex): OverviewIndex {
+function normalizeIndex(index: RawOverviewIndex): OverviewIndex {
   return {
     ...index,
     unhealthy: index.unhealthy ?? false,
@@ -107,32 +107,13 @@ export function revealIndexFilter(
   return { ...relaxed, name: `^${escapeRegExp(name)}$` };
 }
 
-export function matchesOverviewNode(
-  node: OverviewNode,
-  filter: OverviewNodeFilter,
-): boolean {
-  const matchesRole =
-    (node.data && filter.data) ||
-    (node.master && filter.master) ||
-    (node.ingest && filter.ingest) ||
-    (node.coordinating && filter.coordinating);
-  return matchesRole && matchesText(node.name, filter.name);
-}
-
 /** Data nodes matching the name filter (regex or substring), sorted by name. */
 export function visibleDataNodes(
   nodes: readonly OverviewNode[],
   name: string,
 ): OverviewNode[] {
-  const filter: OverviewNodeFilter = {
-    name,
-    data: true,
-    master: false,
-    ingest: false,
-    coordinating: false,
-  };
   return nodes
-    .filter((node) => matchesOverviewNode(node, filter))
+    .filter((node) => node.data && matchesText(node.name, name))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -278,6 +259,21 @@ export function hasShardActivity(counts: ShardCounts): boolean {
   return counts.unassigned > 0 || counts.relocating > 0 || counts.initializing > 0;
 }
 
+/** "3 unassigned · 1 relocating shards": the non-zero counts, one shared noun. */
+export function shardActivityLabel(counts: ShardCounts): string {
+  const parts: [number, string][] = [
+    [counts.unassigned, 'unassigned'],
+    [counts.relocating, 'relocating'],
+    [counts.initializing, 'initializing'],
+  ];
+  const total = counts.unassigned + counts.relocating + counts.initializing;
+  const label = parts
+    .filter(([count]) => count > 0)
+    .map(([count, state]) => `${formatNumber(count)} ${state}`)
+    .join(' · ');
+  return `${label} ${total === 1 ? 'shard' : 'shards'}`;
+}
+
 /** Below this width the grid switches to its compact phone geometry. */
 const NARROW_WIDTH = 600;
 
@@ -348,7 +344,7 @@ export function nodeAttributes(
   attributes: Readonly<Record<string, unknown>>,
 ): readonly (readonly [string, string])[] {
   return Object.entries(attributes)
-    .filter(([name]) => !/^(ml|xpack|transform)\./.test(name))
+    .filter(([name]) => !isInternalAttribute(name))
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([name, value]) => [name, String(value)] as const);
 }
@@ -385,8 +381,7 @@ export type HealthTone = 'green' | 'yellow' | 'red' | 'gray';
 
 /** Cluster health in sentence case ("Yellow"), like every other displayed value. */
 export function healthLabel(status: string | null | undefined): string {
-  const value = (status ?? '').trim().toLowerCase();
-  return value ? value.charAt(0).toUpperCase() + value.slice(1) : 'Unknown';
+  return sentence((status ?? '').toLowerCase()) || 'Unknown';
 }
 
 export function healthTone(status: string | null | undefined): HealthTone {
@@ -513,8 +508,10 @@ export const OPERATIONS: Readonly<Record<IndexOperation, OperationDefinition>> =
   },
 };
 
-function noun(count: number): string {
-  return count === 1 ? 'index' : 'indices';
+/** "1 index", "3 indices", or with an adjective: "2 closed indices". */
+function indexCount(count: number, adjective = ''): string {
+  const prefix = adjective ? `${adjective} ` : '';
+  return pluralize(count, `${prefix}index`, `${prefix}indices`);
 }
 
 /** Operations Elasticsearch rejects on closed indices (`index_closed_exception`). */
@@ -559,7 +556,7 @@ export function operationConfirmation(
   const definition = OPERATIONS[operation];
   const count = names.length;
   const single = count === 1;
-  const target = single ? `index ${names[0]}` : `${count} ${noun(count)}`;
+  const target = single ? `index ${names[0]}` : indexCount(count);
   const verb = operation === 'cache' ? 'Clear the cache of' : definition.label;
   const confirmLabel =
     operation === 'cache'
@@ -568,9 +565,9 @@ export function operationConfirmation(
         : `Clear ${count} caches`
       : single
         ? `${definition.label} index`
-        : `${definition.label} ${count} ${noun(count)}`;
+        : `${definition.label} ${indexCount(count)}`;
   const skippedNote =
-    skipped > 0 ? ` ${skipped} closed ${noun(skipped)} ${skipped === 1 ? 'is' : 'are'} skipped.` : '';
+    skipped > 0 ? ` ${indexCount(skipped, 'closed')} ${skipped === 1 ? 'is' : 'are'} skipped.` : '';
   return {
     title: `${verb} ${target}?`,
     message: definition.message + skippedNote,
@@ -587,7 +584,14 @@ export function operationSuccess(
   skipped = 0,
 ): string {
   const definition = OPERATIONS[operation];
-  const subject = names.length === 1 ? `Index ${names[0]}` : `${names.length} ${noun(names.length)}`;
-  const skippedNote = skipped > 0 ? `, ${skipped} closed ${noun(skipped)} skipped` : '';
+  const subject = names.length === 1 ? `Index ${names[0]}` : indexCount(names.length);
+  const skippedNote = skipped > 0 ? `, ${indexCount(skipped, 'closed')} skipped` : '';
   return `${subject} ${definition.done}${skippedNote}`;
+}
+
+/** "Could not close index products" / "Could not clear the cache of 3 indices". */
+export function operationFailure(operation: IndexOperation, names: readonly string[]): string {
+  const verb = operation === 'cache' ? 'clear the cache of' : OPERATIONS[operation].label.toLowerCase();
+  const target = names.length === 1 ? `index ${names[0]}` : indexCount(names.length);
+  return `Could not ${verb} ${target}`;
 }

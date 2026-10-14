@@ -507,16 +507,18 @@
                   autocomplete="off"
                   autocapitalize="off"
                   spellcheck="false"
-                  aria-describedby="explain-target-help"
+                  [attr.aria-describedby]="explainTargetError() ? 'explain-target-error explain-target-help' : 'explain-target-help'"
                 />
               </div>
               <button type="submit" class="btn btn-primary" [class.is-loading]="explainLoading() && !explainRows()" [disabled]="explainLoading() && !explainRows()">
                 <i class="bi bi-activity" aria-hidden="true"></i> Explain
               </button>
             </div>
-            @if (explainTargetError(); as error) {
-              <p class="field-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
-            }
+            <div aria-live="polite">
+              @if (explainTargetError(); as error) {
+                <p id="explain-target-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+              }
+            </div>
             <p id="explain-target-help" class="field-hint">
               Comma separated names and wildcards. Hidden backing indices need an explicit pattern such as
               <button type="button" class="link-button mono" (click)="explainPreset('.ds-*')">.ds-*</button>; try
@@ -592,7 +594,7 @@
               @if (explainFilter() !== 'all' || explainQuery().trim()) {
                 <span class="count-label"><strong>{{ visibleExplainRows().length }}</strong> of {{ pluralize(rows.length, 'index', 'indices') }}</span>
               } @else {
-                <span class="count-label">{{ pluralize(rows.length, 'index', 'indices') }}</span>
+                <span class="count-label"><strong>{{ rows.length }}</strong> {{ rows.length === 1 ? 'index' : 'indices' }}</span>
               }
             </div>
           </div>

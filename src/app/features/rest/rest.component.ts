@@ -16,6 +16,7 @@ import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import {
   readJsonPreference,
@@ -204,6 +205,7 @@ export class RestComponent {
     description: METHOD_DESCRIPTIONS[method],
   }));
   readonly quickStarts = QUICK_STARTS;
+  readonly pluralize = pluralize;
 
   // ---- Request being edited (persisted per browser) ----
   private readonly initialDraft =
@@ -230,14 +232,14 @@ export class RestComponent {
     if (state.kind !== 'ndjson') {
       return '';
     }
-    return `${state.lines} NDJSON ${state.lines === 1 ? 'line' : 'lines'}`;
+    return pluralize(state.lines, 'NDJSON line');
   });
   readonly textLines = computed(() => {
     const state = this.bodyState();
     if (state.kind !== 'text') {
       return '';
     }
-    return `${state.lines} ${state.lines === 1 ? 'line' : 'lines'} of plain text`;
+    return `${pluralize(state.lines, 'line')} of plain text`;
   });
   readonly bodyPlaceholder = computed(() => {
     if (this.ndjson()) {
@@ -280,7 +282,6 @@ export class RestComponent {
     const linked = this.linked();
     return linked !== null && !sameRequest(linked, this.draft());
   });
-  readonly canSave = computed(() => requestPath(this.path()) !== '');
   readonly saveTitle = computed(() => {
     const linked = this.linked();
     return linked === null
@@ -421,7 +422,7 @@ export class RestComponent {
       if (sequence === this.indexSequence) {
         this.indices.set([]);
         this.endpoint.set('');
-        this.alerts.error('Error while loading indices for autocompletion', error);
+        this.alerts.error(failureMessage('Could not load indices for autocompletion', error), error);
       }
     }
   }
@@ -438,7 +439,7 @@ export class RestComponent {
     } catch (error: unknown) {
       if (sequence === this.historySequence) {
         this.historyFailed.set(true);
-        this.alerts.error('Error while loading the request history', error);
+        this.alerts.error(failureMessage('Could not load the request history', error), error);
       }
     } finally {
       if (sequence === this.historySequence) {
@@ -467,7 +468,7 @@ export class RestComponent {
     try {
       if (state.kind === 'invalid') {
         // Some APIs take bodies that are neither JSON nor recognised NDJSON:
-        // offer to send the text verbatim, as the previous console did.
+        // offer to send the text verbatim.
         this.tab.set('body');
         const raw = await this.dialogs.confirm({
           title: 'Send the body as raw text?',
@@ -569,7 +570,7 @@ export class RestComponent {
     const state = this.bodyState();
     if (state.kind === 'invalid') {
       this.alerts.warn(
-        this.ndjson() ? 'The NDJSON body cannot be formatted' : 'The body is not valid JSON',
+        this.ndjson() ? 'Could not format the NDJSON body' : 'The body is not valid JSON',
         state.message,
       );
       return;
@@ -586,7 +587,7 @@ export class RestComponent {
     await this.clipboard.copy(
       this.body(),
       () => this.alerts.success('Request body copied to the clipboard'),
-      (error) => this.alerts.error('Error while copying the request body', error),
+      (error) => this.alerts.error(failureMessage('Could not copy the request body', error), error),
     );
   }
 
@@ -618,7 +619,7 @@ export class RestComponent {
     await this.clipboard.copy(
       command,
       () => this.alerts.success('cURL command copied to the clipboard'),
-      (error) => this.alerts.error('Error while copying the cURL command', error),
+      (error) => this.alerts.error(failureMessage('Could not copy the cURL command', error), error),
     );
   }
 
@@ -848,7 +849,7 @@ export class RestComponent {
    * reported as saved and dropped on the next reload.
    */
   private canSaveDraft(): boolean {
-    if (!this.canSave()) {
+    if (requestPath(this.path()) === '') {
       this.alerts.warn('Enter a request path before saving the request');
       this.focusPath();
       return false;
@@ -915,7 +916,7 @@ export class RestComponent {
       downloadText(name, text);
       this.alerts.success(`Exported ${pluralize(requests.length, 'saved request')}`, name);
     } catch (error: unknown) {
-      this.alerts.error('The saved requests could not be exported', error);
+      this.alerts.error(failureMessage('Could not export the saved requests', error), error);
     }
   }
 
@@ -942,14 +943,14 @@ export class RestComponent {
     try {
       text = await file.text();
     } catch (error: unknown) {
-      this.alerts.error(`“${file.name}” could not be read`, error);
+      this.alerts.error(failureMessage(`Could not read “${file.name}”`, error), error);
       return;
     } finally {
       this.importing.set(false);
     }
     const parsed = parseImportFile(text, Date.now());
     if (!parsed.ok) {
-      this.alerts.error(`“${file.name}” cannot be imported`, parsed.message);
+      this.alerts.error(`Could not import “${file.name}”`, parsed.message);
       return;
     }
     const plan = planImport(this.saved.requests(), parsed.requests, parsed.invalid);
@@ -1018,7 +1019,7 @@ export class RestComponent {
     await this.clipboard.copy(
       response.text,
       () => this.alerts.success('Response copied to the clipboard'),
-      (error) => this.alerts.error('Error while copying the response', error),
+      (error) => this.alerts.error(failureMessage('Could not copy the response', error), error),
     );
   }
 

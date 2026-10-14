@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { saveMode } from './save-mode';
+import { saveLabel, saveMode } from './save-mode';
 
 describe('saveMode', () => {
   const existing = ['logs', 'metrics'];
@@ -19,5 +19,12 @@ describe('saveMode', () => {
 
   it('copies the selected item under a new name', () => {
     expect(saveMode('logs-copy', 'logs', existing)).toBe('copy');
+  });
+
+  it('labels the save button for each mode', () => {
+    expect(saveLabel('create', 'pipeline')).toBe('Create pipeline');
+    expect(saveLabel('update', 'pipeline')).toBe('Save changes');
+    expect(saveLabel('overwrite', 'pipeline')).toBe('Overwrite pipeline');
+    expect(saveLabel('copy', 'pipeline')).toBe('Save as new pipeline');
   });
 });

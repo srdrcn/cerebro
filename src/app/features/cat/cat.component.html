@@ -14,7 +14,7 @@
         <h2 id="cat-apis-title" class="card-title">
           <i class="bi bi-table" aria-hidden="true"></i> Endpoints
         </h2>
-        <span class="count-label"><strong>{{ options.length }}</strong> APIs</span>
+        <span class="count-label"><strong>{{ options.length | num }}</strong> APIs</span>
       </div>
 
       <div class="cat-apis__picker field">
@@ -138,9 +138,9 @@
               />
               <span class="count-label" aria-live="polite">
                 @if (filter()) {
-                  <strong>{{ visibleRows().length }}</strong> of {{ pluralize(data.rows.length, 'row') }}
+                  <strong>{{ visibleRows().length | num }}</strong> of {{ pluralize(data.rows.length, 'row') }}
                 } @else {
-                  <strong>{{ data.rows.length }}</strong> {{ data.rows.length === 1 ? 'row' : 'rows' }}
+                  <strong>{{ data.rows.length | num }}</strong> {{ data.rows.length === 1 ? 'row' : 'rows' }}
                 }
                 · {{ pluralize(data.columns.length, 'column') }}
               </span>

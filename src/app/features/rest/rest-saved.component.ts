@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { AlertService } from '../../core/alert.service';
 import { DialogService } from '../../core/dialog.service';
-import { formatRelative, formatTimestamp } from '../../core/format';
+import { formatRelative, formatTimestamp, pluralize } from '../../core/format';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -44,8 +44,6 @@ export class RestSavedComponent {
 
   /** "Ctrl" or "⌘", for the keyboard hint. */
   readonly modKey = input('Ctrl');
-  /** False while the editor has no path: there is nothing to save. */
-  readonly canSaveCurrent = input(true);
   /** The editor differs from the linked saved request. */
   readonly dirty = input(false);
 
@@ -54,6 +52,7 @@ export class RestSavedComponent {
   readonly saveCurrent = output<void>();
   readonly importFile = output<void>();
 
+  readonly pluralize = pluralize;
   readonly query = signal('');
   readonly sort = signal<SavedSort>(this.initialSort());
 
@@ -130,7 +129,7 @@ export class RestSavedComponent {
       this.alerts.success(`Deleted “${request.name}”`);
     } else {
       this.alerts.warn(
-        `“${request.name}” was removed from this page, but the browser storage could not be updated`,
+        `Deleted “${request.name}”, but the browser did not store the change`,
         this.store.notStoredDetail(),
       );
     }

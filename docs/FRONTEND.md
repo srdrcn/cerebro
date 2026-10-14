@@ -45,7 +45,7 @@ src/
 | `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
 | `pending-changes.guard.ts` | `PendingChangesAware` (`confirmDiscard()`) and the `confirmDiscardPendingChanges` route guard. |
 | `preferences.ts` | best-effort `localStorage` helpers for per-browser UI preferences; writes return `false` when the browser refused them. |
-| `save-mode.ts` | `saveMode(name, selected, existing)` → `create` / `update` / `overwrite` / `copy` for editors that save under a typed name. |
+| `save-mode.ts` | `saveMode(name, selected, existing)` → `create` / `update` / `overwrite` / `copy` for editors that save under a typed name; `saveLabel(mode, noun)` for the save button. |
 
 ### Shared components (`src/app/shared`)
 

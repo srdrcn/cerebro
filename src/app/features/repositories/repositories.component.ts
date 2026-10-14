@@ -13,7 +13,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { elasticsearchReason } from '../../core/errors';
+import { elasticsearchReason, failureMessage } from '../../core/errors';
 import { matchesText, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -194,7 +194,7 @@ export class RepositoriesComponent {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Could not load snapshot repositories', error);
+        this.alerts.error(failureMessage('Could not load snapshot repositories', error), error);
       }
     }
   }
@@ -346,10 +346,8 @@ export class RepositoriesComponent {
       }
     } catch (error: unknown) {
       this.saveError.set(elasticsearchReason(error) ?? 'Elasticsearch rejected the request.');
-      this.alerts.error(
-        updating ? `Could not update repository ${payload.name}` : `Could not register repository ${payload.name}`,
-        error,
-      );
+      const action = updating ? 'update' : 'register';
+      this.alerts.error(failureMessage(`Could not ${action} repository ${payload.name}`, error), error);
     } finally {
       this.saving.set(false);
     }
@@ -382,7 +380,7 @@ export class RepositoriesComponent {
       }
       await this.load();
     } catch (error: unknown) {
-      this.alerts.error(`Could not delete repository ${name}`, error);
+      this.alerts.error(failureMessage(`Could not delete repository ${name}`, error), error);
     } finally {
       this.deleting.update((names) => {
         const next = new Set(names);

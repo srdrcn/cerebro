@@ -85,13 +85,12 @@ describe('RestSavedComponent', () => {
     expect(importFile).toHaveBeenCalledOnce();
   });
 
-  it('disables saving from the empty state while there is no path', async () => {
+  it('keeps saving from the empty state enabled (the page explains a missing path)', async () => {
     const fixture = TestBed.createComponent(RestSavedComponent);
-    fixture.componentRef.setInput('canSaveCurrent', false);
     await fixture.whenStable();
     const save = element(fixture).querySelector<HTMLButtonElement>('.saved-empty__actions .btn-primary')!;
-    expect(save.disabled).toBe(true);
-    expect(save.title).toBe('Enter a request path first');
+    expect(save.disabled).toBe(false);
+    expect(save.title).toBe('Save the request in the editor');
   });
 
   it('lists the saved requests by name and remembers the chosen sort', async () => {
@@ -124,7 +123,7 @@ describe('RestSavedComponent', () => {
     fixture.componentInstance.query.set('products');
     await fixture.whenStable();
     expect(names(fixture)).toEqual(['Alpha search']);
-    expect(element(fixture).querySelector('.saved-count')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('1 of 4');
+    expect(element(fixture).querySelector('.saved-count')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('1 of 4 requests');
 
     fixture.componentInstance.query.set('nothing-like-this');
     await fixture.whenStable();

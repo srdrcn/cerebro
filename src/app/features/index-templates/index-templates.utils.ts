@@ -22,10 +22,6 @@ import {
   TemplateRow,
 } from './index-templates.models';
 
-// TEMPORARY-UNIFY: data-streams.component.ts still imports these two from here.
-export { failureMessage } from '../../core/errors';
-export { pluralize };
-
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }

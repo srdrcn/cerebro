@@ -104,6 +104,7 @@ export class AliasesComponent implements PendingChangesAware {
   private readonly filterEditor = viewChild<CodeEditorComponent>('filterEditor');
   private readonly pendingCard = viewChild<ElementRef<HTMLElement>>('pendingCard');
   private readonly pendingHeading = viewChild<ElementRef<HTMLElement>>('pendingHeading');
+  private readonly problemNote = viewChild<ElementRef<HTMLElement>>('problemNote');
 
   readonly pageSize = PAGE_SIZE;
 
@@ -157,7 +158,8 @@ export class AliasesComponent implements PendingChangesAware {
 
   readonly pageRows = computed(() => pageSlice(this.visibleRows(), this.currentPage(), PAGE_SIZE));
 
-  readonly aliasCount = computed(() => aliasNames(this.aliases() ?? []).length);
+  /** Counted over the table rows, staged additions included, like the filtered count. */
+  readonly aliasCount = computed(() => aliasNames(this.rows().map((row) => row.record)).length);
   readonly filtering = computed(() => !!this.aliasQuery().trim() || !!this.indexQuery().trim());
 
   readonly aliasSuggestions = computed(() => aliasNames(this.aliases() ?? []));
@@ -414,10 +416,6 @@ export class AliasesComponent implements PendingChangesAware {
 
   // ---- Staging ------------------------------------------------------------
 
-  hasPendingChanges(): boolean {
-    return this.changes().length > 0;
-  }
-
   stageRemove(record: AliasRecord): void {
     this.changes.update((changes) => stageRemoval(changes, record, this.aliases() ?? []));
     this.announce(`Removal of ${record.alias} from ${record.index} staged.`);
@@ -555,7 +553,11 @@ export class AliasesComponent implements PendingChangesAware {
 
   async apply(): Promise<void> {
     const items = this.pending();
-    if (items.length === 0 || this.saving() || this.problemCount() > 0) {
+    if (items.length === 0 || this.saving()) {
+      return;
+    }
+    if (this.problemCount() > 0) {
+      this.showProblems();
       return;
     }
     const counts = countByKind(items);
@@ -576,7 +578,7 @@ export class AliasesComponent implements PendingChangesAware {
     // An auto refresh while the dialog was open may have made some changes
     // stale: Elasticsearch would reject the whole atomic request.
     if (this.problemCount() > 0) {
-      this.alerts.warn('Some staged changes can no longer be applied. Review them and try again.');
+      this.showProblems();
       return;
     }
 
@@ -606,6 +608,19 @@ export class AliasesComponent implements PendingChangesAware {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  /** Apply was pressed while staged changes cannot apply: point at the explanation. */
+  private showProblems(): void {
+    this.alerts.warn('Some staged changes cannot be applied. Revert or edit them and try again.');
+    afterNextRender(
+      () => {
+        const note = this.problemNote()?.nativeElement;
+        note?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        note?.focus({ preventScroll: true });
+      },
+      { injector: this.injector },
+    );
   }
 
   async discardAll(): Promise<void> {
@@ -650,7 +665,7 @@ export class AliasesComponent implements PendingChangesAware {
   }
 
   onBeforeUnload(event: BeforeUnloadEvent): void {
-    if (this.hasPendingChanges()) {
+    if (this.changes().length > 0) {
       event.preventDefault();
     }
   }

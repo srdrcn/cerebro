@@ -1,4 +1,6 @@
+import { elasticsearchReason } from '../../core/errors';
 import { matchesText } from '../../core/format';
+import { isRecord } from '../../core/json';
 import type {
   BodyState,
   QuickStart,
@@ -252,7 +254,7 @@ function autocompleteCandidates(indices: readonly string[], path: string): strin
   return [...alternatives].sort((left, right) => left.localeCompare(right));
 }
 
-/** Match the old typeahead's starts-with filter and ten-result limit. */
+/** The first ten candidates that start with what was typed. */
 export function getAutocompleteOptions(
   indices: readonly string[],
   path: string,
@@ -260,11 +262,6 @@ export function getAutocompleteOptions(
   return autocompleteCandidates(indices, path)
     .filter((candidate) => candidate.startsWith(path))
     .slice(0, 10);
-}
-
-/** Every path the autocomplete can suggest, with `{index}` placeholders. */
-export function autocompleteDefinitions(): readonly string[] {
-  return AUTOCOMPLETE_PATHS;
 }
 
 /** Size of the suggestion list while the first path segment is typed. */
@@ -317,13 +314,13 @@ export function responseText(value: unknown): string {
   }
 }
 
-export function errorResponse(error: unknown): unknown {
-  if (typeof error === 'object' && error !== null) {
+function errorResponse(error: unknown): unknown {
+  if (isRecord(error)) {
     if ('error' in error) {
-      return (error as { readonly error: unknown }).error;
+      return error['error'];
     }
     if ('body' in error) {
-      return (error as { readonly body: unknown }).body;
+      return error['body'];
     }
   }
   return error;
@@ -370,19 +367,19 @@ export function describeBody(path: string, source: string): BodyState {
       const formatted = formatNdjson(source);
       return { kind: 'ndjson', lines: formatted.split('\n').length - 1 };
     } catch (error: unknown) {
-      return { kind: 'invalid', message: errorMessage(error) };
+      return { kind: 'invalid', message: parseErrorMessage(error) };
     }
   }
   try {
     JSON.parse(source);
     return { kind: 'json' };
   } catch (error: unknown) {
-    return { kind: 'invalid', message: errorMessage(error) };
+    return { kind: 'invalid', message: parseErrorMessage(error) };
   }
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function parseErrorMessage(error: unknown): string {
+  return elasticsearchReason(error) ?? String(error);
 }
 
 export function isRestMethod(value: unknown): value is RestMethod {
@@ -390,12 +387,9 @@ export function isRestMethod(value: unknown): value is RestMethod {
 }
 
 /** Validates a draft read back from localStorage. */
-export function parseStoredDraft(value: unknown): RestDraft | null {
-  if (typeof value !== 'object' || value === null) {
-    return null;
-  }
-  const candidate = value as Record<string, unknown>;
+export function parseStoredDraft(candidate: unknown): RestDraft | null {
   if (
+    !isRecord(candidate) ||
     !isRestMethod(candidate['method']) ||
     typeof candidate['path'] !== 'string' ||
     typeof candidate['body'] !== 'string'
@@ -476,10 +470,7 @@ export function responseSize(value: unknown): number {
 
 /** True for the error Cerebro's server reports when a 2xx body is not JSON. */
 function isPlainTextParseError(body: unknown): boolean {
-  if (typeof body !== 'object' || body === null || !('error' in body)) {
-    return false;
-  }
-  const error = (body as { readonly error: unknown }).error;
+  const error = isRecord(body) ? body['error'] : undefined;
   return typeof error === 'string' && /^(?:Unexpected character|Unrecognized token)/.test(error);
 }
 
@@ -637,10 +628,10 @@ export function wrapIndex(current: number, delta: number, length: number): numbe
 
 /** Text shown in the response pane when Cerebro's server could not be reached. */
 export function networkErrorText(error: unknown): string {
-  if (typeof error === 'object' && error !== null && 'status' in error && error.status === 0) {
+  if (isRecord(error) && error['status'] === 0) {
     return "The request did not reach Cerebro's server (network error).";
   }
-  if (typeof error === 'object' && error !== null) {
+  if (isRecord(error)) {
     const details = 'error' in error || 'body' in error ? errorResponse(error) : undefined;
     if (typeof details === 'string' && details.trim() !== '') {
       return details;
@@ -651,8 +642,8 @@ export function networkErrorText(error: unknown): string {
         return text;
       }
     }
-    if ('message' in error && typeof error.message === 'string') {
-      return error.message;
+    if (typeof error['message'] === 'string') {
+      return error['message'];
     }
   }
   return typeof error === 'string' && error !== '' ? error : 'The request could not be sent.';

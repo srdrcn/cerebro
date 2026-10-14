@@ -13,7 +13,7 @@ import { DialogService } from '../../core/dialog.service';
 import { pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { BytesPipe, DurationPipe } from '../../shared/format.pipes';
+import { BytesPipe, DurationPipe, NumberPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { MeterComponent } from '../../shared/meter.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
@@ -50,6 +50,7 @@ const ROLE_FILTERS: readonly RoleFilter[] = [
     EmptyStateComponent,
     MenuComponent,
     MeterComponent,
+    NumberPipe,
     SearchInputComponent,
   ],
   templateUrl: './nodes.component.html',

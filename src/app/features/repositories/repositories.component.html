@@ -207,6 +207,8 @@
                     name="repository-type"
                     [value]="option.type"
                     [checked]="type() === option.type"
+                    [attr.aria-invalid]="submitted() && typeError() ? true : null"
+                    [attr.aria-describedby]="submitted() && typeError() ? 'repository-type-error' : null"
                     (change)="setType(option.type)"
                   />
                   <span class="type-card__icon" aria-hidden="true"><i [class]="'bi ' + option.icon"></i></span>
@@ -219,7 +221,7 @@
               }
             </div>
             @if (submitted() && typeError(); as error) {
-              <p class="field-error">{{ error }}</p>
+              <p id="repository-type-error" class="field-error">{{ error }}</p>
             }
           </fieldset>
 

@@ -220,12 +220,12 @@ export function aliasNameError(name: string): string | undefined {
   if (/^[_\-+]/.test(value)) {
     return 'An alias cannot start with _, - or +.';
   }
-  if (value.includes(' ')) {
-    return 'An alias cannot contain spaces.';
-  }
-  const invalid = invalidCharacters(value, INVALID_INDEX_NAME_CHARACTERS);
+  const invalid = [
+    ...(value.includes(' ') ? ['spaces'] : []),
+    ...invalidCharacters(value, INVALID_INDEX_NAME_CHARACTERS).map((character) => `"${character}"`),
+  ];
   if (invalid.length > 0) {
-    return `An alias cannot contain ${invalid.map((character) => `"${character}"`).join(', ')}.`;
+    return `An alias cannot contain ${invalid.join(', ')}.`;
   }
   if (new TextEncoder().encode(value).length > 255) {
     return 'An alias name cannot be longer than 255 bytes.';

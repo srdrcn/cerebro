@@ -2,6 +2,7 @@ import { effect, inject, Injectable } from '@angular/core';
 import { AlertService } from './alert.service';
 import { ClusterApiService } from './cluster-api.service';
 import { ConnectionService } from './connection.service';
+import { pluralize } from './format';
 import { RefreshService } from './refresh.service';
 
 export interface ClusterSnapshot {
@@ -78,10 +79,10 @@ export class ClusterChangesService {
       }
 
       const changes = detectClusterChanges(previous, current);
-      this.notify(changes.joinedNodes, ' nodes joined the cluster', 'info');
-      this.notify(changes.leftNodes, ' nodes left the cluster', 'warn');
-      this.notify(changes.createdIndices, ' indices created', 'info');
-      this.notify(changes.deletedIndices, ' indices deleted', 'warn');
+      this.notify(changes.joinedNodes, ['node', 'nodes'], 'joined the cluster', 'info');
+      this.notify(changes.leftNodes, ['node', 'nodes'], 'left the cluster', 'warn');
+      this.notify(changes.createdIndices, ['index', 'indices'], 'created', 'info');
+      this.notify(changes.deletedIndices, ['index', 'indices'], 'deleted', 'warn');
     } catch {
       // Cluster-change notifications are best-effort and must not duplicate the
       // primary request error shown by ClusterApiService.
@@ -90,12 +91,13 @@ export class ClusterChangesService {
 
   private notify(
     values: readonly string[],
-    suffix: string,
+    [singular, plural]: readonly [string, string],
+    what: string,
     level: 'info' | 'warn',
   ): void {
     if (values.length === 0) {
       return;
     }
-    this.alerts[level](`${values.length}${suffix}`, values.join(',\n'));
+    this.alerts[level](`${pluralize(values.length, singular, plural)} ${what}`, values.join(',\n'));
   }
 }

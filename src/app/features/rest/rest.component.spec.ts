@@ -404,7 +404,7 @@ describe('RestComponent', () => {
     it('explains files that cannot be imported', async () => {
       const target = component();
       await target.onImportFile(file('notes.json', 'not json'));
-      expect(alerts.error).toHaveBeenCalledWith('“notes.json” cannot be imported', 'The file is not valid JSON.');
+      expect(alerts.error).toHaveBeenCalledWith('Could not import “notes.json”', 'The file is not valid JSON.');
       expect(TestBed.inject(RestSavedStore).count()).toBe(0);
     });
 

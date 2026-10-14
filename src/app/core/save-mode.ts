@@ -14,3 +14,17 @@ export function saveMode(name: string, selected: string | null, existing: readon
   }
   return selected === null ? 'create' : 'copy';
 }
+
+/** The save button for a mode: "Create policy", "Save changes", "Overwrite policy", "Save as new policy". */
+export function saveLabel(mode: SaveMode, noun: string): string {
+  switch (mode) {
+    case 'create':
+      return `Create ${noun}`;
+    case 'update':
+      return 'Save changes';
+    case 'overwrite':
+      return `Overwrite ${noun}`;
+    case 'copy':
+      return `Save as new ${noun}`;
+  }
+}

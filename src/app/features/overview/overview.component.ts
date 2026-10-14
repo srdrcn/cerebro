@@ -12,13 +12,13 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { formatBytes } from '../../core/format';
+import { failureMessage } from '../../core/errors';
+import { formatBytes, pluralize } from '../../core/format';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -59,6 +59,7 @@ import {
   nodeRoleIcons,
   normalizeOverview,
   operationConfirmation,
+  operationFailure,
   operationSuccess,
   operationTargets,
   pageOfIndex,
@@ -66,6 +67,7 @@ import {
   requiresOpenIndex,
   revealFlags,
   revealIndexFilter,
+  shardActivityLabel,
   shardChipClass,
   shardHeading,
   shardMapLayout,
@@ -174,6 +176,7 @@ export class OverviewComponent {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   readonly connection = inject(ConnectionService);
+  readonly pluralize = pluralize;
 
   readonly allocationOptions = ALLOCATION_OPTIONS;
   readonly bulkOperations = BULK_OPERATIONS;
@@ -312,6 +315,7 @@ export class OverviewComponent {
   });
 
   readonly hasActivity = computed(() => hasShardActivity(this.counts()));
+  readonly activityLabel = computed(() => shardActivityLabel(this.counts()));
   readonly affectedCount = computed(
     () => (this.data()?.indices ?? []).filter((index) => index.unhealthy).length,
   );
@@ -331,16 +335,6 @@ export class OverviewComponent {
   readonly selectedNodeName = computed(() => {
     const shard = this.selected();
     return shard?.node ? (this.nodeNames().get(shard.node) ?? shard.node) : '';
-  });
-
-  /** Page of the selected shard's index, when it is not the current one. */
-  readonly selectedIndexPage = computed(() => {
-    const shard = this.selected();
-    if (!shard) {
-      return undefined;
-    }
-    const page = pageOfIndex(this.filteredIndices(), shard.index, this.pageSize());
-    return page === this.currentPage() ? undefined : page;
   });
 
   readonly selectedOnPage = computed(() => {
@@ -430,10 +424,8 @@ export class OverviewComponent {
         return;
       }
       this.failed.set(true);
-      // Network failures are already reported by ClusterApiService.
-      if (!(error instanceof HttpErrorResponse)) {
-        this.alerts.error('Could not load the cluster overview', error);
-      }
+      // A network failure was already reported by ClusterApiService; AlertService skips it.
+      this.alerts.error(failureMessage('Could not load the cluster overview', error), error);
     } finally {
       if (sequence === this.loadSequence) {
         this.loading.set(false);
@@ -533,7 +525,7 @@ export class OverviewComponent {
       definition.path,
       indicesPayload([index.name]),
       operationSuccess(operation, [index.name]),
-      `${definition.label} failed for ${index.name}`,
+      operationFailure(operation, [index.name]),
     );
     this.keepClosedVisible(operation, done);
   }
@@ -558,7 +550,7 @@ export class OverviewComponent {
       definition.path,
       indicesPayload(names),
       operationSuccess(operation, names, skipped),
-      `${definition.label} failed`,
+      operationFailure(operation, names),
     );
     this.keepClosedVisible(operation, done);
   }
@@ -597,6 +589,7 @@ export class OverviewComponent {
       'overview/get_shard_stats',
       { index: shard.index, node: shard.node, shard: shard.shard },
       `${shard.primary ? 'Primary' : 'Replica'} on ${node}`,
+      `shard ${shard.shard} of ${shard.index}`,
     );
   }
 
@@ -647,7 +640,7 @@ export class OverviewComponent {
       );
       this.refreshService.refresh();
     } catch (error: unknown) {
-      this.alerts.error(`Could not move shard ${shard.shard} of ${shard.index}`, error);
+      this.alerts.error(failureMessage(`Could not move shard ${shard.shard} of ${shard.index}`, error), error);
     } finally {
       this.relocating.set(false);
     }
@@ -734,7 +727,7 @@ export class OverviewComponent {
       this.alerts.success(success, response);
       return true;
     } catch (error: unknown) {
-      this.alerts.error(failure, error);
+      this.alerts.error(failureMessage(failure, error), error);
       return false;
     } finally {
       this.busy.update((keys) => {
@@ -768,12 +761,13 @@ export class OverviewComponent {
     path: JsonEndpoint,
     payload: Record<string, unknown>,
     subtitle?: string,
+    what = title,
   ): Promise<void> {
     try {
       const response = await this.api.post<unknown>(path, payload);
       this.dialogs.showJson(title, response, subtitle);
     } catch (error: unknown) {
-      this.alerts.error(`Could not load ${title.toLowerCase()}`, error);
+      this.alerts.error(failureMessage(`Could not load ${what}`, error), error);
     }
   }
 }

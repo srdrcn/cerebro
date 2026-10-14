@@ -1,3 +1,4 @@
+import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -79,6 +80,7 @@ type ExplainState =
 })
 export class AllocationComponent {
   private readonly api = inject(ClusterApiService);
+  private readonly document = inject(DOCUMENT);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
   private readonly refreshService = inject(RefreshService);
@@ -336,7 +338,7 @@ export class AllocationComponent {
     this.submitted.set(true);
     const shard = this.formShard();
     if (this.formError() || shard === null) {
-      document.getElementById(this.formIndex() ? 'alloc-shard' : 'alloc-index')?.focus();
+      this.document.getElementById(this.formIndex() ? 'alloc-shard' : 'alloc-index')?.focus();
       return;
     }
     this.go({ index: this.formIndex(), shard, primary: this.formPrimary() });

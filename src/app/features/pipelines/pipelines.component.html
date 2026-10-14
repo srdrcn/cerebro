@@ -88,8 +88,8 @@
                 </span>
                 <span class="pipeline-item__count">
                   <span class="badge tabular" [title]="pluralize(pipeline.processorCount, 'processor')">
-                    {{ pipeline.processorCount }}
-                    <span class="visually-hidden">{{ pipeline.processorCount === 1 ? 'processor' : 'processors' }}</span>
+                    <span aria-hidden="true">{{ pipeline.processorCount }}</span>
+                    <span class="visually-hidden">{{ pluralize(pipeline.processorCount, 'processor') }}</span>
                   </span>
                 </span>
               </button>
@@ -286,7 +286,7 @@
             <section aria-labelledby="processors-title">
               <div class="panel-head">
                 <h3 id="processors-title" class="section-title">Processors</h3>
-                <span class="count-label">{{ pluralize(processors().length, 'processor') }} in order</span>
+                <span class="count-label"><strong>{{ processors().length }}</strong> {{ processors().length === 1 ? 'processor' : 'processors' }} in order</span>
               </div>
               @if (processors().length > 0) {
                 <ol class="processor-list">

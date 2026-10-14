@@ -1,4 +1,5 @@
 import { formatNumber, matchesText, pluralize } from '../../core/format';
+import { isRecord } from '../../core/json';
 import type { RestDraft } from './rest.models';
 import {
   SAVED_REQUESTS_FORMAT,
@@ -174,11 +175,10 @@ function bodyOf(value: unknown): string | null {
  * Validates one saved request read from storage or a file. Unknown fields
  * (a host, credentials …) are dropped; anything unusable yields null.
  */
-export function parseSavedRequest(value: unknown, now: number): SavedRequest | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+export function parseSavedRequest(record: unknown, now: number): SavedRequest | null {
+  if (!isRecord(record)) {
     return null;
   }
-  const record = value as Record<string, unknown>;
   const rawName = record['name'];
   const rawMethod = record['method'];
   const rawPath = record['path'];
@@ -234,11 +234,10 @@ export function parseSavedList(values: readonly unknown[], now: number): ParsedS
  * their entries still look like requests, and are flagged (`newerVersion`)
  * so that this version does not rewrite them and lose what it does not know.
  */
-export function parseStoredSavedRequests(value: unknown, now: number): StoredSavedRequests {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+export function parseStoredSavedRequests(record: unknown, now: number): StoredSavedRequests {
+  if (!isRecord(record)) {
     return { requests: [], invalid: 0, newerVersion: null };
   }
-  const record = value as Record<string, unknown>;
   const version = record['version'];
   const requests = record['requests'];
   if (typeof version !== 'number' || version < 1 || !Array.isArray(requests)) {
@@ -282,13 +281,11 @@ export function exportDocument(requests: readonly SavedRequest[], now: Date): Sa
   };
 }
 
-function pad(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
 /** `cerebro-saved-requests-2026-10-14.json` (local date). */
 export function exportFileName(now: Date): string {
-  return `cerebro-saved-requests-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.json`;
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `cerebro-saved-requests-${now.getFullYear()}-${month}-${day}.json`;
 }
 
 /**
@@ -305,16 +302,15 @@ export function parseImportFile(text: string, now: number): ImportFileResult {
   let entries: unknown;
   if (Array.isArray(value)) {
     entries = value;
-  } else if (typeof value === 'object' && value !== null) {
-    const record = value as Record<string, unknown>;
-    const version = record['version'];
+  } else if (isRecord(value)) {
+    const version = value['version'];
     if (typeof version === 'number' && version > SAVED_REQUESTS_VERSION) {
       return {
         ok: false,
         message: `The file was exported by a newer version of Cerebro (format version ${version}).`,
       };
     }
-    entries = record['requests'];
+    entries = value['requests'];
   }
   if (!Array.isArray(entries)) {
     return { ok: false, message: 'The file does not contain saved requests.' };
@@ -584,7 +580,7 @@ export function sortSavedRequests(
   );
 }
 
-export function matchesSaved(request: SavedRequest, query: string): boolean {
+function matchesSaved(request: SavedRequest, query: string): boolean {
   return matchesText(`${request.name} ${request.method} ${request.path} ${request.body}`, query);
 }
 

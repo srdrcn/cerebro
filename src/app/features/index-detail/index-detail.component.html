@@ -861,7 +861,7 @@
               <!-- ================= Aliases ================= -->
               @case ('aliases') {
                 <div class="panel-toolbar">
-                  <span class="count-label"><strong>{{ aliases().length }}</strong> {{ aliases().length === 1 ? 'alias' : 'aliases' }}</span>
+                  <span class="count-label"><strong>{{ aliases().length | num }}</strong> {{ aliases().length === 1 ? 'alias' : 'aliases' }}</span>
                   <span class="spacer"></span>
                   <a class="btn btn-sm" routerLink="/aliases" [queryParams]="connection.hostQuery()">
                     <i class="bi bi-pencil" aria-hidden="true"></i> Manage aliases

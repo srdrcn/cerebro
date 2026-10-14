@@ -29,13 +29,13 @@
             ariaLabel="Filter by index name"
           />
         </div>
-        @if (aliases(); as all) {
+        @if (aliases()) {
           <span class="count-label">
             @if (filtering()) {
               <strong>{{ visibleRows().length }}</strong> of {{ pluralize(rows().length, 'assignment') }}
             } @else {
               <strong>{{ aliasCount() }}</strong> {{ aliasCount() === 1 ? 'alias' : 'aliases' }} ·
-              <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'assignment' : 'assignments' }}
+              <strong>{{ rows().length }}</strong> {{ rows().length === 1 ? 'assignment' : 'assignments' }}
             }
           </span>
         }
@@ -636,7 +636,7 @@
 
           <div class="pending-note">
             @if (problemCount() > 0) {
-              <div class="callout callout-warning">
+              <div #problemNote class="callout callout-warning" tabindex="-1">
                 <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
                 <span>
                   {{ problemCount() === 1 ? 'One change' : problemCount() + ' changes' }} cannot be applied as staged.
@@ -659,7 +659,7 @@
               type="button"
               class="btn btn-primary"
               [class.is-loading]="saving()"
-              [disabled]="saving() || problemCount() > 0"
+              [disabled]="saving()"
               (click)="apply()"
             >
               <i class="bi bi-check2" aria-hidden="true"></i>

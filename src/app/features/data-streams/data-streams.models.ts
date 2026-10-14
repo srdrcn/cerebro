@@ -1,7 +1,5 @@
 /** Shapes of `GET _data_stream` and `GET _data_stream/_stats` as wrapped by Cerebro. */
 
-export type StreamHealth = 'GREEN' | 'YELLOW' | 'RED';
-
 export interface BackingIndex {
   readonly index_name: string;
   readonly index_uuid?: string;
