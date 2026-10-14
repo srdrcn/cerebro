@@ -2,6 +2,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -16,7 +18,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
-import { formatNumber, formatRelative, formatTimestamp } from '../../core/format';
+import { formatNumber, formatRelative, formatTimestamp, pluralize } from '../../core/format';
 import { healthLabel } from '../../core/health';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
@@ -132,6 +134,38 @@ export class DoctorComponent {
 
   readonly passedChecks = computed(() => (this.report()?.outcomes ?? []).filter((outcome) => outcome.status === 'passed'));
   readonly skippedChecks = computed(() => (this.report()?.outcomes ?? []).filter((outcome) => outcome.status === 'skipped'));
+  /** Distinct reasons of the checks that could not run (and leave a gap in the report). */
+  readonly gapReasons = computed(() => [
+    ...new Set(
+      this.skippedChecks()
+        .filter((outcome) => !outcome.unsupported)
+        .map((outcome) => outcome.reason ?? 'Unknown reason'),
+    ),
+  ]);
+
+  /** "All 12 checks that ran passed. The cluster looks healthy." */
+  readonly allPassedText = computed(() => {
+    const report = this.report();
+    if (!report) {
+      return '';
+    }
+    const passed = report.ran === 1 ? 'The only check that ran passed.' : `All ${formatNumber(report.ran)} checks that ran passed.`;
+    return report.gaps > 0
+      ? `${passed} ${pluralize(report.gaps, 'check')} could not run, so problems may still be hidden.`
+      : `${passed} The cluster looks healthy.`;
+  });
+
+  /** Text of the health report card on clusters older than 8.7. */
+  readonly unsupportedText = computed(() => {
+    const report = this.report();
+    if (!report) {
+      return '';
+    }
+    const version = report.version ? `This cluster runs Elasticsearch ${report.version}.` : '';
+    // Only claim the other checks cover it when they all ran.
+    const covered = report.gaps === 0 ? ' The checks on this page cover the same ground.' : '';
+    return `${version}${covered}`.trim();
+  });
 
   /** "just now", "5m ago". */
   readonly checkedAgo = computed(() => {
@@ -141,6 +175,7 @@ export class DoctorComponent {
 
   readonly checkedLabel = computed(() => (this.checkedAgo() ? `Checked ${this.checkedAgo()}` : ''));
 
+  private readonly injector = inject(Injector);
   private runSequence = 0;
   private destroyed = false;
   /** Cluster the report on screen belongs to. */
@@ -188,8 +223,9 @@ export class DoctorComponent {
       this.raw.set(raw);
       this.report.set(report);
       this.reportHost = host;
-      if (report.findings.length === 0) {
-        // Nothing to fix: what was verified is the interesting part.
+      if (report.findings.length === 0 || report.gaps > 0) {
+        // Nothing to fix (what was verified is the interesting part), or
+        // checks are missing (what was not verified matters).
         this.checksOpen.set(true);
       }
       this.checkedAt.set(Date.now());
@@ -213,7 +249,7 @@ export class DoctorComponent {
     }
   }
 
-  async applyFix(fix: DoctorFix): Promise<void> {
+  async applyFix(fix: DoctorFix, finding?: DoctorFinding): Promise<void> {
     if (this.fixing() !== null) {
       return;
     }
@@ -239,7 +275,28 @@ export class DoctorComponent {
     }
     if (!this.destroyed) {
       await this.run();
+      this.restoreFocus(finding);
     }
+  }
+
+  /**
+   * The fix button is gone after the re-run (or disabled during it), so move
+   * focus to the same finding if it is still there, otherwise to the list.
+   */
+  private restoreFocus(finding: DoctorFinding | undefined): void {
+    afterNextRender(
+      () => {
+        if (this.destroyed) {
+          return;
+        }
+        const target =
+          (finding ? this.document.getElementById(this.findingDomId(finding.id, 'title')) : null) ??
+          this.document.getElementById('doctor-findings-title') ??
+          this.document.getElementById('doctor-verdict-title');
+        target?.focus({ preventScroll: false });
+      },
+      { injector: this.injector },
+    );
   }
 
   viewRaw(): void {
@@ -296,6 +353,11 @@ export class DoctorComponent {
 
   // ---- Template helpers ----
 
+  /** Stable element id for a finding (`finding.id` may hold any character). */
+  findingDomId(id: string, part: 'title' | 'resources'): string {
+    return `finding-${part}-${id.replace(/[^A-Za-z0-9_-]+/g, '-').slice(0, 60)}-${hash(id)}`;
+  }
+
   severityMeta(severity: DoctorSeverity): SeverityMeta {
     return SEVERITIES.find((meta) => meta.key === severity) ?? SEVERITIES[2]!;
   }
@@ -339,6 +401,15 @@ export class DoctorComponent {
   }
 
   readonly statusLabel = healthLabel;
+}
+
+/** Short, stable hash (djb2) to keep sanitized ids unique. */
+function hash(value: string): string {
+  let result = 5381;
+  for (let index = 0; index < value.length; index += 1) {
+    result = ((result << 5) + result + value.charCodeAt(index)) | 0;
+  }
+  return (result >>> 0).toString(36);
 }
 
 function toggled(current: ReadonlySet<string>, key: string): ReadonlySet<string> {

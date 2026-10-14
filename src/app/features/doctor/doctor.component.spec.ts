@@ -56,9 +56,9 @@ describe('DoctorComponent', () => {
 
     expect(post).toHaveBeenCalledTimes(1);
     expect(post).toHaveBeenCalledWith('doctor');
-    expect(target.report()?.counts).toEqual({ critical: 1, warning: 7, info: 2 });
+    expect(target.report()?.counts).toEqual({ critical: 1, warning: 5, info: 3 });
     expect(target.announcement()).toBe(
-      'Checks finished. Critical problems found: 1 critical problem and 7 warnings need attention, plus 2 suggestions.',
+      'Checks finished. Critical problems found: 1 critical problem and 5 warnings need attention, plus 3 info findings.',
     );
     expect(target.checkedLabel()).toBe('Checked just now');
     expect(target.running()).toBe(false);
@@ -87,7 +87,8 @@ describe('DoctorComponent', () => {
     resolveFirst(liveReport());
     await Promise.resolve();
 
-    expect(target.report()?.findings.some((finding) => finding.id === 'cluster-status:yellow')).toBe(false);
+    // The healthy (second) report has no yellow cluster status.
+    expect(target.report()?.findings.some((finding) => finding.summary.startsWith('Cluster health is yellow'))).toBe(false);
     expect(target.running()).toBe(false);
   });
 
@@ -188,7 +189,57 @@ describe('DoctorComponent', () => {
     expect(navigate).toHaveBeenCalledWith([], expect.objectContaining({ queryParams: { severity: 'critical,warning', category: 'shards' }, replaceUrl: true }));
     target.resetFilters();
     expect(target.filtered()).toBe(false);
-    expect(target.visibleFindings().length).toBe(10);
+    expect(target.visibleFindings().length).toBe(9);
+  });
+
+  it('opens the checks card and explains the gaps when checks could not run', async () => {
+    post.mockResolvedValue({
+      health: { status: 'green', number_of_data_nodes: 3 },
+      info: { version: { number: '8.15.3' } },
+      unavailable: { nodes: { status: 403, error: {} }, shards: { status: 403, error: {} } },
+    });
+    const target = component();
+    await vi.waitFor(() => expect(target.report()).toBeDefined());
+
+    expect(target.report()?.verdict.title).toBe('Partly checked');
+    expect(target.checksOpen()).toBe(true);
+    expect(target.gapReasons()).toEqual([
+      'Elasticsearch did not return the health report',
+      'Needs the monitor privilege (403)',
+      'Elasticsearch did not return the index list',
+      'Elasticsearch did not return the index blocks',
+      'Elasticsearch did not return the lifecycle status',
+      'Elasticsearch did not return the cluster settings',
+      'Elasticsearch did not return the deprecation info',
+    ]);
+    expect(target.allPassedText()).toBe('The only check that ran passed. 18 checks could not run, so problems may still be hidden.');
+  });
+
+  it('moves focus back to the finding (or the list) after a fix', async () => {
+    post.mockResolvedValue(liveReport());
+    dialogs.confirm.mockResolvedValue(true);
+    const target = component();
+    await vi.waitFor(() => expect(target.report()).toBeDefined());
+    const finding = target.report()!.findings.find((item) => item.id === 'missing-replicas')!;
+    const heading = document.createElement('h3');
+    heading.id = target.findingDomId(finding.id, 'title');
+    heading.tabIndex = -1;
+    document.body.appendChild(heading);
+    post.mockImplementation(async (path: string) => (path === 'doctor' ? liveReport() : { acknowledged: true }));
+
+    await target.applyFix(finding.fixes[0]!, finding);
+    TestBed.tick();
+
+    expect(document.activeElement).toBe(heading);
+    heading.remove();
+  });
+
+  it('builds safe, distinct element ids from finding ids', () => {
+    post.mockResolvedValue(liveReport());
+    const target = component();
+    const first = target.findingDomId("deprecations:critical:Cluster name cannot contain ':'", 'title');
+    expect(first).toMatch(/^finding-title-[A-Za-z0-9_-]+$/);
+    expect(first).not.toBe(target.findingDomId('deprecations:critical:Cluster name cannot contain', 'title'));
   });
 
   it('shows the raw report', async () => {

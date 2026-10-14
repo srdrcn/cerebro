@@ -85,7 +85,15 @@ export const LIVE_REPORT: Record<string, any> = {
           "mem": {
             "heap_used_in_bytes": 174799424,
             "heap_used_percent": 41,
-            "heap_max_in_bytes": 419430400
+            "heap_max_in_bytes": 419430400,
+            "pools": {
+              "old": {
+                "used_in_bytes": 92412176,
+                "max_in_bytes": 419430400,
+                "peak_used_in_bytes": 92529920,
+                "peak_max_in_bytes": 419430400
+              }
+            }
           },
           "gc": {
             "collectors": {
@@ -171,7 +179,15 @@ export const LIVE_REPORT: Record<string, any> = {
           "mem": {
             "heap_used_in_bytes": 298588784,
             "heap_used_percent": 71,
-            "heap_max_in_bytes": 419430400
+            "heap_max_in_bytes": 419430400,
+            "pools": {
+              "old": {
+                "used_in_bytes": 151519232,
+                "max_in_bytes": 419430400,
+                "peak_used_in_bytes": 151636976,
+                "peak_max_in_bytes": 419430400
+              }
+            }
           },
           "gc": {
             "collectors": {
@@ -257,7 +273,15 @@ export const LIVE_REPORT: Record<string, any> = {
           "mem": {
             "heap_used_in_bytes": 133722464,
             "heap_used_percent": 31,
-            "heap_max_in_bytes": 419430400
+            "heap_max_in_bytes": 419430400,
+            "pools": {
+              "old": {
+                "used_in_bytes": 70254592,
+                "max_in_bytes": 419430400,
+                "peak_used_in_bytes": 70372336,
+                "peak_max_in_bytes": 419430400
+              }
+            }
           },
           "gc": {
             "collectors": {
@@ -1779,4 +1803,24 @@ export const DEPRECATIONS = {
     ],
   },
   ml_settings: [],
+};
+
+/**
+ * `_ilm/explain?only_errors=true` for an index whose `index.lifecycle.name`
+ * points to a policy that does not exist (captured from 8.15): step ERROR,
+ * no `failed_step`, and `_ilm/retry` rejects it.
+ */
+export const ILM_MISSING_POLICY = {
+  'tmp-doctor-nopolicy': {
+    index: 'tmp-doctor-nopolicy',
+    managed: true,
+    policy: 'tmp-doctor-missing',
+    index_creation_date_millis: 1792010878023,
+    time_since_index_creation: '3.11s',
+    step: 'ERROR',
+    step_info: {
+      type: 'illegal_argument_exception',
+      reason: 'policy [tmp-doctor-missing] does not exist',
+    },
+  },
 };

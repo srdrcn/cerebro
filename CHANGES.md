@@ -333,6 +333,7 @@ First cerebro release.
 
 #### New features
 
+- Cluster doctor: a one click health check of the whole cluster. It finds unassigned shards, replicas that can never be allocated, indices without replicas, nodes above the disk watermarks (with headroom), read-only blocks, oversized and over-sharded indices, the shard limit, ILM errors, heap and old-generation memory pressure, garbage collection, tripped circuit breakers, disabled allocation, transient settings and upgrade deprecations, shows Elasticsearch's health report on 8.7+, explains each problem and offers a confirmed one-click fix or a link to the page that handles it.
 - Shard allocation explain: why a shard is unassigned or stays on its node, with every node's deciders, reachable from the overview's shard menus and the unassigned-shards warning.
 - Index details page with overview, settings, mappings, statistics, aliases and shards tabs.
 - Composable index templates and component templates: list, edit, delete and preview the settings, mappings and aliases a template resolves to.

@@ -187,6 +187,8 @@ function parseNodes(value: unknown): NodeInfo[] | null {
       const mem = isRecord(jvm['mem']) ? jvm['mem'] : {};
       const gc = isRecord(jvm['gc']) && isRecord(jvm['gc']['collectors']) ? jvm['gc']['collectors'] : {};
       const old = isRecord(gc['old']) ? gc['old'] : {};
+      const pools = isRecord(mem['pools']) ? mem['pools'] : {};
+      const oldPool = isRecord(pools['old']) ? pools['old'] : {};
       return {
         id,
         name: text(node['name']) ?? id,
@@ -195,6 +197,8 @@ function parseNodes(value: unknown): NodeInfo[] | null {
         heapPercent: toNumber(mem['heap_used_percent']),
         heapUsed: toNumber(mem['heap_used_in_bytes']),
         heapMax: toNumber(mem['heap_max_in_bytes']),
+        oldGenUsed: toNumber(oldPool['used_in_bytes']),
+        oldGenMax: toNumber(oldPool['max_in_bytes']),
         uptime: toNumber(jvm['uptime_in_millis']),
         oldGcCount: toNumber(old['collection_count']),
         oldGcTime: toNumber(old['collection_time_in_millis']),
@@ -267,6 +271,9 @@ function parseShards(value: unknown): ShardRow[] | null {
     .filter((row) => row.index !== '');
 }
 
+/** Searchable snapshot markers, kept when the backend asks for them. */
+const STORE_KEYS = new Set(['index.store.type', 'index.store.snapshot.partial']);
+
 function parseBlocks(value: unknown): Map<string, Readonly<Record<string, unknown>>> | null {
   if (!isRecord(value)) {
     return null;
@@ -281,7 +288,7 @@ function parseBlocks(value: unknown): Map<string, Readonly<Record<string, unknow
     const nested = isRecord(settings['index']) && isRecord(settings['index']['blocks']) ? settings['index']['blocks'] : null;
     const flat: Record<string, unknown> = {};
     for (const [key, setting] of Object.entries(settings)) {
-      if (key.startsWith('index.blocks.')) {
+      if (key.startsWith('index.blocks.') || STORE_KEYS.has(key)) {
         flat[key] = setting;
       }
     }
@@ -293,6 +300,8 @@ function parseBlocks(value: unknown): Map<string, Readonly<Record<string, unknow
   return blocks;
 }
 
+const MISSING_POLICY = /^policy \[.*\] does not exist$/;
+
 function parseIlm(value: unknown): IlmErrorRow[] | null {
   if (!isRecord(value) || !isRecord(value['indices'])) {
     return null;
@@ -302,16 +311,21 @@ function parseIlm(value: unknown): IlmErrorRow[] | null {
     .filter(([, entry]) => text(entry['step'])?.toUpperCase() === 'ERROR')
     .map(([index, entry]) => {
       const info = isRecord(entry['step_info']) ? entry['step_info'] : {};
+      const reason = text(info['reason']) ?? elasticsearchReason(info);
+      const failedStep = text(entry['failed_step']);
       return {
         index: text(entry['index']) ?? index,
         policy: text(entry['policy']),
         phase: text(entry['phase']),
         action: text(entry['action']),
-        failedStep: text(entry['failed_step']),
+        failedStep,
         errorType: text(info['type']),
-        reason: text(info['reason']) ?? elasticsearchReason(info),
+        reason,
         retryCount: toNumber(entry['failed_step_retry_count']),
         autoRetry: entry['is_auto_retryable_error'] === true,
+        // IndexLifecycleService reports "policy [x] does not exist" as an ERROR
+        // step without a failed step; `_ilm/retry` rejects such an index.
+        missingPolicy: failedStep === null || MISSING_POLICY.test(reason ?? ''),
       };
     })
     .sort((left, right) => left.index.localeCompare(right.index));
@@ -427,6 +441,23 @@ export function unavailableReason(input: DoctorInput, source: DoctorSource): str
   }
   const suffix = status ? ` (${status})` : '';
   return reason ? `${sentence(reason)}${suffix}` : `Could not read the ${SOURCE_LABELS[source]}${suffix}`;
+}
+
+/**
+ * Whether a source is missing because the feature does not exist on this
+ * cluster (rather than because of privileges or an error): the health report
+ * before 8.7, the deprecation API before 6.0, ILM and deprecations without
+ * X-Pack (the endpoint is unknown: 400/404/405).
+ */
+export function isUnsupportedSource(input: DoctorInput, source: DoctorSource): boolean {
+  const status = input.unavailable.get(source)?.status ?? null;
+  if (source === 'health_report') {
+    return input.version ? !versionAtLeast(input.version, 8, 7) : status === 400 || status === 404;
+  }
+  if (source === 'deprecations' && input.version && input.version.major < 6) {
+    return true;
+  }
+  return (source === 'ilm' || source === 'deprecations') && (status === 400 || status === 404 || status === 405);
 }
 
 /* ------------------------------------------------------------------ */
@@ -560,13 +591,13 @@ export function requiredFreeBytes(level: WatermarkLevel, total: number): number 
   return level.headroom === null ? free : Math.min(free, level.headroom);
 }
 
-/** "90%" or "90% (at most 150 GB free)", "500 MB free". */
+/** "90%", "90% (max headroom 150 GB)", "500 MB free". */
 export function describeWatermark(level: WatermarkLevel): string {
   if (level.watermark.kind === 'bytes') {
     return `${formatBytes(level.watermark.bytes)} free`;
   }
   const percent = `${roundPercent(level.watermark.ratio * 100)}%`;
-  return level.headroom === null ? percent : `${percent}, at most ${formatBytes(level.headroom)} free`;
+  return level.headroom === null ? percent : `${percent} (max headroom ${formatBytes(level.headroom)})`;
 }
 
 /** 90.6 → "90.6", 90 → "90". */
@@ -693,12 +724,8 @@ export function healthReportView(input: DoctorInput): HealthReportView {
     const status = text(report['status'])?.toLowerCase() ?? 'unknown';
     return { kind: 'report', status, tone: healthTone(status), indicators: indicatorViews(report) };
   }
-  const entry = input.unavailable.get('health_report');
   // Older versions answer 400/404 ("no handler found"); 8.7 introduced the API.
-  const older = input.version
-    ? !versionAtLeast(input.version, 8, 7)
-    : entry?.status === 400 || entry?.status === 404;
-  if (older) {
+  if (isUnsupportedSource(input, 'health_report')) {
     return { kind: 'unsupported', version: input.version?.text ?? null };
   }
   return { kind: 'unavailable', reason: unavailableReason(input, 'health_report') };

@@ -89,6 +89,9 @@ export interface NodeInfo {
   readonly heapPercent: number | null;
   readonly heapUsed: number | null;
   readonly heapMax: number | null;
+  /** Old-generation pool (`jvm.mem.pools.old`): what is left after collections. */
+  readonly oldGenUsed: number | null;
+  readonly oldGenMax: number | null;
   readonly uptime: number | null;
   readonly oldGcCount: number | null;
   readonly oldGcTime: number | null;
@@ -133,6 +136,11 @@ export interface IlmErrorRow {
   readonly reason: string | null;
   readonly retryCount: number | null;
   readonly autoRetry: boolean;
+  /**
+   * The index points to a policy that does not exist: explain reports it as
+   * step ERROR without a failed step, and `_ilm/retry` rejects it.
+   */
+  readonly missingPolicy: boolean;
 }
 
 export interface UnavailableSource {
@@ -147,7 +155,10 @@ export interface DoctorInput {
   readonly settings: ClusterSettingsLayers | null;
   readonly indices: readonly IndexRow[] | null;
   readonly shards: readonly ShardRow[] | null;
-  /** Index name → flat `index.blocks.*` settings. */
+  /**
+   * Index name → flat `index.blocks.*` settings plus `index.store.type` and
+   * `index.store.snapshot.partial` (searchable snapshot detection).
+   */
   readonly blocks: ReadonlyMap<string, Readonly<Record<string, unknown>>> | null;
   readonly ilm: readonly IlmErrorRow[] | null;
   readonly deprecations: Readonly<Record<string, unknown>> | null;
@@ -306,6 +317,11 @@ export interface CheckOutcome {
   readonly findings: readonly DoctorFinding[];
   /** Why a skipped check could not run ("Needs the monitor privilege (403)"). */
   readonly reason?: string;
+  /**
+   * Skipped because the feature does not exist on this cluster (health report
+   * before 8.7, ILM without X-Pack…): not a gap in the report.
+   */
+  readonly unsupported?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -357,7 +373,8 @@ export type HealthReportView =
 /* ------------------------------------------------------------------ */
 
 export interface DoctorVerdict {
-  readonly tone: 'red' | 'yellow' | 'green';
+  /** Blue: no problems found, but some checks could not run. */
+  readonly tone: 'red' | 'yellow' | 'green' | 'blue';
   readonly icon: string;
   readonly title: string;
   readonly text: string;
@@ -372,6 +389,8 @@ export interface DoctorReport {
   readonly ran: number;
   readonly passed: number;
   readonly skipped: number;
+  /** Skipped checks that leave a gap (not merely unsupported by this version). */
+  readonly gaps: number;
   readonly verdict: DoctorVerdict;
   readonly healthReport: HealthReportView;
 }

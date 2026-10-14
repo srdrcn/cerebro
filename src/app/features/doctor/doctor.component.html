@@ -12,7 +12,7 @@
         [disabled]="running()"
         (click)="run()"
       >
-        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Run checks again
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> {{ report() ? 'Run checks again' : 'Run checks' }}
       </button>
       <cerebro-menu label="More actions" align="end" [disabled]="raw() === undefined">
         <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
@@ -69,8 +69,8 @@
           <dd class="doctor-stat__value">
             {{ report.passed | num }}<span class="doctor-stat__of">/{{ report.ran | num }}</span>
           </dd>
-          @if (report.skipped > 0) {
-            <dd class="doctor-stat__meta">{{ report.skipped | num }} not checked</dd>
+          @if (report.gaps > 0) {
+            <dd class="doctor-stat__meta">{{ report.gaps | num }} could not run</dd>
           }
         </div>
       </dl>
@@ -80,7 +80,7 @@
       <div class="stack min-w-0" [attr.aria-busy]="running()">
         <section aria-labelledby="doctor-findings-title" class="stack">
           <div class="doctor-toolbar">
-            <h2 id="doctor-findings-title" class="section-title">Findings</h2>
+            <h2 id="doctor-findings-title" class="section-title" tabindex="-1">Findings</h2>
             @if (report.findings.length > 0) {
               <div class="row-wrap doctor-chips" role="group" aria-label="Filter by severity">
                 @for (severity of severities; track severity.key) {
@@ -121,12 +121,30 @@
             }
           </div>
 
+          @if (report.gaps > 0) {
+            <div class="callout callout-info doctor-gaps">
+              <i class="bi bi-dash-circle" aria-hidden="true"></i>
+              <div class="min-w-0">
+                <strong>{{ report.gaps | num }} {{ report.gaps | plural: 'check' }} could not run.</strong>
+                The report only covers what Elasticsearch let the doctor read.
+                <ul class="doctor-gaps__reasons">
+                  @for (reason of gapReasons(); track reason) {
+                    <li>{{ reason }}</li>
+                  }
+                </ul>
+                <button type="button" class="link-button text-sm" (click)="showChecks()" aria-controls="doctor-checks-list">
+                  See which checks
+                </button>
+              </div>
+            </div>
+          }
+
           @if (report.findings.length === 0) {
-            <div class="card doctor-all-good">
+            <div class="card doctor-all-good" [class.is-partial]="report.gaps > 0">
               <cerebro-empty
-                icon="bi-check2-circle"
-                heading="Nothing to fix"
-                [text]="'All ' + report.ran + ' checks passed. The cluster looks healthy' + (report.skipped > 0 ? ', although some checks could not run.' : '.')"
+                [icon]="report.gaps > 0 ? 'bi-clipboard-check' : 'bi-check2-circle'"
+                [heading]="report.gaps > 0 ? 'Nothing to fix in what was checked' : 'Nothing to fix'"
+                [text]="allPassedText()"
               >
                 <button type="button" class="btn btn-sm" (click)="showChecks()" aria-controls="doctor-checks-list">
                   <i class="bi bi-list-check" aria-hidden="true"></i> See what was checked
@@ -143,12 +161,12 @@
             </div>
           } @else {
             <ol class="doctor-findings" aria-label="Findings by severity">
-              @for (finding of visibleFindings(); track finding.id; let i = $index) {
+              @for (finding of visibleFindings(); track finding.id) {
                 <li>
                   <article
                     class="card finding"
                     [class]="'card finding tone-' + severityMeta(finding.severity).tone"
-                    [attr.aria-labelledby]="'finding-title-' + i"
+                    [attr.aria-labelledby]="findingDomId(finding.id, 'title')"
                   >
                     <div class="finding__head">
                       <span class="finding__icon" aria-hidden="true"><i [class]="'bi ' + severityMeta(finding.severity).icon"></i></span>
@@ -160,7 +178,7 @@
                             {{ categoryMeta(finding.category).label }}
                           </span>
                         </div>
-                        <h3 class="finding__title" [id]="'finding-title-' + i">{{ finding.title }}</h3>
+                        <h3 class="finding__title" [id]="findingDomId(finding.id, 'title')" tabindex="-1">{{ finding.title }}</h3>
                       </div>
                     </div>
 
@@ -202,7 +220,7 @@
                             {{ finding.resourceLabel ?? 'Affected' }}
                             <span class="finding__resources-count">{{ finding.resources.length | num }}</span>
                           </h4>
-                          <ul class="resource-list" [id]="'finding-resources-' + i">
+                          <ul class="resource-list" [id]="findingDomId(finding.id, 'resources')">
                             @for (resource of visibleResources(finding); track resource.kind + ':' + resource.name) {
                               <li class="resource">
                                 <i [class]="'bi ' + resourceIcon(resource) + ' resource__icon'" aria-hidden="true"></i>
@@ -231,7 +249,7 @@
                                         [class.is-loading]="fixing() === fix.key"
                                         [disabled]="fixing() !== null || running()"
                                         [attr.aria-label]="fix.label + ': ' + resource.name"
-                                        (click)="applyFix(fix)"
+                                        (click)="applyFix(fix, finding)"
                                       >
                                         <i [class]="'bi ' + fix.icon" aria-hidden="true"></i> {{ fix.label }}
                                       </button>
@@ -246,7 +264,7 @@
                               type="button"
                               class="link-button text-sm finding__more"
                               [attr.aria-expanded]="expandedResources().has(finding.id)"
-                              [attr.aria-controls]="'finding-resources-' + i"
+                              [attr.aria-controls]="findingDomId(finding.id, 'resources')"
                               (click)="toggleResources(finding)"
                             >
                               @if (expandedResources().has(finding.id)) {
@@ -270,7 +288,7 @@
                             [class.btn-danger]="fix.tone === 'danger'"
                             [class.is-loading]="fixing() === fix.key"
                             [disabled]="fixing() !== null || running()"
-                            (click)="applyFix(fix)"
+                            (click)="applyFix(fix, finding)"
                           >
                             <i [class]="'bi ' + fix.icon" aria-hidden="true"></i>
                             {{ fix.label }}
@@ -386,7 +404,7 @@
                 [compact]="true"
                 icon="bi-hourglass"
                 heading="Available from Elasticsearch 8.7"
-                [text]="report.version ? 'This cluster runs Elasticsearch ' + report.version + '. The checks on this page cover the same ground.' : 'The checks on this page cover the same ground.'"
+                [text]="unsupportedText()"
               />
             }
             @case ('unavailable') {

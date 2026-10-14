@@ -415,9 +415,28 @@
 
 /* ---- All good ---------------------------------------------------------- */
 
-.doctor-all-good ::ng-deep .empty__icon {
+.doctor-all-good:not(.is-partial) ::ng-deep .empty__icon {
   background: var(--green-soft);
   color: var(--green-text);
+}
+
+/* ---- Checks that could not run ----------------------------------------- */
+
+.doctor-gaps__reasons {
+  margin: var(--space-1) 0 var(--space-2);
+  padding-left: var(--space-5);
+}
+
+/* Focus lands on these after a fix (programmatic, tabindex="-1"). */
+.finding__title:focus,
+#doctor-findings-title:focus {
+  outline: none;
+}
+
+.finding__title:focus-visible,
+#doctor-findings-title:focus-visible {
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
 }
 
 /* ---- Health report ----------------------------------------------------- */

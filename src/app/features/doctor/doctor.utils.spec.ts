@@ -151,7 +151,7 @@ describe('disk watermarks', () => {
     expect(requiredFreeBytes(thresholds.high!, 10 * 1024 * GB)).toBe(150 * GB);
     // 10% of 100 GB stays below the cap.
     expect(requiredFreeBytes(thresholds.high!, 100 * GB)).toBe(10 * GB);
-    expect(describeWatermark(thresholds.high!)).toBe('90%, at most 150 GB free');
+    expect(describeWatermark(thresholds.high!)).toBe('90% (max headroom 150 GB)');
   });
 
   it('drops the headroom of an explicit watermark unless the headroom is explicit too', () => {

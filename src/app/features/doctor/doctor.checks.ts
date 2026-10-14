@@ -14,6 +14,7 @@ import {
   DoctorResource,
   DoctorSeverity,
   DoctorVerdict,
+  IlmErrorRow,
   IndexRow,
   NodeInfo,
   ResourceKind,
@@ -32,6 +33,7 @@ import {
   isExplicit,
   isFrozenOnly,
   isTrue,
+  isUnsupportedSource,
   parseDoctorInput,
   requiredFreeBytes,
   roundPercent,
@@ -39,6 +41,7 @@ import {
   sortFindings,
   toNumber,
   unavailableReason,
+  versionAtLeast,
 } from './doctor.utils';
 
 /* ------------------------------------------------------------------ */
@@ -102,7 +105,21 @@ const NODES_LINK: DoctorLink = { label: 'Open nodes', icon: 'bi-hdd-stack', rout
 const CLUSTER_SETTINGS_LINK: DoctorLink = { label: 'Cluster settings', icon: 'bi-sliders', route: '/cluster_settings' };
 const ALLOCATION_LINK: DoctorLink = { label: 'Explain unassigned shards', icon: 'bi-signpost-split', route: '/allocation' };
 const RECOVERY_LINK: DoctorLink = { label: 'Open recoveries', icon: 'bi-arrow-repeat', route: '/recovery' };
-const ILM_STATUS_LINK: DoctorLink = { label: 'Lifecycle status', icon: 'bi-hourglass-split', route: '/ilm', params: { tab: 'status' } };
+const ILM_POLICIES_LINK: DoctorLink = { label: 'Lifecycle policies', icon: 'bi-hourglass-split', route: '/ilm' };
+const DATA_STREAMS_LINK: DoctorLink = { label: 'Data streams', icon: 'bi-water', route: '/data_streams' };
+/** Indices passed to the ILM status page (it explains them on arrival). */
+const ILM_LINK_INDICES = 20;
+
+/** The ILM status tab, explaining the given indices right away. */
+function ilmStatusLink(indices: readonly string[]): DoctorLink {
+  const shown = indices.slice(0, ILM_LINK_INDICES);
+  return {
+    label: 'Lifecycle status',
+    icon: 'bi-hourglass-split',
+    route: '/ilm',
+    params: shown.length > 0 ? { tab: 'status', index: shown.join(',') } : { tab: 'status' },
+  };
+}
 
 function indexLink(index: string, tab?: string): DoctorLink {
   return {
@@ -161,17 +178,29 @@ function replicasFix(indices: readonly string[], replicas: number, kind: 'add' |
   };
 }
 
-function removeReadOnlyFix(indices: readonly string[], stillFull: readonly string[]): DoctorFix {
+/** What the disk threshold monitor does with the flood stage block right now. */
+interface FloodBlockState {
+  /** `cluster.routing.allocation.disk.threshold_enabled`. */
+  readonly enabled: boolean;
+  /** Data nodes still past the flood stage (only when enabled). */
+  readonly stillFull: readonly string[];
+}
+
+function removeReadOnlyFix(indices: readonly string[], state: FloodBlockState): DoctorFix {
   const target = subject(indices, 'index', 'indices');
-  const reapplied =
-    stillFull.length > 0
-      ? `${listJoin(stillFull)} ${isAre(stillFull.length)} still above the flood stage watermark, so Elasticsearch will add the block again until disk space is freed.`
-      : 'Elasticsearch adds it again if a node holding their shards passes the flood stage watermark.';
+  const shards = indices.length === 1 ? 'its shards' : 'their shards';
+  // DiskThresholdMonitor adds the block at the flood stage only while the
+  // thresholds are enabled.
+  const reapplied = !state.enabled
+    ? 'Disk-based shard allocation is disabled, so Elasticsearch will neither add it again nor remove it on its own.'
+    : state.stillFull.length > 0
+      ? `${listJoin(state.stillFull)} ${isAre(state.stillFull.length)} still above the flood stage watermark, so Elasticsearch will add the block again until disk space is freed.`
+      : `Elasticsearch adds it again if a node holding ${shards} passes the flood stage watermark.`;
   return {
     key: `read-only:${indices.join(',')}`,
     label: indices.length > 1 ? 'Remove all blocks' : 'Remove read-only block',
     icon: 'bi-unlock',
-    tone: stillFull.length > 0 ? 'warning' : 'default',
+    tone: state.stillFull.length > 0 ? 'warning' : 'default',
     confirmTitle: `Remove the read-only block from ${target}?`,
     confirmMessage: `Removes index.blocks.read_only_allow_delete so writes are accepted again. ${reapplied}`,
     confirmItems: indices.length > 1 ? indices : [],
@@ -232,8 +261,12 @@ export function nodeDiskStates(input: DoctorInput, thresholds: DiskThresholds): 
         ? [thresholds.frozenFlood ?? thresholds.flood]
         : [thresholds.flood, thresholds.high, thresholds.low];
       const required = (level: WatermarkLevel): number => {
-        // Without the cluster settings, prefer what the node itself reports (8.x).
-        const reported = thresholds.source === 'defaults' && !frozen ? disk.reported[level.key] : null;
+        // Elasticsearch 8.x reports the free space each watermark requires on
+        // this path, resolved by the node itself: it also accounts for values
+        // set in elasticsearch.yml (which change the max_headroom defaults but
+        // not what include_defaults shows). Frozen nodes report the regular
+        // flood stage, not the frozen one, so compute theirs.
+        const reported = frozen ? null : disk.reported[level.key];
         return reported ?? requiredFreeBytes(level, disk.total);
       };
       const exceeded = levels.find((level): level is WatermarkLevel => level !== null && disk.available < required(level));
@@ -274,27 +307,57 @@ function settingLayer(settings: ClusterSettingsLayers, key: string): string {
 /* 1. Cluster status                                                   */
 /* ------------------------------------------------------------------ */
 
+function delayedText(delayed: number): string {
+  return delayed > 0
+    ? ` ${formatNumber(delayed)} of them ${isAre(delayed)} delayed on purpose after a node left (index.unassigned.node_left.delayed_timeout).`
+    : '';
+}
+
+function healthFacts(health: DoctorInput['health']): DoctorFact[] {
+  return [
+    { label: 'Unassigned', value: formatNumber(health.unassigned) },
+    { label: 'Initializing', value: formatNumber(health.initializing) },
+    { label: 'Relocating', value: formatNumber(health.relocating) },
+    { label: 'Active shards', value: formatNumber(health.activeShards) },
+  ];
+}
+
 const clusterStatus: DoctorCheck = {
   id: 'cluster-status',
   category: 'health',
   title: 'Cluster status',
   description: 'Cluster health is green: every primary and replica shard is allocated.',
   sources: ['health'],
-  run: ({ health }) => {
+  run: (input) => {
+    const health = input.health;
     if (health.status !== 'red' && health.status !== 'yellow') {
       return [];
     }
-    const facts: DoctorFact[] = [
-      { label: 'Unassigned', value: formatNumber(health.unassigned) },
-      { label: 'Initializing', value: formatNumber(health.initializing) },
-      { label: 'Relocating', value: formatNumber(health.relocating) },
-      { label: 'Active shards', value: formatNumber(health.activeShards) },
-    ];
-    const delayed =
-      health.delayedUnassigned > 0
-        ? ` ${formatNumber(health.delayedUnassigned)} of them ${isAre(health.delayedUnassigned)} delayed on purpose after a node left (index.unassigned.node_left.delayed_timeout).`
-        : '';
+    const facts = healthFacts(health);
+    const delayed = delayedText(health.delayedUnassigned);
+    // The unassigned shards finding exists when the shard list could be read and lists them.
+    const listed = (input.shards ?? []).some((row) => row.state === 'UNASSIGNED');
     if (health.status === 'red') {
+      // Red means a primary is not active: unassigned, or still initializing
+      // (recovering from disk after a restart).
+      if (health.unassigned === 0 && health.initializing > 0) {
+        return [
+          {
+            id: 'cluster-status:red',
+            checkId: 'cluster-status',
+            severity: 'critical',
+            category: 'health',
+            title: 'Cluster health is red while primaries recover',
+            summary: `Some primary shards are still initializing (recovering); ${pluralize(health.initializing, 'shard')} ${isAre(health.initializing)} initializing in total.`,
+            impact: 'Until they finish, searches on the affected indices return partial results or fail, and writes to them are rejected.',
+            advice: 'Usually this resolves on its own after a restart: watch the recoveries. If one does not progress, explain the shard on the shard allocation page.',
+            facts,
+            resources: [],
+            fixes: [],
+            links: [RECOVERY_LINK, ALLOCATION_LINK],
+          },
+        ];
+      }
       return [
         {
           id: 'cluster-status:red',
@@ -304,7 +367,9 @@ const clusterStatus: DoctorCheck = {
           title: 'Cluster health is red',
           summary: `At least one primary shard is not allocated${health.unassigned > 0 ? ` (${pluralize(health.unassigned, 'unassigned shard')} in total)` : ''}.${delayed}`,
           impact: 'Searches on the affected indices return partial results or fail, and writes to them are rejected.',
-          advice: 'Find the missing primaries in the unassigned shards finding and explain why Elasticsearch cannot place them.',
+          advice: listed
+            ? 'Find the missing primaries in the unassigned shards finding and explain why Elasticsearch cannot place them.'
+            : 'Explain the unassigned primaries on the shard allocation page to see why Elasticsearch cannot place them.',
           facts,
           resources: [],
           fixes: [],
@@ -323,7 +388,9 @@ const clusterStatus: DoctorCheck = {
           summary: `Every primary shard is allocated, but ${pluralize(health.unassigned, 'replica shard')} ${isAre(health.unassigned)} not.${delayed}`,
           impact:
             'Your data has fewer copies than configured: losing a node can make some of it unavailable, and searches have fewer copies to spread over.',
-          advice: 'See the unassigned shards finding for the reason, or explain them on the shard allocation page.',
+          advice: listed
+            ? 'See the unassigned shards finding for the reason, or explain them on the shard allocation page.'
+            : 'Explain the unassigned shards on the shard allocation page to see why no node accepts them.',
           facts,
           resources: [],
           fixes: [],
@@ -400,6 +467,8 @@ const unassignedShards: DoctorCheck = {
           };
         });
       const count = copies.length;
+      // A yellow cluster is reported here (runChecks drops the separate status finding).
+      const yellow = !primary && input.health.status === 'yellow';
       findings.push({
         id: `unassigned-shards:${primary ? 'primary' : 'replica'}`,
         checkId: 'unassigned-shards',
@@ -408,13 +477,14 @@ const unassignedShards: DoctorCheck = {
         title: `${pluralize(count, primary ? 'primary shard' : 'replica shard')} ${isAre(count)} unassigned`,
         summary: primary
           ? `${indicesLabel(groups.size)} ${hasHave(groups.size)} primary shards without an active copy.`
-          : `${indicesLabel(groups.size)} ${isAre(groups.size)} missing replica copies.`,
+          : `${yellow ? 'Cluster health is yellow: ' : ''}${indicesLabel(groups.size)} ${isAre(groups.size)} missing replica copies.${yellow ? delayedText(input.health.delayedUnassigned) : ''}`,
         impact: primary
           ? 'This data cannot be searched and writes to it fail until the primaries are allocated.'
-          : 'The data is still served by the primaries, but with less redundancy: losing a node that holds a primary turns the cluster red.',
+          : 'The data is still served, but with less redundancy: if a node holding the last active copy of a shard fails, the cluster turns red.',
         advice: primary
           ? 'Explain each shard to see what blocks it. If a node left, bring it back; if allocation failed repeatedly, fix the cause and retry.'
           : 'Explain a shard to see why no node accepts it. Common causes are too few nodes for the replica count, full disks and allocation filters.',
+        ...(yellow ? { facts: [{ label: 'Cluster health', value: 'Yellow' }, ...healthFacts(input.health).slice(0, 3)] } : {}),
         resources,
         resourceLabel: 'Affected indices',
         fixes:
@@ -497,21 +567,66 @@ const impossibleReplicas: DoctorCheck = {
 /* 4. Indices without replicas                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Data stream of a backing index: `.ds-<stream>-<yyyy.MM.dd>-<generation>`
+ * (7.11+) or `.ds-<stream>-<generation>` (7.9–7.10).
+ */
+const BACKING_INDEX = /^\.ds-(.+?)-(?:\d{4}\.\d{2}\.\d{2}-)?\d+$/;
+
+export function backingDataStream(index: string): string | null {
+  return BACKING_INDEX.exec(index)?.[1] ?? null;
+}
+
+/** Hidden data streams Elasticsearch creates itself whose names do not start with a dot. */
+const SYSTEM_DATA_STREAMS = /^(?:ilm-history|slm-history)-\d+$/;
+
+/**
+ * Mounted searchable snapshot indices have no replicas by design: the
+ * snapshot is their resilience ("Searchable snapshots" in the reference).
+ * Their store type is `snapshot` (partially mounted ones also set
+ * `index.store.snapshot.partial`).
+ */
+function isSearchableSnapshot(input: DoctorInput, index: string): boolean {
+  const settings = input.blocks?.get(index);
+  return settings !== undefined && (settings['index.store.type'] === 'snapshot' || isTrue(settings['index.store.snapshot.partial']));
+}
+
+/** User data: regular indices and backing indices of user data streams. */
+function isUserIndex(name: string): boolean {
+  const stream = backingDataStream(name);
+  if (stream !== null) {
+    return !isSystemName(stream) && !SYSTEM_DATA_STREAMS.test(stream);
+  }
+  return !isSystemName(name);
+}
+
 const missingReplicas: DoctorCheck = {
   id: 'missing-replicas',
   category: 'indices',
   title: 'Indices have replicas',
-  description: 'Every index (other than system and hidden indices) keeps at least one replica.',
+  description:
+    'Every index and data stream keeps at least one replica (system indices and searchable snapshots, which rely on their snapshot, are not counted).',
   sources: ['indices'],
   run: (input) => {
     const dataNodes = dataNodeCount(input);
     const rows = (input.indices ?? [])
-      .filter((row) => row.replicas === 0 && !isSystemName(row.name))
+      .filter((row) => row.replicas === 0 && isUserIndex(row.name) && !isSearchableSnapshot(input, row.name))
       .sort((left, right) => left.name.localeCompare(right.name));
     if (rows.length === 0 || dataNodes <= 0) {
       return [];
     }
-    const resource = (row: IndexRow): DoctorResource => ({
+    // Backing indices are listed per data stream.
+    const plain = rows.filter((row) => backingDataStream(row.name) === null);
+    const streams = new Map<string, IndexRow[]>();
+    for (const row of rows) {
+      const stream = backingDataStream(row.name);
+      if (stream !== null) {
+        streams.set(stream, [...(streams.get(stream) ?? []), row]);
+      }
+    }
+    const streamNames = [...streams.keys()].sort((left, right) => left.localeCompare(right));
+    const sizeOf = (selected: readonly IndexRow[]) => selected.reduce((sum, row) => sum + (row.primarySize ?? row.size ?? 0), 0);
+    const indexResource = (row: IndexRow): DoctorResource => ({
       kind: 'index',
       name: row.name,
       detail: [
@@ -521,6 +636,31 @@ const missingReplicas: DoctorCheck = {
       ].join(' · '),
       link: indexLink(row.name),
     });
+    const streamResource = (stream: string): DoctorResource => {
+      const backing = streams.get(stream) ?? [];
+      return {
+        kind: 'data-stream',
+        name: stream,
+        detail: [
+          pluralize(backing.length, 'backing index', 'backing indices'),
+          pluralize(backing.reduce((sum, row) => sum + row.primaries, 0), 'primary shard'),
+          formatBytes(sizeOf(backing)),
+        ].join(' · '),
+        link: { label: 'Open data stream', icon: 'bi-water', route: '/data_streams', params: { name: stream } },
+      };
+    };
+    const templateAdvice =
+      streamNames.length > 0
+        ? ' For data streams, also set number_of_replicas in their index template: new backing indices inherit it.'
+        : '';
+    const streamLinks = streamNames.length > 0 ? [DATA_STREAMS_LINK] : [];
+    const label = streamNames.length > 0 && plain.length > 0 ? 'Affected indices and data streams' : streamNames.length > 0 ? 'Affected data streams' : 'Affected indices';
+    const subjects = [
+      ...(plain.length > 0 ? [indicesLabel(plain.length)] : []),
+      ...(streamNames.length > 0 ? [pluralize(streamNames.length, 'data stream')] : []),
+    ];
+    const subjectCount = plain.length + streamNames.length;
+    const title = `${listJoin(subjects)} ${subjectCount === 1 ? 'has' : 'have'} no replicas`;
     if (dataNodes === 1) {
       return [
         {
@@ -528,26 +668,44 @@ const missingReplicas: DoctorCheck = {
           checkId: 'missing-replicas',
           severity: 'info',
           category: 'indices',
-          title: `${indicesLabel(rows.length)} ${hasHave(rows.length)} no replicas`,
+          title,
           summary:
             'Every shard exists only once. That is expected with a single data node: Elasticsearch never allocates a replica on the node that holds its primary.',
           impact: 'If the node or its disk fails, this data is unavailable or lost; snapshots are its only other copy.',
           advice: 'Add a second data node and then add replicas, or make sure snapshots run regularly.',
-          resources: rows.map(resource),
-          resourceLabel: 'Affected indices',
+          resources: [...plain.map(indexResource), ...streamNames.map(streamResource)],
+          resourceLabel: label,
           fixes: [],
-          links: [],
+          links: streamLinks,
         },
       ];
     }
     const thresholds = diskThresholds(input.settings, input.version);
     const crowded = nodeDiskStates(input, thresholds).filter((state) => state.level === 'high' || state.level === 'flood');
     const extra = (selected: readonly IndexRow[]): string => {
-      const bytes = selected.reduce((sum, row) => sum + (row.primarySize ?? 0), 0);
-      const disk = `Elasticsearch copies every shard to another node, which needs about ${formatBytes(bytes)} of extra disk.`;
+      const disk = `Elasticsearch copies every shard to another node, which needs about ${formatBytes(sizeOf(selected))} of extra disk.`;
       return crowded.length > 0 && thresholds.enabled
         ? `${disk} ${listJoin(crowded.map((state) => state.node.name))} ${isAre(crowded.length)} above the high watermark, so the new replicas may stay unassigned.`
         : disk;
+    };
+    const many = subjectCount > 1;
+    const streamFix = (stream: string): DoctorFix => {
+      const backing = streams.get(stream) ?? [];
+      return {
+        ...replicasFix(
+          backing.map((row) => row.name),
+          1,
+          'add',
+          `${extra(backing)} New backing indices take number_of_replicas from the index template.`,
+        ),
+        confirmTitle:
+          backing.length === 1
+            ? `Add a replica to the backing index of ${stream}?`
+            : `Add a replica to the ${pluralize(backing.length, 'backing index', 'backing indices')} of ${stream}?`,
+        confirmItems: backing.length > 1 ? backing.map((row) => row.name) : [],
+        success: `Added a replica to the backing indices of ${stream}`,
+        failure: `Could not add a replica to the backing indices of ${stream}`,
+      };
     };
     return [
       {
@@ -555,18 +713,31 @@ const missingReplicas: DoctorCheck = {
         checkId: 'missing-replicas',
         severity: 'warning',
         category: 'indices',
-        title: `${indicesLabel(rows.length)} ${hasHave(rows.length)} no replicas`,
-        summary: 'Every shard of these indices exists only once.',
+        title,
+        summary:
+          streamNames.length > 0 && plain.length === 0
+            ? 'Every shard of these data streams exists only once.'
+            : `Every shard of these ${streamNames.length > 0 ? 'indices and data streams' : 'indices'} exists only once.`,
         impact:
           'If a node fails, its shards are unavailable until it returns, and lost if its disk is lost. Searches also cannot be spread over copies.',
-        advice: 'Add a replica so every shard has a copy on another node. It takes as much extra disk as the primaries use.',
-        resources: rows.map((row) => ({
-          ...resource(row),
-          ...(rows.length > 1 ? { fix: replicasFix([row.name], 1, 'add', extra([row])) } : {}),
-        })),
-        resourceLabel: 'Affected indices',
-        fixes: [replicasFix(rows.map((row) => row.name), 1, 'add', extra(rows))],
-        links: [],
+        advice: `Add a replica so every shard has a copy on another node. It takes as much extra disk as the primaries use.${templateAdvice}`,
+        resources: [
+          ...plain.map((row) => ({
+            ...indexResource(row),
+            ...(many ? { fix: replicasFix([row.name], 1, 'add', extra([row])) } : {}),
+          })),
+          ...streamNames.map((stream) => ({
+            ...streamResource(stream),
+            ...(many ? { fix: streamFix(stream) } : {}),
+          })),
+        ],
+        resourceLabel: label,
+        fixes: [
+          !many && streamNames.length === 1 && plain.length === 0
+            ? streamFix(streamNames[0]!)
+            : replicasFix(rows.map((row) => row.name), 1, 'add', extra(rows)),
+        ],
+        links: streamLinks,
       },
     ];
   },
@@ -694,13 +865,15 @@ const diskAllocationEnabled: DoctorCheck = {
       {
         id: 'disk-threshold-enabled',
         checkId: 'disk-threshold-enabled',
-        severity: pressed.length > 0 ? 'warning' : 'info',
+        // Info: when nodes are past a watermark, the disk finding already
+        // carries the warning and explains that nothing is enforced.
+        severity: 'info',
         category: 'settings',
         title: 'Disk watermarks are not enforced',
         summary: `${key} is false, so Elasticsearch neither keeps shards off full nodes nor blocks writes before a disk fills up.`,
         impact:
           pressed.length > 0
-            ? `${listJoin(pressed.map((state) => state.node.name))} ${isAre(pressed.length)} already past a watermark and nothing protects ${pressed.length === 1 ? 'it' : 'them'} from running out of disk.`
+            ? `${listJoin(pressed.map((state) => state.node.name))} ${isAre(pressed.length)} already past a watermark (see the disk finding) and nothing protects ${pressed.length === 1 ? 'it' : 'them'} from running out of disk.`
             : 'A node can run out of disk completely, which fails writes and shards.',
         advice: resettable
           ? 'Enable it again unless this is a test cluster.'
@@ -742,6 +915,47 @@ const BLOCK_LABELS: readonly (readonly [string, string])[] = [
   ['index.blocks.metadata', 'metadata block'],
 ];
 
+/** Advice and note for the flood stage block, from what the disk threshold monitor does now. */
+function floodBlockTexts(
+  state: FloodBlockState,
+  aboveHigh: readonly string[],
+  autoRelease: boolean,
+  knowDisks: boolean,
+): { advice: string; note: string } {
+  if (!state.enabled) {
+    return {
+      advice: 'Make sure the disks have room, then remove the block.',
+      note: 'Disk-based shard allocation is disabled (threshold_enabled: false), so Elasticsearch neither re-applies nor removes this block on its own.',
+    };
+  }
+  if (state.stillFull.length > 0) {
+    return {
+      advice: 'Free disk space first, then remove the block.',
+      note: `${listJoin(state.stillFull)} ${isAre(state.stillFull.length)} still above the flood stage watermark: Elasticsearch re-applies the block until disk space is freed.`,
+    };
+  }
+  if (!knowDisks) {
+    return {
+      advice: 'Free disk space first, then remove the block.',
+      note: 'Elasticsearch re-applies the block while a node holding these indices stays above the flood stage watermark.',
+    };
+  }
+  if (aboveHigh.length > 0) {
+    return {
+      advice: 'No node is above the flood stage any more, so the block can be removed now.',
+      note: autoRelease
+        ? `Elasticsearch also removes it on its own once ${listJoin(aboveHigh)} ${aboveHigh.length === 1 ? 'drops' : 'drop'} below the high watermark.`
+        : 'Elasticsearch re-applies the block if a node holding these indices passes the flood stage again.',
+    };
+  }
+  return {
+    advice: 'No node is above the flood stage any more, so the block can be removed now.',
+    note: autoRelease
+      ? 'Every node is below the high watermark, so Elasticsearch normally releases the block on its own within a minute.'
+      : 'Elasticsearch re-applies the block if a node holding these indices passes the flood stage again.',
+  };
+}
+
 const indexBlocks: DoctorCheck = {
   id: 'index-blocks',
   category: 'indices',
@@ -762,11 +976,16 @@ const indexBlocks: DoctorCheck = {
     const findings: DoctorFinding[] = [];
     if (floodBlocked.length > 0) {
       const thresholds = diskThresholds(input.settings, input.version);
-      const stillFull = thresholds.enabled
-        ? nodeDiskStates(input, thresholds)
-            .filter((state) => state.level === 'flood')
-            .map((state) => state.node.name)
-        : [];
+      const states = thresholds.enabled ? nodeDiskStates(input, thresholds) : [];
+      const state: FloodBlockState = {
+        enabled: thresholds.enabled,
+        stillFull: states.filter((item) => item.level === 'flood').map((item) => item.node.name),
+      };
+      const aboveHigh = states.filter((item) => item.level === 'high').map((item) => item.node.name);
+      // Since 7.4 DiskThresholdMonitor releases the block once every node
+      // holding the index is below the high watermark.
+      const autoRelease = input.version === null || versionAtLeast(input.version, 7, 4);
+      const texts = floodBlockTexts(state, aboveHigh, autoRelease, input.nodes !== null);
       findings.push({
         id: 'index-blocks:read-only-allow-delete',
         checkId: 'index-blocks',
@@ -776,19 +995,16 @@ const indexBlocks: DoctorCheck = {
         summary:
           'These indices carry index.blocks.read_only_allow_delete, the block Elasticsearch adds when a node passes the flood stage watermark. Only deletes are allowed.',
         impact: 'Indexing and updates fail with "index read-only / allow delete" errors, so new data is being dropped or queued.',
-        advice: 'Free disk space first, then remove the block.',
-        note:
-          stillFull.length > 0
-            ? `${listJoin(stillFull)} ${isAre(stillFull.length)} still above the flood stage watermark: Elasticsearch re-applies the block until disk space is freed.`
-            : 'Elasticsearch re-applies the block while a node holding these indices stays above the flood stage watermark.',
+        advice: texts.advice,
+        note: texts.note,
         resources: floodBlocked.map((index) => ({
           kind: 'index',
           name: index,
           link: indexSettingsLink(index),
-          ...(floodBlocked.length > 1 ? { fix: removeReadOnlyFix([index], stillFull) } : {}),
+          ...(floodBlocked.length > 1 ? { fix: removeReadOnlyFix([index], state) } : {}),
         })),
         resourceLabel: 'Blocked indices',
-        fixes: [removeReadOnlyFix(floodBlocked, stillFull)],
+        fixes: [removeReadOnlyFix(floodBlocked, state)],
         links: [NODES_LINK],
       });
     }
@@ -978,6 +1194,11 @@ const overSharded: DoctorCheck = {
 /* 10. Lifecycle errors                                                */
 /* ------------------------------------------------------------------ */
 
+/** "policy [x] does not exist" → "x". */
+function missingPolicyName(row: IlmErrorRow): string | null {
+  return /^policy \[(.*)\] does not exist$/.exec(row.reason ?? '')?.[1] ?? row.policy;
+}
+
 const ilmErrors: DoctorCheck = {
   id: 'ilm-errors',
   category: 'lifecycle',
@@ -986,24 +1207,26 @@ const ilmErrors: DoctorCheck = {
   sources: ['ilm'],
   run: (input) => {
     const rows = input.ilm ?? [];
-    if (rows.length === 0) {
-      return [];
-    }
-    const indices = rows.map((row) => row.index);
-    return [
-      {
+    // An index whose policy does not exist cannot be retried (`_ilm/retry`
+    // rejects it, and with it the whole request), so it gets its own finding.
+    const failed = rows.filter((row) => !row.missingPolicy);
+    const orphaned = rows.filter((row) => row.missingPolicy);
+    const findings: DoctorFinding[] = [];
+    if (failed.length > 0) {
+      const indices = failed.map((row) => row.index);
+      findings.push({
         id: 'ilm-errors',
         checkId: 'ilm-errors',
         severity: 'warning',
         category: 'lifecycle',
-        title: `Lifecycle management failed for ${indicesLabel(rows.length)}`,
+        title: `Lifecycle management failed for ${indicesLabel(failed.length)}`,
         summary: 'ILM stopped at a failed step for these indices.',
         impact: 'Until the step succeeds they are not rolled over, moved to other tiers or deleted, so they can grow and use disk without limit.',
         advice: 'Fix the cause shown for each index (often a missing rollover alias, setting or privilege), then retry the step.',
-        ...(rows.some((row) => row.autoRetry)
+        ...(failed.some((row) => row.autoRetry)
           ? { note: 'Elasticsearch retries some of these steps on its own (the error is retryable); a manual retry runs the step right away.' }
           : {}),
-        resources: rows.map((row) => ({
+        resources: failed.map((row) => ({
           kind: 'index',
           name: row.index,
           detail: [
@@ -1012,13 +1235,39 @@ const ilmErrors: DoctorCheck = {
             ...(row.retryCount ? [`retried ${pluralize(row.retryCount, 'time')}`] : []),
           ].join(' · '),
           link: indexLink(row.index, 'lifecycle'),
-          ...(rows.length > 1 ? { fix: ilmRetryFix([row.index]) } : {}),
+          ...(failed.length > 1 ? { fix: ilmRetryFix([row.index]) } : {}),
         })),
         resourceLabel: 'Affected indices',
         fixes: [ilmRetryFix(indices)],
-        links: [ILM_STATUS_LINK],
-      },
-    ];
+        links: [ilmStatusLink(indices)],
+      });
+    }
+    if (orphaned.length > 0) {
+      const policies = [...new Set(orphaned.map(missingPolicyName).filter((name): name is string => !!name))].sort();
+      findings.push({
+        id: 'ilm-errors:missing-policy',
+        checkId: 'ilm-errors',
+        severity: 'warning',
+        category: 'lifecycle',
+        title: `${indicesLabel(orphaned.length)} ${orphaned.length === 1 ? 'uses' : 'use'} a lifecycle policy that does not exist`,
+        summary:
+          policies.length === 1
+            ? `index.lifecycle.name points to ${policies[0]}, which does not exist, so ILM cannot manage ${orphaned.length === 1 ? 'this index' : 'these indices'}.`
+            : `index.lifecycle.name points to policies that do not exist (${listJoin(policies)}), so ILM cannot manage these indices.`,
+        impact: 'They are never rolled over, moved to other tiers or deleted, so they can grow and use disk without limit. Retrying does not help.',
+        advice: 'Create the policy, or point index.lifecycle.name to an existing policy (or remove it) in the index settings.',
+        resources: orphaned.map((row) => ({
+          kind: 'index',
+          name: row.index,
+          detail: `Policy ${missingPolicyName(row) ?? '(unknown)'} does not exist`,
+          link: indexSettingsLink(row.index),
+        })),
+        resourceLabel: 'Affected indices',
+        fixes: [],
+        links: [ILM_POLICIES_LINK],
+      });
+    }
+    return findings;
   },
 };
 
@@ -1026,35 +1275,58 @@ const ilmErrors: DoctorCheck = {
 /* 11. JVM                                                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * JVM memory pressure as Elastic defines it ("High JVM memory pressure"
+ * troubleshooting guide): old-generation used / max. Total heap usage is noisy
+ * with G1 (it climbs high before every young collection), so it is only the
+ * fallback when the pool is not reported.
+ */
+export function memoryPressure(node: NodeInfo): { percent: number; oldGen: boolean } | null {
+  if (node.oldGenUsed !== null && node.oldGenMax !== null && node.oldGenMax > 0) {
+    return { percent: (node.oldGenUsed / node.oldGenMax) * 100, oldGen: true };
+  }
+  return node.heapPercent === null ? null : { percent: node.heapPercent, oldGen: false };
+}
+
 const jvmHeap: DoctorCheck = {
   id: 'jvm-heap',
   category: 'nodes',
-  title: 'Heap usage',
-  description: `Every node uses less than ${HEAP_WARNING}% of its JVM heap.`,
+  title: 'JVM memory pressure',
+  description: `Every node keeps its old-generation heap (JVM memory pressure) below ${HEAP_WARNING}%.`,
   sources: ['nodes'],
   run: (input) => {
-    const nodes = (input.nodes ?? []).filter((node) => node.heapPercent !== null && node.heapPercent >= HEAP_WARNING);
-    const levels: readonly { severity: DoctorSeverity; nodes: NodeInfo[]; word: string; threshold: number }[] = [
-      { severity: 'critical', nodes: nodes.filter((node) => (node.heapPercent ?? 0) >= HEAP_CRITICAL), word: 'critical', threshold: HEAP_CRITICAL },
-      { severity: 'warning', nodes: nodes.filter((node) => (node.heapPercent ?? 0) < HEAP_CRITICAL), word: 'high', threshold: HEAP_WARNING },
+    const entries = (input.nodes ?? [])
+      .map((node) => ({ node, pressure: memoryPressure(node) }))
+      .filter((entry) => entry.pressure !== null && entry.pressure.percent >= HEAP_WARNING);
+    const levels: readonly { severity: DoctorSeverity; entries: typeof entries; word: string; threshold: number }[] = [
+      { severity: 'critical', entries: entries.filter((entry) => entry.pressure!.percent >= HEAP_CRITICAL), word: 'critical', threshold: HEAP_CRITICAL },
+      { severity: 'warning', entries: entries.filter((entry) => entry.pressure!.percent < HEAP_CRITICAL), word: 'high', threshold: HEAP_WARNING },
     ];
     return levels
-      .filter((level) => level.nodes.length > 0)
+      .filter((level) => level.entries.length > 0)
       .map((level) => ({
         id: `jvm-heap:${level.severity}`,
         checkId: 'jvm-heap',
         severity: level.severity,
         category: 'nodes' as const,
-        title: `Heap usage is ${level.word} on ${pluralize(level.nodes.length, 'node')}`,
-        summary: `${level.threshold}% or more of the JVM heap is in use.`,
+        title: `JVM memory pressure is ${level.word} on ${pluralize(level.entries.length, 'node')}`,
+        summary: level.entries.every((entry) => entry.pressure!.oldGen)
+          ? `${level.threshold}% or more of the old-generation heap is in use: memory that garbage collection could not free.`
+          : `${level.threshold}% or more of the JVM heap is in use.`,
         impact:
-          'Under sustained heap pressure a node spends more time in garbage collection, trips circuit breakers and can run out of memory.',
+          level.severity === 'critical'
+            ? 'The node is close to the parent circuit breaker limit (95% of the heap by default), so requests start being rejected, and it risks running out of memory.'
+            : 'Under sustained memory pressure a node spends more time in garbage collection, trips circuit breakers and can run out of memory.',
         advice:
-          'This is a single sample, so run the checks again to see whether it stays high. If it does, reduce shards, fielddata or heavy aggregations, or give the node more heap (at most half of its RAM).',
-        resources: level.nodes.map((node) => ({
+          'Reduce the number of shards, fielddata on text fields or heavy aggregations, or give the node more heap (at most half of its RAM, below 32 GB).',
+        note: 'This is a single sample: run the checks again to see whether it stays high.',
+        resources: level.entries.map((entry) => ({
           kind: 'node' as const,
-          name: node.name,
-          detail: `${node.heapPercent}% of ${formatBytes(node.heapMax)}`,
+          name: entry.node.name,
+          detail: [
+            ...(entry.pressure!.oldGen ? [`old gen ${roundPercent(entry.pressure!.percent)}%`] : []),
+            `heap ${entry.node.heapPercent ?? '?'}% of ${formatBytes(entry.node.heapMax)}`,
+          ].join(' · '),
         })),
         resourceLabel: 'Affected nodes',
         fixes: [],
@@ -1154,10 +1426,20 @@ const circuitBreakers: DoctorCheck = {
 
 const ALLOCATION_KEY = 'cluster.routing.allocation.enable';
 
-const ALLOCATION_MODES: Readonly<Record<string, string>> = {
-  none: 'No shards are allocated at all, not even primaries of new indices.',
-  primaries: 'Only primary shards are allocated; replicas stay unassigned.',
-  new_primaries: 'Only primaries of newly created indices are allocated.',
+/** What each `cluster.routing.allocation.enable` mode allows, and what it costs. */
+const ALLOCATION_MODES: Readonly<Record<string, { summary: string; impact: string }>> = {
+  none: {
+    summary: 'No shards are allocated at all, not even primaries of new indices.',
+    impact: 'Unassigned shards stay unassigned, a restarted node gets none of its shards back, and new indices stay red.',
+  },
+  primaries: {
+    summary: 'Only primary shards are allocated; replicas stay unassigned.',
+    impact: 'Replicas stay unassigned, so the cluster stays yellow and has less redundancy.',
+  },
+  new_primaries: {
+    summary: 'Only primaries of newly created indices are allocated.',
+    impact: 'Existing shards, including those of a restarted node, stay unassigned; only new indices get primaries.',
+  },
 };
 
 const allocationEnabled: DoctorCheck = {
@@ -1182,8 +1464,8 @@ const allocationEnabled: DoctorCheck = {
         severity: 'warning',
         category: 'settings',
         title: 'Shard allocation is restricted',
-        summary: ALLOCATION_MODES[value] ?? `${ALLOCATION_KEY} is "${value}".`,
-        impact: 'Unassigned shards stay unassigned, and a node that restarts gets none of its shards back.',
+        summary: ALLOCATION_MODES[value]?.summary ?? `${ALLOCATION_KEY} is "${value}".`,
+        impact: ALLOCATION_MODES[value]?.impact ?? 'Some shards cannot be allocated while this is set.',
         advice: 'This is expected during a rolling restart. Enable allocation again once all nodes are back.',
         facts: [
           { label: 'Setting', value: `${ALLOCATION_KEY}: ${value}` },
@@ -1209,6 +1491,74 @@ const allocationEnabled: DoctorCheck = {
             },
             success: 'Shard allocation enabled',
             failure: 'Could not enable shard allocation',
+          },
+        ],
+        links: [CLUSTER_SETTINGS_LINK],
+      },
+    ];
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* Cluster-wide blocks                                                 */
+/* ------------------------------------------------------------------ */
+
+const CLUSTER_BLOCKS: readonly (readonly [string, string])[] = [
+  ['cluster.blocks.read_only', 'read-only'],
+  ['cluster.blocks.read_only_allow_delete', 'read-only, deletes allowed'],
+];
+
+/**
+ * `cluster.blocks.read_only(_allow_delete)` rejects every write and metadata
+ * change in the cluster (reference: "Cluster-level shard allocation and
+ * routing settings" → metadata). Updating the cluster settings to remove it
+ * stays allowed.
+ */
+const clusterBlocks: DoctorCheck = {
+  id: 'cluster-blocks',
+  category: 'settings',
+  title: 'Cluster-wide blocks',
+  description: 'The cluster accepts writes (no cluster.blocks.read_only or read_only_allow_delete).',
+  sources: ['settings'],
+  run: (input) => {
+    const settings = input.settings;
+    if (!settings) {
+      return [];
+    }
+    const active = CLUSTER_BLOCKS.filter(([key]) => isTrue(settingValue(settings, key)));
+    if (active.length === 0) {
+      return [];
+    }
+    const keys = CLUSTER_BLOCKS.map(([key]) => key);
+    // Reset the API values; a block set in elasticsearch.yml needs a persistent "false".
+    const persistent = Object.fromEntries(keys.map((key) => [key, isTrue(settings.defaults[key]) ? 'false' : null]));
+    const transient = Object.fromEntries(keys.map((key) => [key, null]));
+    return [
+      {
+        id: 'cluster-blocks',
+        checkId: 'cluster-blocks',
+        severity: 'critical',
+        category: 'settings',
+        title: 'Writes to every index are rejected',
+        summary: `The cluster is blocked (${active.map(([key]) => key).join(', ')}): Elasticsearch rejects indexing and changes to indices, mappings and templates in the whole cluster.`,
+        impact: 'Clients get cluster_block_exception errors for every write, so new data is being dropped or queued.',
+        advice: 'Remove the block once the reason for it (maintenance, a full disk) is gone.',
+        facts: active.map(([key, label]) => ({ label: label === 'read-only' ? 'Read-only' : 'Read-only (allow delete)', value: settingLayer(settings, key) })),
+        resources: [],
+        fixes: [
+          {
+            key: 'cluster-blocks',
+            label: 'Remove cluster block',
+            icon: 'bi-unlock',
+            tone: 'warning',
+            confirmTitle: 'Remove the cluster-wide block?',
+            confirmMessage: `Clears ${keys.join(' and ')} so the cluster accepts writes again.`,
+            confirmItems: [],
+            confirmLabel: 'Remove block',
+            path: 'cluster_settings/save',
+            payload: { settings: { persistent, transient } },
+            success: 'Removed the cluster-wide block',
+            failure: 'Could not remove the cluster-wide block',
           },
         ],
         links: [CLUSTER_SETTINGS_LINK],
@@ -1408,7 +1758,8 @@ const healthIndicators: DoctorCheck = {
   id: 'health-indicators',
   category: 'health',
   title: 'Elasticsearch health indicators',
-  description: 'Every indicator of the Elasticsearch health report is green.',
+  description:
+    'The health report indicators the other checks do not cover (master stability, lifecycle, snapshots, repositories, …) are green.',
   sources: ['health_report'],
   run: (input) => {
     // Indicators covered by the checks above, when those checks could run.
@@ -1481,6 +1832,7 @@ export const CHECKS: readonly DoctorCheck[] = [
   jvmGc,
   circuitBreakers,
   allocationEnabled,
+  clusterBlocks,
   diskAllocationEnabled,
   transientSettings,
   upgradeReadiness,
@@ -1490,49 +1842,89 @@ export function runCheck(check: DoctorCheck, input: DoctorInput): CheckOutcome {
   const base = { id: check.id, category: check.category, title: check.title, description: check.description };
   const missing = check.sources.find((source) => !hasSource(input, source));
   if (missing) {
-    return { ...base, status: 'skipped', findings: [], reason: unavailableReason(input, missing) };
+    return {
+      ...base,
+      status: 'skipped',
+      findings: [],
+      reason: unavailableReason(input, missing),
+      ...(isUnsupportedSource(input, missing) ? { unsupported: true } : {}),
+    };
   }
   const findings = check.run(input);
   return { ...base, status: findings.length > 0 ? 'failed' : 'passed', findings };
 }
 
-export function verdictFor(counts: Readonly<Record<DoctorSeverity, number>>): DoctorVerdict {
+/**
+ * Findings another finding already reports, keyed by the finding that covers
+ * them: a yellow cluster is explained by its unassigned replicas.
+ */
+const COVERED_BY: Readonly<Record<string, readonly string[]>> = {
+  'cluster-status:yellow': ['unassigned-shards:replica', 'unassigned-shards:primary'],
+};
+
+/** Drops findings that repeat what another finding reports (one root cause, one finding). */
+export function consolidate(outcomes: readonly CheckOutcome[]): CheckOutcome[] {
+  const present = new Set(outcomes.flatMap((outcome) => outcome.findings.map((finding) => finding.id)));
+  return outcomes.map((outcome) => {
+    const findings = outcome.findings.filter((finding) => !(COVERED_BY[finding.id] ?? []).some((id) => present.has(id)));
+    // Still "failed" when its findings were folded into another one: it did not pass.
+    return findings.length === outcome.findings.length ? outcome : { ...outcome, findings };
+  });
+}
+
+export function verdictFor(counts: Readonly<Record<DoctorSeverity, number>>, coverage?: { ran: number; gaps: number }): DoctorVerdict {
   const problems = [
     ...(counts.critical > 0 ? [pluralize(counts.critical, 'critical problem')] : []),
     ...(counts.warning > 0 ? [pluralize(counts.warning, 'warning')] : []),
   ];
   const total = counts.critical + counts.warning;
-  const suggestions = counts.info > 0 ? pluralize(counts.info, 'suggestion') : '';
+  const infos = counts.info > 0 ? pluralize(counts.info, 'info finding') : '';
+  const gaps = coverage?.gaps ?? 0;
+  const notRun = gaps > 0 ? ` ${pluralize(gaps, 'check')} could not run.` : '';
   if (total > 0) {
-    const sentence = `${problems.join(' and ')} ${total === 1 ? 'needs' : 'need'} attention${suggestions ? `, plus ${suggestions}` : ''}.`;
+    const sentence = `${problems.join(' and ')} ${total === 1 ? 'needs' : 'need'} attention${infos ? `, plus ${infos}` : ''}.${notRun}`;
     return counts.critical > 0
       ? { tone: 'red', icon: 'bi-x-octagon-fill', title: 'Critical problems found', text: sentence }
       : { tone: 'yellow', icon: 'bi-exclamation-triangle-fill', title: 'Needs attention', text: sentence };
+  }
+  if (coverage && gaps > 0) {
+    // Not "healthy": most of the cluster may not have been looked at.
+    const ran = coverage.ran === 1 ? 'the only check that could run' : `the ${formatNumber(coverage.ran)} checks that could run`;
+    return {
+      tone: 'blue',
+      icon: 'bi-question-circle-fill',
+      title: 'Partly checked',
+      text: `No problems in ${ran}${infos ? ` (only ${infos})` : ''}, but ${pluralize(gaps, 'check')} could not run.`,
+    };
   }
   return {
     tone: 'green',
     icon: 'bi-check-circle-fill',
     title: 'Healthy',
-    text: suggestions ? `No problems found, only ${suggestions} to consider.` : 'No problems found.',
+    text: infos ? `No problems found, only ${infos} to consider.` : 'No problems found.',
   };
 }
 
 /** Runs every check against the backend report. */
 export function runChecks(raw: unknown): DoctorReport {
   const input = parseDoctorInput(raw);
-  const outcomes = CHECKS.map((check) => runCheck(check, input));
+  const outcomes = consolidate(CHECKS.map((check) => runCheck(check, input)));
   const findings = sortFindings(outcomes.flatMap((outcome) => outcome.findings));
   const counts = countBySeverity(findings);
+  const ran = outcomes.filter((outcome) => outcome.status !== 'skipped').length;
+  const skipped = outcomes.filter((outcome) => outcome.status === 'skipped');
+  const gaps = skipped.filter((outcome) => !outcome.unsupported).length;
   return {
     clusterName: input.health.clusterName,
     version: input.version?.text ?? null,
     findings,
     outcomes,
     counts,
-    ran: outcomes.filter((outcome) => outcome.status !== 'skipped').length,
+    ran,
     passed: outcomes.filter((outcome) => outcome.status === 'passed').length,
-    skipped: outcomes.filter((outcome) => outcome.status === 'skipped').length,
-    verdict: verdictFor(counts),
+    skipped: skipped.length,
+    gaps,
+    verdict: verdictFor(counts, { ran, gaps }),
     healthReport: healthReportView(input),
   };
 }

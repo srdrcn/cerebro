@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHECKS, runChecks, verdictFor } from './doctor.checks';
-import { DEPRECATIONS, liveReport } from './doctor.fixtures';
+import { DEPRECATIONS, ILM_MISSING_POLICY, liveReport } from './doctor.fixtures';
 import { DoctorFinding, DoctorReport } from './doctor.models';
 
 const GB = 1024 ** 3;
@@ -61,23 +61,26 @@ describe('runChecks on the live 8.15 report', () => {
     expect(report.skipped).toBe(0);
     expect(report.version).toBe('8.15.3');
     expect(report.clusterName).toBe('cerebro-demo');
+    // The yellow status is reported by the unassigned replicas finding.
     expect(ids(report)).toEqual([
       'index-blocks:read-only-allow-delete',
-      'cluster-status:yellow',
       'disk-watermarks:high',
       'impossible-replicas',
       'unassigned-shards:replica',
       'missing-replicas',
       'ilm-errors',
-      'disk-threshold-enabled',
       'over-sharded',
       'index-blocks:manual',
+      'disk-threshold-enabled',
     ]);
     const severities = report.findings.map((item) => item.severity);
     expect(severities).toEqual([...severities].sort((left, right) => ['critical', 'warning', 'info'].indexOf(left) - ['critical', 'warning', 'info'].indexOf(right)));
     expect(report.findings[0]?.id).toBe('index-blocks:read-only-allow-delete');
-    expect(report.counts).toEqual({ critical: 1, warning: 7, info: 2 });
+    expect(report.counts).toEqual({ critical: 1, warning: 5, info: 3 });
+    // cluster-status found the yellow health, so it did not pass either.
     expect(report.passed).toBe(CHECKS.length - 9);
+    expect(outcome(report, 'cluster-status')).toMatchObject({ status: 'failed', findings: [] });
+    expect(report.gaps).toBe(0);
   });
 
   it('sums up the verdict in one sentence', () => {
@@ -85,16 +88,20 @@ describe('runChecks on the live 8.15 report', () => {
       tone: 'red',
       icon: 'bi-x-octagon-fill',
       title: 'Critical problems found',
-      text: '1 critical problem and 7 warnings need attention, plus 2 suggestions.',
+      text: '1 critical problem and 5 warnings need attention, plus 3 info findings.',
     });
   });
 
-  it('reports the yellow cluster with its shard counts', () => {
-    const status = finding(report, 'cluster-status:yellow');
-    expect(status.severity).toBe('warning');
-    expect(status.summary).toBe('Every primary shard is allocated, but 4 replica shards are not.');
-    expect(status.facts).toContainEqual({ label: 'Unassigned', value: '4' });
-    expect(status.links[0]?.route).toBe('/allocation');
+  it('reports the yellow cluster through its unassigned replicas, with the shard counts', () => {
+    const unassigned = finding(report, 'unassigned-shards:replica');
+    expect(unassigned.summary).toBe('Cluster health is yellow: 2 indices are missing replica copies.');
+    expect(unassigned.facts).toEqual([
+      { label: 'Cluster health', value: 'Yellow' },
+      { label: 'Unassigned', value: '4' },
+      { label: 'Initializing', value: '0' },
+      { label: 'Relocating', value: '0' },
+    ]);
+    expect(unassigned.impact).toContain('if a node holding the last active copy of a shard fails, the cluster turns red');
   });
 
   it('groups unassigned replicas by index with their reason and an explain link', () => {
@@ -172,16 +179,17 @@ describe('runChecks on the live 8.15 report', () => {
       detail: '90.6% used · 23.6 GB free of 252 GB · the high watermark needs 25.2 GB free',
     });
     expect(disk.facts).toEqual([
-      { label: 'Low watermark', value: '85%, at most 200 GB free' },
-      { label: 'High watermark', value: '90%, at most 150 GB free' },
-      { label: 'Flood stage', value: '95%, at most 100 GB free' },
+      { label: 'Low watermark', value: '85% (max headroom 200 GB)' },
+      { label: 'High watermark', value: '90% (max headroom 150 GB)' },
+      { label: 'Flood stage', value: '95% (max headroom 100 GB)' },
     ]);
     expect(disk.links).toEqual([{ label: 'Open nodes', icon: 'bi-hdd-stack', route: '/nodes' }]);
   });
 
-  it('warns that disk-based allocation is disabled in the node configuration', () => {
+  it('notes that disk-based allocation is disabled in the node configuration (the disk finding carries the warning)', () => {
     const threshold = finding(report, 'disk-threshold-enabled');
-    expect(threshold.severity).toBe('warning');
+    expect(threshold.severity).toBe('info');
+    expect(threshold.impact).toContain('see the disk finding');
     expect(threshold.facts).toEqual([{ label: 'Set in', value: 'node configuration (elasticsearch.yml) or default' }]);
     // elasticsearch.yml cannot be changed through the API.
     expect(threshold.fixes).toEqual([]);
@@ -198,6 +206,10 @@ describe('runChecks on the live 8.15 report', () => {
       payload: { indices: ['tmp-doctor-ro'], settings: { 'index.blocks.read_only_allow_delete': null } },
       tone: 'default',
     });
+    // threshold_enabled is false on the demo cluster: nothing adds or removes the block.
+    expect(blocked.advice).toBe('Make sure the disks have room, then remove the block.');
+    expect(blocked.note).toContain('neither re-applies nor removes this block on its own');
+    expect(blocked.fixes[0]?.confirmMessage).toContain('will neither add it again nor remove it on its own');
     const manual = finding(report, 'index-blocks:manual');
     expect(manual.severity).toBe('info');
     expect(manual.resources).toEqual([
@@ -218,7 +230,7 @@ describe('runChecks on the live 8.15 report', () => {
     );
     expect(ilm.resources[0]?.link).toEqual({ label: 'Index details', icon: 'bi-box', route: '/index_detail', params: { index: 'tmp-doctor-ilm-1', tab: 'lifecycle' } });
     expect(ilm.fixes[0]).toMatchObject({ label: 'Retry step', path: 'ilm/retry', payload: { indices: ['tmp-doctor-ilm-1'] } });
-    expect(ilm.links[0]).toMatchObject({ route: '/ilm', params: { tab: 'status' } });
+    expect(ilm.links[0]).toMatchObject({ route: '/ilm', params: { tab: 'status', index: 'tmp-doctor-ilm-1' } });
     expect(ilm.note).toContain('retries some of these steps on its own');
   });
 
@@ -262,7 +274,32 @@ describe('cluster status', () => {
   it('mentions delayed allocation', () => {
     const raw = liveReport();
     raw['health'].delayed_unassigned_shards = 1;
-    expect(finding(runChecks(raw), 'cluster-status:yellow').summary).toContain('1 of them is delayed on purpose');
+    expect(finding(runChecks(raw), 'unassigned-shards:replica').summary).toContain('1 of them is delayed on purpose');
+  });
+
+  it('reports yellow on its own when the shard list could not be read', () => {
+    const raw = liveReport();
+    raw['shards'] = null;
+    raw['unavailable'] = { shards: { status: 403, error: {} } };
+    const status = finding(runChecks(raw), 'cluster-status:yellow');
+    expect(status.summary).toBe('Every primary shard is allocated, but 4 replica shards are not.');
+    expect(status.facts).toContainEqual({ label: 'Unassigned', value: '4' });
+    // There is no unassigned shards finding to point to.
+    expect(status.advice).not.toContain('finding');
+    expect(status.links[0]?.route).toBe('/allocation');
+  });
+
+  it('explains red health caused by primaries that are still initializing', () => {
+    const raw = healthyReport();
+    raw['health'].status = 'red';
+    raw['health'].initializing_shards = 2;
+    const status = finding(runChecks(raw), 'cluster-status:red');
+    expect(status).toMatchObject({
+      severity: 'critical',
+      title: 'Cluster health is red while primaries recover',
+      summary: 'Some primary shards are still initializing (recovering); 2 shards are initializing in total.',
+    });
+    expect(status.links.map((link) => link.route)).toEqual(['/recovery', '/allocation']);
   });
 });
 
@@ -493,14 +530,27 @@ describe('JVM', () => {
     return Object.values<any>(raw['nodes'].nodes);
   }
 
-  it('grades heap usage', () => {
+  it('grades old-generation memory pressure, not the noisy total heap', () => {
     const raw = healthyReport();
-    nodes(raw)[0].jvm.mem.heap_used_percent = 86;
-    nodes(raw)[1].jvm.mem.heap_used_percent = 97;
+    // A full young generation right before a G1 collection: not a problem.
+    nodes(raw)[2].jvm.mem.heap_used_percent = 97;
+    expect(ids(runChecks(raw))).toEqual([]);
+    nodes(raw)[0].jvm.mem.pools.old.used_in_bytes = Math.round(419430400 * 0.86);
+    nodes(raw)[1].jvm.mem.pools.old.used_in_bytes = Math.round(419430400 * 0.97);
     const report = runChecks(raw);
-    expect(finding(report, 'jvm-heap:critical')).toMatchObject({ title: 'Heap usage is critical on 1 node' });
-    expect(finding(report, 'jvm-heap:critical').resources[0]?.detail).toBe('97% of 400 MB');
+    expect(finding(report, 'jvm-heap:critical')).toMatchObject({ title: 'JVM memory pressure is critical on 1 node' });
+    expect(finding(report, 'jvm-heap:critical').resources[0]?.detail).toBe('old gen 97% · heap 71% of 400 MB');
     expect(finding(report, 'jvm-heap:warning').resources.map((item) => item.name)).toEqual(['es-node-1']);
+    expect(finding(report, 'jvm-heap:warning').note).toContain('single sample');
+  });
+
+  it('falls back to the heap percentage without the old-generation pool', () => {
+    const raw = healthyReport();
+    delete nodes(raw)[0].jvm.mem.pools;
+    nodes(raw)[0].jvm.mem.heap_used_percent = 88;
+    const heap = finding(runChecks(raw), 'jvm-heap:warning');
+    expect(heap.summary).toBe('85% or more of the JVM heap is in use.');
+    expect(heap.resources[0]?.detail).toBe('heap 88% of 400 MB');
   });
 
   it('flags long or frequent old-generation collections', () => {
@@ -686,7 +736,28 @@ describe('older and restricted clusters', () => {
   it('survives malformed sources', () => {
     const report = runChecks({ health: 'nope', nodes: [], indices: {}, shards: 'x', blocks: [], ilm: { indices: [] }, unavailable: null });
     expect(report.findings).toEqual([]);
-    expect(runChecks(null).verdict.tone).toBe('green');
+    // Almost nothing could be read: not a healthy verdict.
+    expect(runChecks(null).verdict).toMatchObject({ tone: 'blue', title: 'Partly checked' });
+  });
+
+  it('does not call a mostly unchecked cluster healthy', () => {
+    const report = runChecks({
+      health: { status: 'green', number_of_data_nodes: 3 },
+      info: { version: { number: '7.17.24' } },
+      unavailable: Object.fromEntries(
+        ['nodes', 'settings', 'indices', 'shards', 'blocks', 'ilm', 'deprecations'].map((source) => [source, { status: 403, error: {} }]),
+      ),
+    });
+    expect(report.ran).toBe(1);
+    // The health report does not exist on 7.17: not a gap.
+    expect(report.gaps).toBe(CHECKS.length - 2);
+    expect(outcome(report, 'health-indicators')).toMatchObject({ status: 'skipped', unsupported: true });
+    expect(report.verdict).toEqual({
+      tone: 'blue',
+      icon: 'bi-question-circle-fill',
+      title: 'Partly checked',
+      text: `No problems in the only check that could run, but ${CHECKS.length - 2} checks could not run.`,
+    });
   });
 });
 
@@ -697,11 +768,212 @@ describe('verdictFor', () => {
     expect(verdictFor({ critical: 0, warning: 1, info: 1 })).toMatchObject({
       tone: 'yellow',
       title: 'Needs attention',
-      text: '1 warning needs attention, plus 1 suggestion.',
+      text: '1 warning needs attention, plus 1 info finding.',
     });
     expect(verdictFor({ critical: 0, warning: 0, info: 2 })).toMatchObject({
       tone: 'green',
-      text: 'No problems found, only 2 suggestions to consider.',
+      text: 'No problems found, only 2 info findings to consider.',
     });
+    expect(verdictFor({ critical: 0, warning: 1, info: 0 }, { ran: 4, gaps: 2 }).text).toBe('1 warning needs attention. 2 checks could not run.');
+    expect(verdictFor({ critical: 0, warning: 0, info: 1 }, { ran: 4, gaps: 1 })).toMatchObject({
+      tone: 'blue',
+      text: 'No problems in the 4 checks that could run (only 1 info finding), but 1 check could not run.',
+    });
+    expect(verdictFor({ critical: 0, warning: 0, info: 0 }, { ran: 18, gaps: 0 }).title).toBe('Healthy');
+  });
+});
+
+describe('lifecycle errors', () => {
+  it('does not offer a retry for indices whose policy does not exist', () => {
+    const raw = liveReport();
+    Object.assign(raw['ilm'].indices, structuredClone(ILM_MISSING_POLICY));
+    const report = runChecks(raw);
+    const failed = finding(report, 'ilm-errors');
+    // Only the genuinely failed step is retried: one bad index makes Elasticsearch reject the whole request.
+    expect(failed.resources.map((item) => item.name)).toEqual(['tmp-doctor-ilm-1']);
+    expect(failed.fixes[0]?.payload).toEqual({ indices: ['tmp-doctor-ilm-1'] });
+    const missing = finding(report, 'ilm-errors:missing-policy');
+    expect(missing).toMatchObject({
+      severity: 'warning',
+      title: '1 index uses a lifecycle policy that does not exist',
+      summary: 'index.lifecycle.name points to tmp-doctor-missing, which does not exist, so ILM cannot manage this index.',
+      fixes: [],
+      links: [{ label: 'Lifecycle policies', icon: 'bi-hourglass-split', route: '/ilm' }],
+    });
+    expect(missing.resources).toEqual([
+      {
+        kind: 'index',
+        name: 'tmp-doctor-nopolicy',
+        detail: 'Policy tmp-doctor-missing does not exist',
+        link: { label: 'Index settings', icon: 'bi-gear', route: '/index_settings', params: { index: 'tmp-doctor-nopolicy' } },
+      },
+    ]);
+  });
+
+  it('reports only the missing policy when nothing can be retried', () => {
+    const raw = liveReport();
+    raw['ilm'].indices = structuredClone(ILM_MISSING_POLICY);
+    const report = runChecks(raw);
+    expect(ids(report)).not.toContain('ilm-errors');
+    expect(ids(report)).toContain('ilm-errors:missing-policy');
+  });
+
+  it('passes several indices to the status page', () => {
+    const raw = healthyReport();
+    raw['ilm'].indices = {
+      a: { index: 'a', managed: true, policy: 'p', step: 'ERROR', failed_step: 'check-rollover-ready', step_info: { reason: 'x' } },
+      b: { index: 'b', managed: true, policy: 'p', step: 'ERROR', failed_step: 'check-rollover-ready', step_info: { reason: 'y' } },
+    };
+    const ilm = finding(runChecks(raw), 'ilm-errors');
+    expect(ilm.links[0]?.params).toEqual({ tab: 'status', index: 'a,b' });
+    expect(ilm.fixes[0]?.label).toBe('Retry 2 steps');
+  });
+});
+
+describe('replicas of data streams and searchable snapshots', () => {
+  it('skips mounted searchable snapshot indices', () => {
+    const raw = healthyReport();
+    raw['indices'].push(
+      { index: 'restored-logs-1', status: 'open', pri: '1', rep: '0', 'pri.store.size': '100' },
+      { index: 'partial-logs-0', status: 'open', pri: '1', rep: '0', 'pri.store.size': '100' },
+    );
+    raw['blocks'] = {
+      'restored-logs-1': { settings: { 'index.store.type': 'snapshot' } },
+      'partial-logs-0': { settings: { 'index.store.type': 'snapshot', 'index.store.snapshot.partial': 'true' } },
+    };
+    const report = runChecks(raw);
+    expect(ids(report)).not.toContain('missing-replicas');
+    expect(outcome(report, 'missing-replicas')?.description).toContain('searchable snapshots');
+  });
+
+  it('reports a regular index whose name only looks like a mounted snapshot', () => {
+    const raw = healthyReport();
+    raw['indices'].push({ index: 'restored-orders', status: 'open', pri: '1', rep: '0', 'pri.store.size': '100' });
+    expect(finding(runChecks(raw), 'missing-replicas').resources.map((resource) => resource.name)).toEqual(['restored-orders']);
+  });
+
+  it('groups backing indices of user data streams and ignores system ones', () => {
+    const raw = healthyReport();
+    raw['indices'].push(
+      { index: '.ds-app-events-web-2026.10.14-000001', status: 'open', pri: '1', rep: '0', 'pri.store.size': '1000' },
+      { index: '.ds-app-events-web-2026.10.14-000002', status: 'open', pri: '1', rep: '0', 'pri.store.size': '24' },
+      { index: '.ds-.logs-deprecation.elasticsearch-default-2026.10.14-000001', status: 'open', pri: '1', rep: '0' },
+      { index: '.ds-ilm-history-7-2026.10.14-000001', status: 'open', pri: '1', rep: '0' },
+      { index: '.internal', status: 'open', pri: '1', rep: '0' },
+    );
+    const missing = finding(runChecks(raw), 'missing-replicas');
+    expect(missing.title).toBe('1 data stream has no replicas');
+    expect(missing.resources).toEqual([
+      {
+        kind: 'data-stream',
+        name: 'app-events-web',
+        detail: '2 backing indices · 2 primary shards · 1 KB',
+        link: { label: 'Open data stream', icon: 'bi-water', route: '/data_streams', params: { name: 'app-events-web' } },
+      },
+    ]);
+    expect(missing.advice).toContain('set number_of_replicas in their index template');
+    expect(missing.fixes[0]).toMatchObject({
+      confirmTitle: 'Add a replica to the 2 backing indices of app-events-web?',
+      payload: {
+        indices: ['.ds-app-events-web-2026.10.14-000001', '.ds-app-events-web-2026.10.14-000002'],
+        settings: { 'index.number_of_replicas': 1 },
+      },
+    });
+    expect(missing.links).toEqual([{ label: 'Data streams', icon: 'bi-water', route: '/data_streams' }]);
+  });
+
+  it('lists indices and data streams together, each with its own fix', () => {
+    const raw = healthyReport();
+    raw['indices'].push(
+      { index: 'solo', status: 'open', pri: '1', rep: '0', 'pri.store.size': '10' },
+      { index: '.ds-logs-app-default-2026.10.14-000001', status: 'open', pri: '1', rep: '0', 'pri.store.size': '10' },
+    );
+    const missing = finding(runChecks(raw), 'missing-replicas');
+    expect(missing.title).toBe('1 index and 1 data stream have no replicas');
+    expect(missing.resourceLabel).toBe('Affected indices and data streams');
+    expect(missing.resources.map((item) => [item.kind, item.name, item.fix?.payload])).toEqual([
+      ['index', 'solo', { indices: ['solo'], settings: { 'index.number_of_replicas': 1 } }],
+      ['data-stream', 'logs-app-default', { indices: ['.ds-logs-app-default-2026.10.14-000001'], settings: { 'index.number_of_replicas': 1 } }],
+    ]);
+    expect(missing.fixes[0]?.payload).toEqual({
+      indices: ['.ds-logs-app-default-2026.10.14-000001', 'solo'],
+      settings: { 'index.number_of_replicas': 1 },
+    });
+  });
+});
+
+describe('read-only block texts', () => {
+  it('says the block can go now when no node is at the flood stage', () => {
+    const raw = liveReport();
+    enableDiskThreshold(raw);
+    setDisks(raw, 100 * GB, 50 * GB);
+    const blocked = finding(runChecks(raw), 'index-blocks:read-only-allow-delete');
+    expect(blocked.advice).toBe('No node is above the flood stage any more, so the block can be removed now.');
+    expect(blocked.note).toBe('Every node is below the high watermark, so Elasticsearch normally releases the block on its own within a minute.');
+    expect(blocked.fixes[0]?.confirmMessage).toContain('if a node holding its shards passes the flood stage watermark');
+  });
+
+  it('names the nodes that must drop below the high watermark first', () => {
+    const raw = liveReport();
+    enableDiskThreshold(raw);
+    setDisks(raw, 100 * GB, 8 * GB);
+    const blocked = finding(runChecks(raw), 'index-blocks:read-only-allow-delete');
+    expect(blocked.note).toBe('Elasticsearch also removes it on its own once es-node-1, es-node-2 and es-node-3 drop below the high watermark.');
+  });
+});
+
+describe('node-reported watermarks', () => {
+  it('prefers the free space each node reports (it knows about elasticsearch.yml)', () => {
+    const raw = healthyReport();
+    // elasticsearch.yml sets the low watermark to 80%: the node requires 20% of
+    // 2 TB (no headroom), although include_defaults still shows 200GB.
+    for (const node of Object.values<any>(raw['nodes'].nodes)) {
+      node.fs.data[0] = { path: '/data', total_in_bytes: 2 * TB, available_in_bytes: 300 * GB, low_watermark_free_space_in_bytes: Math.round(2 * TB * 0.2), high_watermark_free_space_in_bytes: 150 * GB, flood_stage_free_space_in_bytes: 100 * GB };
+    }
+    const disk = finding(runChecks(raw), 'disk-watermarks:low');
+    expect(disk.resources[0]?.detail).toBe('85.4% used · 300 GB free of 2 TB · the low watermark needs 409.6 GB free');
+  });
+});
+
+describe('cluster-wide blocks', () => {
+  it('is critical and clears both layers', () => {
+    const raw = healthyReport();
+    raw['settings'].transient['cluster.blocks.read_only_allow_delete'] = 'true';
+    const blocks = finding(runChecks(raw), 'cluster-blocks');
+    expect(blocks).toMatchObject({
+      severity: 'critical',
+      category: 'settings',
+      title: 'Writes to every index are rejected',
+      facts: [{ label: 'Read-only (allow delete)', value: 'transient cluster setting' }],
+    });
+    expect(blocks.fixes[0]).toMatchObject({
+      path: 'cluster_settings/save',
+      payload: {
+        settings: {
+          persistent: { 'cluster.blocks.read_only': null, 'cluster.blocks.read_only_allow_delete': null },
+          transient: { 'cluster.blocks.read_only': null, 'cluster.blocks.read_only_allow_delete': null },
+        },
+      },
+    });
+  });
+
+  it('overrides a block set in elasticsearch.yml', () => {
+    const raw = healthyReport();
+    raw['settings'].defaults['cluster.blocks.read_only'] = 'true';
+    const blocks = finding(runChecks(raw), 'cluster-blocks');
+    expect((blocks.fixes[0]?.payload['settings'] as any).persistent['cluster.blocks.read_only']).toBe('false');
+  });
+});
+
+describe('allocation modes', () => {
+  it('words the impact of each mode', () => {
+    const impact = (mode: string) => {
+      const raw = healthyReport();
+      raw['settings'].persistent['cluster.routing.allocation.enable'] = mode;
+      return finding(runChecks(raw), 'allocation-enabled').impact;
+    };
+    expect(impact('primaries')).toBe('Replicas stay unassigned, so the cluster stays yellow and has less redundancy.');
+    expect(impact('none')).toContain('a restarted node gets none of its shards back');
+    expect(impact('new_primaries')).toContain('only new indices get primaries');
   });
 });

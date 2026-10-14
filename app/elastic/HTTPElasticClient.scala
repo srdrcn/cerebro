@@ -395,8 +395,11 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
   def ilmErrors(target: ElasticServer) =
     execute("/_all/_ilm/explain?only_errors=true&expand_wildcards=all", "GET", None, target)
 
-  def indexBlocks(target: ElasticServer) =
-    execute("/_all/_settings/index.blocks.*?flat_settings=true&expand_wildcards=all", "GET", None, target)
+  // Blocks, plus the store settings that identify mounted searchable snapshots.
+  def indexBlocks(target: ElasticServer) = {
+    val settings = "index.blocks.*,index.store.type,index.store.snapshot.partial"
+    execute(s"/_all/_settings/$settings?flat_settings=true&expand_wildcards=all", "GET", None, target)
+  }
 
   def catIndexSizes(target: ElasticServer) = {
     val columns = "index,health,status,pri,rep,docs.count,store.size,pri.store.size"
