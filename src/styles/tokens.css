@@ -23,6 +23,8 @@
   --text-lg: 18px;
   --text-xl: 22px;
 
+  /* Thin indicator and progress bars (2-3px tall). */
+  --radius-2xs: 2px;
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius: 8px;
@@ -71,6 +73,8 @@
   --text-2: #475467;
   /* Tertiary text still carries content: keep it at 4.5:1 on every surface. */
   --text-3: #646e82;
+  /* .select chevron, drawn in --text-3 (an SVG data URI cannot read tokens). */
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='%23646e82'%3E%3Cpath d='M3.2 5.7a.75.75 0 0 1 1.06 0L8 9.44l3.74-3.74a.75.75 0 1 1 1.06 1.06l-4.27 4.27a.75.75 0 0 1-1.06 0L3.2 6.76a.75.75 0 0 1 0-1.06Z'/%3E%3C/svg%3E");
   --placeholder: #6b7588;
 
   /* Dark enough for white text on filled buttons and chips (5:1). */
@@ -153,6 +157,7 @@
     --text: #e7eaf0;
     --text-2: #a5adbb;
     --text-3: #848ea0;
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='%23848ea0'%3E%3Cpath d='M3.2 5.7a.75.75 0 0 1 1.06 0L8 9.44l3.74-3.74a.75.75 0 1 1 1.06 1.06l-4.27 4.27a.75.75 0 0 1-1.06 0L3.2 6.76a.75.75 0 0 1 0-1.06Z'/%3E%3C/svg%3E");
     --placeholder: #7a8495;
 
     --accent: #1ac98e;
@@ -228,6 +233,7 @@
   --text: #e7eaf0;
   --text-2: #a5adbb;
   --text-3: #848ea0;
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='%23848ea0'%3E%3Cpath d='M3.2 5.7a.75.75 0 0 1 1.06 0L8 9.44l3.74-3.74a.75.75 0 1 1 1.06 1.06l-4.27 4.27a.75.75 0 0 1-1.06 0L3.2 6.76a.75.75 0 0 1 0-1.06Z'/%3E%3C/svg%3E");
   --placeholder: #7a8495;
 
   --accent: #1ac98e;

@@ -71,7 +71,7 @@
   display: grid;
   place-items: center;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
   background: var(--surface);
   box-shadow: var(--shadow-md);
   color: var(--text);

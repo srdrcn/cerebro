@@ -63,7 +63,6 @@
 /* ---- Add setting form ---- */
 
 .add-setting {
-  scroll-margin-top: calc(var(--settings-sticky-top) + 72px);
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
   animation: slide-in-up 180ms var(--ease-out);
 }
@@ -91,9 +90,9 @@
 
 /* ---- Groups ---- */
 
-.settings-group {
-  scroll-margin-top: calc(var(--settings-sticky-top) + 72px);
-}
+/* Groups, the add-setting form and keyboard focus stop below the sticky
+   toolbar and above the pending-changes bar: see "Sticky bars and keyboard
+   focus" in styles/components.css (html scroll-padding while it is shown). */
 
 .settings-group__header {
   min-height: 56px;
@@ -146,7 +145,7 @@
   bottom: 6px;
   left: 0;
   width: 3px;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 var(--radius-2xs) var(--radius-2xs) 0;
   background: var(--accent);
 }
 
@@ -408,7 +407,7 @@ code {
   bottom: 7px;
   left: 0;
   width: 2px;
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   background: var(--accent);
 }
 

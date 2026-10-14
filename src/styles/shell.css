@@ -16,6 +16,11 @@ cerebro-root {
   grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
 }
 
+/* Connect screen: the shell only hosts the router outlet, without chrome. */
+.shell.shell--bare {
+  display: block;
+}
+
 /* ---- Sidebar ---- */
 
 .sidebar {
@@ -208,7 +213,7 @@ cerebro-root {
   bottom: 8px;
   left: -10px;
   width: 3px;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 var(--radius-2xs) var(--radius-2xs) 0;
   background: var(--accent);
 }
 

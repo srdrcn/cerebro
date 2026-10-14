@@ -19,6 +19,8 @@ src/
     auth.css              connect screen and server-rendered sign-in page
     ace.css               Ace editor theme driven by the tokens
   app/
+    app.component.ts      one <router-outlet> inside the shell; the shell hides its
+                          chrome on Connect, so pages are never recreated when it appears
     app.routes.ts         lazy loaded routes (paths are kept for old bookmarks)
     core/                 services and pure helpers (no UI)
     shared/               reusable UI components
@@ -29,23 +31,25 @@ src/
 
 | Service | Purpose |
 | --- | --- |
-| `ClusterApiService` | `post<T>(path, payload)` calls a Play endpoint. The connected host and credentials are merged into every payload. Resolves with the inner `body` for 2xx, rejects with `ClusterApiError` (`status`, `body`) otherwise. Network failures are already reported with a toast. |
+| `ClusterApiService` | `post<T>(path, payload)` calls a Play endpoint. The connected host and credentials are merged into every payload. Resolves with the inner `body` for 2xx, rejects with `ClusterApiError` (`status`, `body`) otherwise. Network failures are already reported with a toast. An Elasticsearch 401 sends the user to the sign-in form of Connect once (also for concurrent requests), replacing the history entry and passing `returnUrl` so signing in returns to the page; nothing happens while already on Connect. The rejected `ClusterApiError` is marked as reported, so the page's own error toast is skipped. |
 | `ConnectionService` | `host()`, `connected()`, `hostQuery()` (query params every in-app link must carry), `connect()`, `disconnect()` (navigates to Connect first and only clears the connection when the navigation was not cancelled by unsaved edits), `followUrlHost()`. The `?host=` of the URL always wins: `requireConnection` switches to it (dropping credentials) and cluster routes re-run their guards when only `host` changes (`hostOrParamsChange`). |
 | `RefreshService` | `tick()` signal increments on every auto refresh / manual refresh. Views that show live data read it inside an `effect` to reload. `refresh()` forces a reload after a mutation. `setInterval()`, and `toggle()` / `resume()` that restore the interval used before pausing. |
 | `AlertService` | Toasts: `success(msg, details?)`, `info`, `warn`, `error(msg, error)`. Pass the caught error as the second argument so the user can expand the details. Identical toasts are folded together, and an error already reported by `ClusterApiService` ("Error connecting to the server") is not shown a second time. Errors stay until dismissed; other toasts time out, and hovering or focusing the toasts pauses them (`pauseAll()` / `resumeAll()`). |
-| `DialogService` | `confirm({ title, message?, items?, confirmLabel?, tone? })` → `Promise<boolean>`; `showJson(title, value, subtitle?)` opens a read-only JSON viewer. |
-| `ClipboardService` | `copy(text, onSuccess?, onFailure?)`. |
+| `DialogService` | `confirm({ title, message?, items?, confirmLabel?, tone? })` → `Promise<boolean>`; `showJson(title, value, subtitle?)` opens a read-only JSON viewer (a compact dialog sized to short documents, a tall one from 30 lines). |
+| `ClipboardService` | `copyAndNotify(value, what)` copies and toasts with the app-wide wording: "Request body copied to the clipboard" / "Could not copy the request body: <reason>" (`what` in lower case). Use it for every copy action; `copy(text, onSuccess?, onFailure?)` is the low-level form. |
 | `ClusterStatusService` | Cluster health/name polled by the shell; also sets the document title and favicon. |
 | `ClusterChangesService` | Announces nodes that joined or left and indices created or deleted outside the app. Index changes made through `overview/delete_indices`, `create_index/create` and `snapshots/restore` are recognised automatically (via `ClusterApiService.onSuccess`); call `expect({ created, deleted })` after other endpoints that create or delete indices so the user is not told twice. |
 | `ThemeService` | `preference()`, `resolved()`, `set()`, `cycle()`. |
-| `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `formatDate`, `formatTimestamp`, `formatRelative`, `pluralize` ("3 nodes"), `plural` (the noun alone, for labels that style the number), `sentence`, `humanize`, `severity`, `clampPercent`, `matchesText` (regex-or-substring filter), `sortByName`. |
+| `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `formatDate`, `formatTimestamp`, `formatRelative`, `pluralize` ("3 nodes"), `plural` (the noun alone, for labels that style the number), `sentence`, `humanize`, `severity`, `clampPercent`, `textMatcher(query)` (compiles a filter once: case-insensitive regular expression when valid, substring otherwise; use it for every list or table filter) and `matchesText(value, query)` (its one-off form), `sortByName`. Never filter with a bare `includes()`: all filters accept the same queries. |
 | `errors.ts` | `elasticsearchReason(error)` extracts the most specific readable reason from a `ClusterApiError`, an Elasticsearch error body, a string or an `Error` (HTML error pages are ignored); `readableReason(error)` returns it as a sentence for error states; `failureMessage(action, error)` builds "Could not delete index: no such index [logs]". |
 | `health.ts` | `healthTone(status)` (`green` / `yellow` / `red` / `gray`, case-insensitive) and `healthLabel(status)` for Elasticsearch health colours. |
 | `json.ts` | `isRecord`, `stringList` for defensive parsing of Elasticsearch responses. |
+| `layout.ts` | `STACKED_LAYOUT_QUERY` (the 1180px breakpoint of rule 11), `isStackedLayout()`, `revealWhenStacked(element, { onlyBelowFold? })`: after a pick in a master/detail list, scrolls the editor or detail into view when the layout is stacked. Never repeat the breakpoint in TypeScript. |
 | `names.ts` | `validateResourceName(name, noun)` (template, snapshot and repository names) and the invalid character lists for resource and index names. ILM policy and pipeline ids follow their own rules in their features. |
 | `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
 | `pending-changes.guard.ts` | `PendingChangesAware` (`confirmDiscard()`) and the `confirmDiscardPendingChanges` route guard. |
 | `preferences.ts` | best-effort `localStorage` helpers for per-browser UI preferences; writes return `false` when the browser refused them. |
+| `templates.ts` | `isManagedTemplate(name, meta)`: built-in templates (system `.` names or `_meta.managed: true`) that the template pages hide behind "Show managed templates". |
 | `save-mode.ts` | `saveMode(name, selected, existing)` → `create` / `update` / `overwrite` / `copy` for editors that save under a typed name; `saveLabel(mode, noun)` for the save button. |
 
 ### Shared components (`src/app/shared`)
@@ -53,7 +57,7 @@ src/
 | Selector | Usage |
 | --- | --- |
 | `<cerebro-menu>` | Dropdown rendered in the top layer (never clipped). Project `<i trigger class="bi …">` (or any element with the `trigger` attribute) and `.menu-item` buttons/links, `.menu-label`, `.menu-separator`. Inputs: `label` (aria-label), `align="start|end"`, `triggerClass` (defaults to an icon button), `minWidth`. Clicking a `.menu-item` closes the menu. |
-| `<cerebro-code-editor>` | Ace JSON/text editor. `[(value)]`, `mode`, `readOnly`, `placeholder`, `minLines`/`maxLines` (auto height) or `fill` (fills the CSS height of the host), `flush`, `wrap`, `(submit)` on Ctrl/⌘+Enter. `invalid` and `describedBy` mark it invalid and link its field error. Call `format()` via a template reference to pretty-print. Tab and Shift+Tab move focus out of the editor (it never traps the keyboard); Ctrl+] and Ctrl+[ indent and outdent; Ctrl/⌘+K is left to the command palette. The page scrolls to keep the caret visible and clear of sticky bars (top bar, sticky card footers). |
+| `<cerebro-code-editor>` | Ace JSON/text editor. `[(value)]`, `mode`, `readOnly`, `placeholder`, `minLines`/`maxLines` (auto height) or `fill` (fills the CSS height of the host), `flush`, `wrap`, `(submit)` on Ctrl/⌘+Enter. `invalid` and `describedBy` mark it invalid and link its field error. Call `format()` via a template reference to pretty-print. Tab and Shift+Tab move focus out of the editor (it never traps the keyboard); Ctrl+] and Ctrl+[ indent and outdent; Ctrl/⌘+K is left to the command palette. The page scrolls to keep the caret visible and clear of sticky bars (top bar, sticky card footers). `flush` editors draw an inset focus ring (they have no border, and read-only ones no caret). |
 | `<cerebro-search>` | Search field with icon and clear button: `[(value)]`, `placeholder`, `ariaLabel`, `small`. |
 | `<cerebro-empty>` | Empty/error state: `icon`, `heading`, `text`, optional projected action buttons, `compact`. |
 | `<cerebro-meter>` | Usage bar: `[value]` (percent), `warn`/`danger` thresholds, `small`, `label`. |
@@ -73,6 +77,15 @@ src/
   `[ngModel]="x()" (ngModelChange)="x.set($event)"`.
 * Guard async loads against races with a sequence counter (see
   `NodesComponent.load`).
+* Load failures keep their reason for the error state:
+  `readonly loadError = signal<string | undefined>(undefined)`, set from
+  `readableReason(error)` in the `catch` and cleared on success, bound as
+  `<cerebro-empty … [text]="loadError() ?? 'The cluster did not answer …'">`.
+  Toasts use `failureMessage(action, error)`. Hints such as "needs
+  Elasticsearch 7.8" are shown only when there is no reason or the reason
+  says the endpoint is unknown.
+* No feature imports another feature: a helper two pages need moves to
+  `core/` (pure logic) or `shared/` (UI).
 * Larger pages use `templateUrl` + `styleUrl`; page styles only contain
   layout specific to that page — everything reusable belongs to the design
   system.
@@ -90,7 +103,9 @@ light and dark themes** and down to phone width.
 ### Rules
 
 1. Never hard-code colours, shadows or radii; use the tokens from
-   `styles/tokens.css` (`var(--text-2)`, `var(--surface-2)`, `var(--red)`, …).
+   `styles/tokens.css` (`var(--text-2)`, `var(--surface-2)`, `var(--red)`,
+   `var(--radius-2xs)` for 2–3px indicator bars, `var(--radius-full)` for
+   pills, …).
 2. Bootstrap is **not** loaded. Do not use Bootstrap classes (`row`, `col-*`,
    `d-flex`, `mb-3`, `form-control`, `btn-outline-*`, `table-hover` …). Use the
    classes below or a few lines of component CSS.
@@ -119,8 +134,20 @@ light and dark themes** and down to phone width.
    icon-only buttons have `aria-label` and `title`, tables use `<th scope>`
    and `aria-sort` on sortable headers, focus styles are never removed.
 11. Responsive: layouts collapse to one column under 1180px
-   (`.layout-split`, `.layout-sidebar-*`) and controls stack under 760px.
-   Wide tables scroll horizontally inside `.table-wrap`.
+   (`.layout-split`, `.layout-sidebar-*`, `STACKED_LAYOUT_QUERY` in code) and
+   controls stack under 760px. Wide tables scroll horizontally inside
+   `.table-wrap`.
+12. Sticky bars never hide keyboard focus (WCAG 2.4.11). Browsers only
+   honour the scroll container's `scroll-padding` when focus moves (not the
+   field's `scroll-margin`), so `html` carries it: `base.css` clears the top
+   bar, and "Sticky bars and keyboard focus" in `components.css` widens it
+   with `html:has(…)` while the settings toolbar, the pending-changes bar or
+   a `.card--sticky-footer` is rendered. A new sticky bar adds its rule
+   there. In-page scroll targets therefore need no top-bar offset
+   (`scroll-margin-top: var(--topbar-height)…`) of their own.
+13. Links inside running text (paragraphs, hints, callouts, notes) are
+   underlined by `base.css`; do not remove it. Standalone links styled as
+   buttons, menu items or navigation are not affected.
 
 ### Page skeleton
 
@@ -150,7 +177,68 @@ light and dark themes** and down to phone width.
 ```
 
 Count labels read "12 items", and "3 of 12 items" only while a filter is
-active. A card header with an icon tile:
+active.
+
+Header links to a sibling page ("Index templates" on data streams, "Snapshots"
+on repositories) are plain `.btn` with an icon, placed before any primary
+button; never `.btn-ghost` or `.btn-primary`.
+
+Menu items and buttons end with an ellipsis ("Restore…", "Rename…") only when
+they open a dialog that collects input. Actions that only ask for
+confirmation do not ("Delete", "Delete index"), nor do items that navigate.
+
+### Master/detail editors
+
+Pages that list resources beside an editor (legacy templates, index
+templates, lifecycle policies, pipelines, repositories) share one layout:
+
+```html
+<div class="layout-sidebar-start">
+  <div class="card list-card">
+    <div class="card-header">
+      <h2 class="card-title spacer"><i class="bi bi-diagram-3" aria-hidden="true"></i> Pipelines</h2>
+      <span class="count-label"><strong>{{ shown() | num }}</strong> of {{ total() | num }} {{ total() | plural: 'pipeline' }}</span>
+      <button type="button" class="btn btn-sm btn-soft" (click)="newPipeline()">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> New pipeline
+      </button>
+    </div>
+    <div class="list-card__toolbar">
+      <cerebro-search [(value)]="query" [small]="true" placeholder="Filter by name" />
+      <label class="switch list-card__switch">…Show managed pipelines <span class="count">20</span></label>
+    </div>
+    <ul class="list list-card__list" aria-label="Pipelines">
+      <li><button type="button" class="list-item list-item--interactive" [class.is-selected]="…">
+        <span class="list-item__icon" aria-hidden="true"><i class="bi bi-diagram-3"></i></span>
+        <span class="list-item__body">…</span>
+      </button></li>
+    </ul>
+    <p class="list-card__note">Optional explanation pinned to the bottom.</p>
+  </div>
+
+  <div #editorCard class="card card--sticky-footer">
+    <div class="card-header">…</div>
+    <div class="card-body">…</div>
+    <div class="card-footer card-footer--between">
+      <span class="footer-keys"><kbd>Ctrl</kbd><kbd>Enter</kbd> to save</span>
+      <div class="row"><button class="btn btn-danger-soft">Delete</button><button class="btn btn-primary">Save pipeline</button></div>
+    </div>
+  </div>
+</div>
+```
+
+* The only way to start a new item is the `btn-sm btn-soft` "New <noun>"
+  button in the list card header. The page header has no primary button:
+  the primary action of the page is the editor footer's Save / Create.
+* The list card header follows the recipe above: icon, title, right-aligned
+  `.count-label`, then "New <noun>". Every list item has an icon tile.
+* The selection lives in the URL (`?name=`, `?policy=`, `?pipeline=`,
+  `?repository=`), written with `replaceUrl` and
+  `queryParamsHandling: 'merge'`; an unknown name shows a
+  "<Thing> <name> does not exist" warning and drops the parameter.
+* After a pick, `revealWhenStacked(editorCard)` brings the editor into view
+  on narrow screens.
+* Built-in items (managed templates, policies, pipelines) are hidden behind
+  a "Show managed …" `.switch` under the filter, off by default. A card header with an icon tile:
 
 ```html
 <div class="card-header">
@@ -190,7 +278,12 @@ active. A card header with an icon tile:
   chips; `.input-group` for icon inputs.
 * Surfaces: `.card`, `.card-header` (`--plain`), `.card-icon` (tinted icon
   tile before a card title), `.card-title`,
-  `.card-subtitle`, `.card-body` (`--flush`), `.card-footer` (`--between`);
+  `.card-subtitle`, `.card-body` (`--flush`), `.card-footer` (`--between`),
+  `.card--sticky-footer` (editor card whose footer stays visible, with focus
+  kept above it), `.footer-keys` (keyboard hint in an editor footer, hidden on
+  phones);
+  `.list-card` (sticky master/detail list card) with `__toolbar`, `__switch`,
+  `__list` (scrolls) and `__note`;
   `.callout` + `-info` | `-warning` | `-danger` | `-success`;
   `.stat-grid` > `.stat` > `.stat__label`, `.stat__value`, `.stat__meta`.
 * Data: `.table-wrap` > `.data-table` (`--compact`), cells `.num`, `.actions`,

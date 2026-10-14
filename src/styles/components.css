@@ -483,7 +483,7 @@
 .select {
   padding-right: 32px;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='%237a8598'%3E%3Cpath d='M3.2 5.7a.75.75 0 0 1 1.06 0L8 9.44l3.74-3.74a.75.75 0 1 1 1.06 1.06l-4.27 4.27a.75.75 0 0 1-1.06 0L3.2 6.76a.75.75 0 0 1 0-1.06Z'/%3E%3C/svg%3E");
+  background-image: var(--select-chevron);
   background-position: right 10px center;
   background-repeat: no-repeat;
   cursor: pointer;
@@ -879,6 +879,28 @@
 
 .card-footer--between {
   justify-content: space-between;
+}
+
+/* Editor card whose footer (Save / Delete) stays visible while scrolling a
+   long form; keyboard focus stops above it (see "Sticky bars and keyboard
+   focus" below). */
+.card--sticky-footer > .card-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+}
+
+/* Keyboard hint at the start of an editor footer: "Ctrl Enter to save". */
+.footer-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-3);
+  font-size: var(--text-xs);
+}
+
+.footer-keys kbd:last-of-type {
+  margin-right: 3px;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1363,7 +1385,7 @@ kbd,
   bottom: -1px;
   left: 8px;
   height: 2px;
-  border-radius: 2px 2px 0 0;
+  border-radius: var(--radius-2xs) var(--radius-2xs) 0 0;
   background: var(--accent);
 }
 
@@ -1457,6 +1479,68 @@ kbd,
   flex: none;
   align-items: center;
   gap: 2px;
+}
+
+/* Master/detail list card: the list column of the template, index template,
+   lifecycle policy, pipeline and repository editors. Header recipe: icon +
+   title (.card-title.spacer), right-aligned .count-label, then the
+   btn-sm btn-soft "New …" button. Sticky beside the editor on wide screens. */
+.list-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.list-card__toolbar {
+  display: grid;
+  gap: 10px;
+  padding: 10px var(--space-4) 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.list-card__toolbar cerebro-search {
+  width: 100%;
+}
+
+/* "Show managed templates 12" and similar switches under the filter. */
+.list-card__switch {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.list-card__list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Short explanatory footer pinned to the bottom of the list card. */
+.list-card__note {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-top: auto;
+  padding: 10px var(--space-4);
+  border-top: 1px solid var(--border);
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: var(--text-xs);
+}
+
+@media (min-width: 1181px) {
+  .list-card {
+    position: sticky;
+    top: calc(var(--topbar-height) + var(--space-5));
+    max-height: calc(100svh - var(--topbar-height) - var(--space-10));
+  }
+}
+
+@media (max-width: 1180px) {
+  .list-card__list {
+    max-height: 380px;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1827,12 +1911,50 @@ kbd,
 }
 
 .code-frame--flush {
+  isolation: isolate;
   border: 0;
   border-radius: 0;
 }
 
+/* Flush editors have no border to recolour and sit in cards that clip outer
+   shadows, so the focus ring is drawn inside, above the Ace layers. Read-only
+   editors have no caret: the ring is their only focus indicator. */
 .code-frame--flush:focus-within {
   box-shadow: none;
+}
+
+.code-frame--flush:focus-within::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  box-shadow: inset var(--focus-ring);
+  pointer-events: none;
+}
+
+.code-frame--flush.is-invalid:focus-within::after {
+  box-shadow: inset 0 0 0 2px var(--red);
+}
+
+/* ------------------------------------------------------------------ */
+/* Sticky bars and keyboard focus                                      */
+/* ------------------------------------------------------------------ */
+
+/* A field reached with Tab must not end up under a sticky bar (WCAG 2.4.11).
+   Browsers decide whether focus needs scrolling from the scroll container's
+   scroll-padding (scroll-margin on the field is ignored for that), so
+   html widens it while a page shows extra sticky bars. base.css covers the
+   top bar. Add a rule here for every new sticky bar. */
+html:has(.card--sticky-footer),
+html:has(.settings-actionbar) {
+  scroll-padding-bottom: calc(var(--control-height) + var(--space-10) + var(--space-4));
+}
+
+@media (min-width: 761px) {
+  /* The settings editor's filter toolbar sticks below the top bar. */
+  html:has(.settings-toolbar) {
+    scroll-padding-top: calc(var(--topbar-height) + var(--space-3) + 72px);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1910,6 +2032,11 @@ kbd,
   .context-picker {
     flex: 1 1 100%;
     width: 100%;
+  }
+
+  /* Phones have no keyboard shortcut to advertise. */
+  .footer-keys {
+    display: none;
   }
 
   .page-header__actions:has(.context-picker) {

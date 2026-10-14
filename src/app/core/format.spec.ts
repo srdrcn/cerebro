@@ -15,6 +15,7 @@ import {
   sentence,
   severity,
   sortByName,
+  textMatcher,
 } from './format';
 
 describe('format helpers', () => {
@@ -56,6 +57,19 @@ describe('format helpers', () => {
     expect(matchesText('a[b', '[b')).toBe(true);
     expect(matchesText('anything', '  ')).toBe(true);
     expect(matchesText('orders', 'logs')).toBe(false);
+  });
+
+  it('compiles a reusable matcher with the same semantics as matchesText', () => {
+    const regex = textMatcher(' ^app-');
+    expect(['app-logs', 'my-app-logs', 'APP-metrics'].filter(regex)).toEqual(['app-logs', 'APP-metrics']);
+    const invalid = textMatcher('a[b');
+    expect(invalid('xA[Bx')).toBe(true);
+    expect(invalid('ab')).toBe(false);
+    expect(textMatcher('')('anything')).toBe(true);
+    expect(textMatcher('   ')('')).toBe(true);
+    // A compiled matcher is stateless: repeated calls give the same answer.
+    const logs = textMatcher('logs');
+    expect([logs('logs'), logs('logs'), logs('logs')]).toEqual([true, true, true]);
   });
 
   it('sorts and de-duplicates names', () => {

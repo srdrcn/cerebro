@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { AlertService } from './alert.service';
 import { ClipboardService } from './clipboard.service';
 
 describe('ClipboardService', () => {
@@ -80,5 +81,54 @@ describe('ClipboardService', () => {
     expect(success).not.toHaveBeenCalled();
     expect(failure).toHaveBeenCalledOnce();
     expect(document.querySelector('textarea[aria-hidden="true"]')).toBeNull();
+  });
+
+  describe('copyAndNotify', () => {
+    const success = vi.fn();
+    const error = vi.fn();
+
+    beforeEach(() => {
+      success.mockClear();
+      error.mockClear();
+      TestBed.configureTestingModule({
+        providers: [{ provide: AlertService, useValue: { success, error } }],
+      });
+    });
+
+    it('reports a copy with the shared wording', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(Navigator.prototype, 'clipboard', {
+        configurable: true,
+        get: () => ({ writeText }),
+      });
+
+      const service = TestBed.inject(ClipboardService);
+      await expect(service.copyAndNotify('http://localhost:9200', 'host address')).resolves.toBe(true);
+      await service.copyAndNotify('curl -XGET', 'cURL command');
+
+      expect(writeText).toHaveBeenCalledWith('http://localhost:9200');
+      expect(success.mock.calls.map(([message]) => message)).toEqual([
+        'Host address copied to the clipboard',
+        'cURL command copied to the clipboard',
+      ]);
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it('reports a failure with its reason', async () => {
+      const failure = new Error('Document is not focused');
+      Object.defineProperty(Navigator.prototype, 'clipboard', {
+        configurable: true,
+        get: () => ({ writeText: vi.fn().mockRejectedValue(failure) }),
+      });
+
+      const copied = await TestBed.inject(ClipboardService).copyAndNotify('{}', 'JSON document');
+
+      expect(copied).toBe(false);
+      expect(success).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalledWith(
+        'Could not copy the JSON document: Document is not focused',
+        failure,
+      );
+    });
   });
 });

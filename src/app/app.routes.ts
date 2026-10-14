@@ -53,6 +53,7 @@ export const routes: Routes = [
       },
       {
         path: 'create',
+        canDeactivate: [confirmDiscardPendingChanges],
         loadComponent: () =>
           import('./features/create-index/create-index.component').then(
             (m) => m.CreateIndexComponent,
@@ -92,6 +93,7 @@ export const routes: Routes = [
       },
       {
         path: 'repository',
+        canDeactivate: [confirmDiscardPendingChanges],
         loadComponent: () =>
           import('./features/repositories/repositories.component').then(
             (m) => m.RepositoriesComponent,

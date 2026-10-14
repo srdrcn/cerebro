@@ -20,14 +20,13 @@ import { ToastCenterComponent } from './shared/toast-center.component';
     DialogHostComponent,
     CommandPaletteComponent,
   ],
+  // A single router outlet that never moves: switching between two outlets
+  // when the connection state flips would destroy and recreate the page (and
+  // repeat its first requests). The shell only hides its chrome on Connect.
   template: `
-    @if (showShell()) {
-      <cerebro-shell>
-        <router-outlet />
-      </cerebro-shell>
-    } @else {
+    <cerebro-shell [chrome]="showShell()">
       <router-outlet />
-    }
+    </cerebro-shell>
     <cerebro-toast-center />
     <cerebro-dialog-host />
     <cerebro-command-palette />

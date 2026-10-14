@@ -7,7 +7,6 @@ import {
   inject,
   viewChild,
 } from '@angular/core';
-import { AlertService } from '../core/alert.service';
 import { ClipboardService } from '../core/clipboard.service';
 import { DialogService } from '../core/dialog.service';
 import { CodeEditorComponent } from './code-editor.component';
@@ -23,6 +22,7 @@ import { ModalDialogDirective } from './modal-dialog.directive';
       cerebroModal="manual"
       class="dialog"
       [class.dialog--wide]="state()?.kind === 'json'"
+      [class.dialog--fit]="state()?.kind === 'json' && !longJson()"
       aria-labelledby="cerebro-dialog-title"
       (dismiss)="dialogs.close()"
     >
@@ -104,13 +104,25 @@ import { ModalDialogDirective } from './modal-dialog.directive';
           </header>
           <div class="dialog__body dialog__body--flush json-body">
             @defer (on immediate) {
-              <cerebro-code-editor
-                [value]="dialog.text"
-                [readOnly]="true"
-                [fill]="true"
-                [flush]="true"
-                ariaLabel="JSON document"
-              />
+              <!-- Long documents fill the tall dialog; short ones size it to their lines. -->
+              @if (longJson()) {
+                <cerebro-code-editor
+                  [value]="dialog.text"
+                  [readOnly]="true"
+                  [fill]="true"
+                  [flush]="true"
+                  ariaLabel="JSON document"
+                />
+              } @else {
+                <cerebro-code-editor
+                  [value]="dialog.text"
+                  [readOnly]="true"
+                  [minLines]="minJsonLines"
+                  [maxLines]="maxFitLines"
+                  [flush]="true"
+                  ariaLabel="JSON document"
+                />
+              }
             } @placeholder {
               <pre class="json-fallback">{{ dialog.text }}</pre>
             }
@@ -159,6 +171,16 @@ import { ModalDialogDirective } from './modal-dialog.directive';
       flex: 1;
     }
 
+    /* Short documents: the dialog shrinks to the editor instead of the
+       fixed tall size of .dialog--wide. */
+    .dialog--fit {
+      height: fit-content;
+    }
+
+    .dialog--fit .json-body {
+      flex: none;
+    }
+
     .json-fallback {
       overflow: auto;
       padding: 14px 18px;
@@ -171,7 +193,6 @@ import { ModalDialogDirective } from './modal-dialog.directive';
 export class DialogHostComponent {
   readonly dialogs = inject(DialogService);
   private readonly clipboard = inject(ClipboardService);
-  private readonly alerts = inject(AlertService);
   private readonly modal = viewChild.required(ModalDialogDirective);
   private readonly confirmButton = viewChild<ElementRef<HTMLButtonElement>>('confirmButton');
   private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>('cancelButton');
@@ -185,6 +206,10 @@ export class DialogHostComponent {
     const state = this.state();
     return state?.kind === 'json' ? state.text.split('\n').length : 0;
   });
+  /** Short JSON documents get a compact dialog sized to their lines. */
+  readonly maxFitLines = 30;
+  readonly minJsonLines = 3;
+  readonly longJson = computed(() => this.lineCount() > this.maxFitLines);
 
   constructor() {
     effect(() => {
@@ -207,10 +232,6 @@ export class DialogHostComponent {
   }
 
   async copy(text: string): Promise<void> {
-    await this.clipboard.copy(
-      text,
-      () => this.alerts.success('Copied to clipboard'),
-      (error) => this.alerts.error('Could not copy to clipboard', error),
-    );
+    await this.clipboard.copyAndNotify(text, 'JSON document');
   }
 }

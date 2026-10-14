@@ -9,13 +9,13 @@ import {
   computed,
   effect,
   inject,
+  input,
   signal,
   viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map } from 'rxjs';
-import { AlertService } from '../../core/alert.service';
 import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterStatusService } from '../../core/cluster-status.service';
 import { ConnectionService } from '../../core/connection.service';
@@ -46,12 +46,19 @@ export class ShellComponent {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly clipboard = inject(ClipboardService);
-  private readonly alerts = inject(AlertService);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
-  private readonly sidebar = viewChild.required<ElementRef<HTMLElement>>('sidebar');
-  private readonly menuButton = viewChild.required<ElementRef<HTMLButtonElement>>('menuButton');
+  private readonly sidebar = viewChild<ElementRef<HTMLElement>>('sidebar');
+  private readonly menuButton = viewChild<ElementRef<HTMLButtonElement>>('menuButton');
+
+  /**
+   * Shows the sidebar and top bar. AppComponent keeps the shell (and its one
+   * `<router-outlet>`) mounted on every route and only turns the chrome off
+   * on the connect screen, so pages are never destroyed and recreated when
+   * the connection state changes during a deep-link load.
+   */
+  readonly chrome = input(true);
 
   readonly connection = inject(ConnectionService);
   readonly status = inject(ClusterStatusService);
@@ -135,15 +142,15 @@ export class ShellComponent {
   });
 
   constructor() {
-    this.status.shellActive.set(true);
+    effect(() => {
+      // The connect screen has no chrome: plain "cerebro" title and favicon.
+      const chrome = this.chrome();
+      this.status.shellActive.set(chrome);
+      this.status.pageTitle.set(chrome ? this.currentPage()?.label : undefined);
+    });
     this.destroyRef.onDestroy(() => {
-      // The connect screen has no shell; do not leave this page's title behind.
       this.status.shellActive.set(false);
       this.status.pageTitle.set(undefined);
-    });
-
-    effect(() => {
-      this.status.pageTitle.set(this.currentPage()?.label);
     });
     effect(() => {
       // Close the mobile drawer after every navigation.
@@ -165,10 +172,10 @@ export class ShellComponent {
   openDrawer(): void {
     this.drawerOpen.set(true);
     this.afterRender(() => {
-      const sidebar = this.sidebar().nativeElement;
+      const sidebar = this.sidebar()?.nativeElement;
       const target =
-        sidebar.querySelector<HTMLElement>('.nav-link[aria-current="page"]') ??
-        sidebar.querySelector<HTMLElement>('.nav-link');
+        sidebar?.querySelector<HTMLElement>('.nav-link[aria-current="page"]') ??
+        sidebar?.querySelector<HTMLElement>('.nav-link');
       target?.focus();
     });
   }
@@ -180,7 +187,7 @@ export class ShellComponent {
     }
     this.drawerOpen.set(false);
     if (restoreFocus) {
-      this.afterRender(() => this.menuButton().nativeElement.focus());
+      this.afterRender(() => this.menuButton()?.nativeElement.focus());
     }
   }
 
@@ -236,10 +243,6 @@ export class ShellComponent {
     if (!host) {
       return;
     }
-    await this.clipboard.copy(
-      host,
-      () => this.alerts.success('Host address copied'),
-      (error) => this.alerts.error('Could not copy to clipboard', error),
-    );
+    await this.clipboard.copyAndNotify(host, 'host address');
   }
 }

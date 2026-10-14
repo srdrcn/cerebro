@@ -157,17 +157,29 @@ export function severity(value: number | null | undefined, warn = 75, danger = 9
   return value >= warn ? 'warn' : 'ok';
 }
 
-/** Case-insensitive match that accepts a regular expression when valid. */
-export function matchesText(value: string, expression: string): boolean {
+/**
+ * Compiles a filter query once: a case-insensitive regular expression when it
+ * is valid ("^logs-"), a case-insensitive substring otherwise ("a[b"). An
+ * empty query matches everything. Use it when one query is tested against
+ * many values (list and table filters).
+ */
+export function textMatcher(expression: string): (value: string) => boolean {
   const query = expression.trim();
   if (!query) {
-    return true;
+    return () => true;
   }
   try {
-    return new RegExp(query, 'i').test(value);
+    const pattern = new RegExp(query, 'i');
+    return (value) => pattern.test(value);
   } catch {
-    return value.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+    const needle = query.toLocaleLowerCase();
+    return (value) => value.toLocaleLowerCase().includes(needle);
   }
+}
+
+/** One-off form of `textMatcher`: does `value` match the filter `expression`? */
+export function matchesText(value: string, expression: string): boolean {
+  return textMatcher(expression)(value);
 }
 
 export function sortByName<T extends string>(values: readonly T[]): T[] {
