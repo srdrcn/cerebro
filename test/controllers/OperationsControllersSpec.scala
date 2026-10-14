@@ -21,6 +21,7 @@ object OperationsControllersSpec extends MockedServices {
       list all recoveries on request                     $allRecoveries
       list data streams with their stats                 $listDataStreams
       list data streams when stats are unavailable       $dataStreamsWithoutStats
+      fall back to visible streams on older clusters     $dataStreamsWithoutHiddenSupport
       roll over a data stream                            $rollover
       delete a data stream                               $deleteDataStream
       list ILM policies                                  $ilmPolicies
@@ -70,15 +71,26 @@ object OperationsControllersSpec extends MockedServices {
   def listDataStreams = {
     val streams = Json.obj("data_streams" -> Json.arr(Json.obj("name" -> "logs-app")))
     val stats = Json.obj("data_stream_count" -> 1)
-    client.getDataStreams(server) returns Future.successful(Success(200, streams))
-    client.getDataStreamStats(server) returns Future.successful(Success(200, stats))
+    client.getDataStreams(true, server) returns Future.successful(Success(200, streams))
+    client.getDataStreamStats(true, server) returns Future.successful(Success(200, stats))
     ensure(post("/data_streams"), 200, Json.obj("data_streams" -> Json.arr(Json.obj("name" -> "logs-app")), "stats" -> stats))
   }
 
   def dataStreamsWithoutStats = {
-    client.getDataStreams(server) returns Future.successful(Success(200, Json.obj("data_streams" -> Json.arr())))
-    client.getDataStreamStats(server) returns Future.successful(Error(403, Json.obj("error" -> "forbidden")))
+    client.getDataStreams(true, server) returns Future.successful(Success(200, Json.obj("data_streams" -> Json.arr())))
+    client.getDataStreamStats(true, server) returns Future.successful(Error(403, Json.obj("error" -> "forbidden")))
     ensure(post("/data_streams"), 200, Json.obj("data_streams" -> Json.arr(), "stats" -> JsNull))
+  }
+
+  def dataStreamsWithoutHiddenSupport = {
+    val unrecognized = Json.obj("error" -> Json.obj("reason" -> "request [/_data_stream] contains unrecognized parameter: [expand_wildcards]"))
+    val streams = Json.obj("data_streams" -> Json.arr(Json.obj("name" -> "logs-app")))
+    val stats = Json.obj("data_stream_count" -> 1)
+    client.getDataStreams(true, server) returns Future.successful(Error(400, unrecognized))
+    client.getDataStreamStats(true, server) returns Future.successful(Error(400, unrecognized))
+    client.getDataStreams(false, server) returns Future.successful(Success(200, streams))
+    client.getDataStreamStats(false, server) returns Future.successful(Success(200, stats))
+    ensure(post("/data_streams"), 200, Json.obj("data_streams" -> Json.arr(Json.obj("name" -> "logs-app")), "stats" -> stats))
   }
 
   def rollover = {

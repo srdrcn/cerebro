@@ -10,11 +10,16 @@ export function readPreference(key: string): string | null {
   }
 }
 
-export function writePreference(key: string, value: string): void {
+/** `false` when the browser refused the write (no storage, quota exceeded). */
+export function writePreference(key: string, value: string): boolean {
   try {
-    globalThis.localStorage?.setItem(key, value);
+    if (!globalThis.localStorage) {
+      return false;
+    }
+    globalThis.localStorage.setItem(key, value);
+    return true;
   } catch {
-    // Preferences are a convenience; ignore storage failures.
+    return false;
   }
 }
 
@@ -38,6 +43,6 @@ export function readJsonPreference<T>(key: string, fallback: T): T {
   }
 }
 
-export function writeJsonPreference(key: string, value: unknown): void {
-  writePreference(key, JSON.stringify(value));
+export function writeJsonPreference(key: string, value: unknown): boolean {
+  return writePreference(key, JSON.stringify(value));
 }

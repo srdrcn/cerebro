@@ -380,11 +380,15 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
   def cancelTask(taskId: String, target: ElasticServer) =
     execute(s"/_tasks/${encoded(taskId)}/_cancel", "POST", None, target)
 
-  def getDataStreams(target: ElasticServer) =
-    execute("/_data_stream", "GET", None, target)
+  def getDataStreams(includeHidden: Boolean, target: ElasticServer) = {
+    val path = if (includeHidden) "/_data_stream?expand_wildcards=all" else "/_data_stream"
+    execute(path, "GET", None, target)
+  }
 
-  def getDataStreamStats(target: ElasticServer) =
-    execute("/_data_stream/_stats", "GET", None, target)
+  def getDataStreamStats(includeHidden: Boolean, target: ElasticServer) = {
+    val path = if (includeHidden) "/_data_stream/*/_stats?expand_wildcards=all" else "/_data_stream/_stats"
+    execute(path, "GET", None, target)
+  }
 
   def rolloverDataStream(name: String, target: ElasticServer) =
     execute(s"/${encoded(name)}/_rollover", "POST", None, target)

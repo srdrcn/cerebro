@@ -43,7 +43,7 @@ src/
 | `names.ts` | `validateResourceName(name, noun)` and the invalid character lists for index, template, policy and pipeline names. |
 | `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
 | `pending-changes.guard.ts` | `PendingChangesAware` (`confirmDiscard()`) and the `confirmDiscardPendingChanges` route guard. |
-| `preferences.ts` | best-effort `localStorage` helpers for per-browser UI preferences. |
+| `preferences.ts` | best-effort `localStorage` helpers for per-browser UI preferences; writes return `false` when the browser refused them. |
 
 ### Shared components (`src/app/shared`)
 

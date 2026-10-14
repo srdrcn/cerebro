@@ -149,10 +149,10 @@ trait ElasticClient {
 
   def cancelTask(taskId: String, target: ElasticServer): Future[ElasticResponse]
 
-  // Data streams
-  def getDataStreams(target: ElasticServer): Future[ElasticResponse]
+  // Data streams; includeHidden also lists hidden and system streams (Elasticsearch 7.11+)
+  def getDataStreams(includeHidden: Boolean, target: ElasticServer): Future[ElasticResponse]
 
-  def getDataStreamStats(target: ElasticServer): Future[ElasticResponse]
+  def getDataStreamStats(includeHidden: Boolean, target: ElasticServer): Future[ElasticResponse]
 
   def rolloverDataStream(name: String, target: ElasticServer): Future[ElasticResponse]
 
