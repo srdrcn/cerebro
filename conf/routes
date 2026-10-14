@@ -113,6 +113,7 @@ POST        /ilm/policies                             controllers.IlmController.
 POST        /ilm/policies/save                        controllers.IlmController.save
 POST        /ilm/policies/delete                      controllers.IlmController.delete
 POST        /ilm/explain                              controllers.IlmController.explain
+POST        /ilm/retry                                controllers.IlmController.retry
 
 # Ingest pipelines
 POST        /pipelines                                controllers.PipelinesController.list
@@ -122,6 +123,11 @@ POST        /pipelines/simulate                       controllers.PipelinesContr
 
 # Shard recoveries
 POST        /recovery                                 controllers.RecoveryController.list
+
+# Cluster doctor
+POST        /doctor                                   controllers.DoctorController.check
+POST        /doctor/index_settings                    controllers.DoctorController.updateIndexSettings
+POST        /doctor/retry_allocation                  controllers.DoctorController.retryAllocation
 
 # Auth
 POST        /auth/login                               controllers.AuthController.login

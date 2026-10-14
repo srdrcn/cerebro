@@ -167,6 +167,8 @@ trait ElasticClient {
 
   def explainIlm(index: String, target: ElasticServer): Future[ElasticResponse]
 
+  def retryIlm(indices: String, target: ElasticServer): Future[ElasticResponse]
+
   // Ingest pipelines
   def getPipelines(target: ElasticServer): Future[ElasticResponse]
 
@@ -178,5 +180,20 @@ trait ElasticClient {
 
   // Shard recoveries
   def getRecoveries(activeOnly: Boolean, target: ElasticServer): Future[ElasticResponse]
+
+  // Cluster doctor
+  def healthReport(target: ElasticServer): Future[ElasticResponse]
+
+  def migrationDeprecations(target: ElasticServer): Future[ElasticResponse]
+
+  def ilmErrors(target: ElasticServer): Future[ElasticResponse]
+
+  def indexBlocks(target: ElasticServer): Future[ElasticResponse]
+
+  def catIndexSizes(target: ElasticServer): Future[ElasticResponse]
+
+  def catShardSizes(target: ElasticServer): Future[ElasticResponse]
+
+  def retryFailedAllocations(target: ElasticServer): Future[ElasticResponse]
 
 }

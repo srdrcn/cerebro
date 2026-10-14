@@ -410,6 +410,9 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
   def explainIlm(index: String, target: ElasticServer) =
     execute(s"/${encoded(index)}/_ilm/explain", "GET", None, target)
 
+  def retryIlm(indices: String, target: ElasticServer) =
+    execute(s"/${encoded(indices)}/_ilm/retry", "POST", None, target)
+
   def getPipelines(target: ElasticServer) =
     execute("/_ingest/pipeline", "GET", None, target)
 
@@ -424,6 +427,31 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
 
   def getRecoveries(activeOnly: Boolean, target: ElasticServer) =
     execute(s"/_cat/recovery?format=json&bytes=b&time=ms&active_only=$activeOnly", "GET", None, target)
+
+  def healthReport(target: ElasticServer) =
+    execute("/_health_report?verbose=true", "GET", None, target)
+
+  def migrationDeprecations(target: ElasticServer) =
+    execute("/_migration/deprecations", "GET", None, target)
+
+  def ilmErrors(target: ElasticServer) =
+    execute("/_all/_ilm/explain?only_errors=true&expand_wildcards=all", "GET", None, target)
+
+  def indexBlocks(target: ElasticServer) =
+    execute("/_all/_settings/index.blocks.*?flat_settings=true&expand_wildcards=all", "GET", None, target)
+
+  def catIndexSizes(target: ElasticServer) = {
+    val columns = "index,health,status,pri,rep,docs.count,store.size,pri.store.size"
+    execute(s"/_cat/indices?format=json&bytes=b&expand_wildcards=all&h=$columns", "GET", None, target)
+  }
+
+  def catShardSizes(target: ElasticServer) = {
+    val columns = "index,shard,prirep,state,store,node,unassigned.reason"
+    execute(s"/_cat/shards?format=json&bytes=b&h=$columns", "GET", None, target)
+  }
+
+  def retryFailedAllocations(target: ElasticServer) =
+    execute("/_cluster/reroute?retry_failed=true&filter_path=acknowledged", "POST", None, target)
 }
 
 object HTTPElasticClient {
