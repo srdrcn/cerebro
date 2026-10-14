@@ -137,7 +137,7 @@ describe('runChecks on the live 8.15 report', () => {
     expect(replicas.fixes[0]).toMatchObject({
       label: 'Reduce all to 2 replicas',
       confirmLabel: 'Reduce all to 2 replicas',
-      path: 'doctor/index_settings',
+      path: 'index_settings/bulk_update',
       payload: { indices: ['overflow-test', 'tmp-doctor-overflow'], settings: { 'index.number_of_replicas': 2 } },
       confirmItems: ['overflow-test', 'tmp-doctor-overflow'],
     });
@@ -202,7 +202,7 @@ describe('runChecks on the live 8.15 report', () => {
     expect(blocked.resources[0]?.link).toEqual({ label: 'Index settings', icon: 'bi-gear', route: '/index_settings', params: { index: 'tmp-doctor-ro' } });
     expect(blocked.fixes[0]).toMatchObject({
       label: 'Remove read-only block',
-      path: 'doctor/index_settings',
+      path: 'index_settings/bulk_update',
       payload: { indices: ['tmp-doctor-ro'], settings: { 'index.blocks.read_only_allow_delete': null } },
       tone: 'default',
     });

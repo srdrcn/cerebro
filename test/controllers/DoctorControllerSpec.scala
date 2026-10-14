@@ -16,8 +16,6 @@ object DoctorControllerSpec extends MockedServices {
       combine every diagnostic source                    $combine
       report sources Elasticsearch refused               $unavailable
       fail when the cluster health is unavailable        $healthFailure
-      update the settings of several indices             $updateSettings
-      reject an empty list of indices                    $emptyIndices
       retry failed shard allocations                     $retryAllocation
                                                          ${step(play.api.Play.stop(application))}
       """
@@ -81,16 +79,6 @@ object DoctorControllerSpec extends MockedServices {
     val error = Json.obj("error" -> "unavailable")
     client.clusterHealth(server) returns Future.successful(Error(503, error))
     ensure(post("/doctor"), 503, error)
-  }
-
-  def updateSettings = {
-    val settings = Json.obj("index.number_of_replicas" -> 1)
-    client.updateIndexSettings("logs,metrics", settings, server) returns Future.successful(Success(200, ack))
-    ensure(post("/doctor/index_settings", Json.obj("indices" -> Json.arr("logs", "metrics"), "settings" -> settings)), 200, ack)
-  }
-
-  def emptyIndices = {
-    ensure(post("/doctor/index_settings", Json.obj("indices" -> Json.arr(), "settings" -> Json.obj())), 400, Json.obj("error" -> "No indices given"))
   }
 
   def retryAllocation = {

@@ -134,7 +134,7 @@ describe('DoctorComponent', () => {
       confirmLabel: 'Remove block',
       tone: 'default',
     });
-    expect(post.mock.calls.map((call) => call[0])).toEqual(['doctor/index_settings', 'doctor']);
+    expect(post.mock.calls.map((call) => call[0])).toEqual(['index_settings/bulk_update', 'doctor']);
     expect(post.mock.calls[0]?.[1]).toEqual({
       indices: ['tmp-doctor-ro'],
       settings: { 'index.blocks.read_only_allow_delete': null },

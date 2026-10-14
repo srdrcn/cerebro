@@ -168,7 +168,7 @@ function replicasFix(indices: readonly string[], replicas: number, kind: 'add' |
     confirmMessage: `Sets index.number_of_replicas to ${replicas}.${extra ? ` ${extra}` : ''}`,
     confirmItems: indices.length > 1 ? indices : [],
     confirmLabel: label,
-    path: 'doctor/index_settings',
+    path: 'index_settings/bulk_update',
     payload: { indices: [...indices], settings: { 'index.number_of_replicas': replicas } },
     success:
       kind === 'add'
@@ -205,7 +205,7 @@ function removeReadOnlyFix(indices: readonly string[], state: FloodBlockState): 
     confirmMessage: `Removes index.blocks.read_only_allow_delete so writes are accepted again. ${reapplied}`,
     confirmItems: indices.length > 1 ? indices : [],
     confirmLabel: indices.length > 1 ? 'Remove blocks' : 'Remove block',
-    path: 'doctor/index_settings',
+    path: 'index_settings/bulk_update',
     payload: { indices: [...indices], settings: { 'index.blocks.read_only_allow_delete': null } },
     success: `Removed the read-only block from ${target}`,
     failure: `Could not remove the read-only block from ${target}`,

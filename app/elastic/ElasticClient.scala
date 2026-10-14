@@ -181,4 +181,26 @@ trait ElasticClient {
 
   def retryFailedAllocations(target: ElasticServer): Future[ElasticResponse]
 
+  // Live metrics
+  def nodeMetrics(target: ElasticServer): Future[ElasticResponse]
+
+  // Performance diagnosis
+  def hotThreads(node: Option[String], threads: Int, interval: String, kind: String, ignoreIdle: Boolean,
+                 target: ElasticServer): Future[ElasticResponse]
+
+  def catThreadPools(target: ElasticServer): Future[ElasticResponse]
+
+  def pendingClusterTasks(target: ElasticServer): Future[ElasticResponse]
+
+  def slowlogSettings(target: ElasticServer): Future[ElasticResponse]
+
+  // Index operations
+  def resizeIndex(kind: String, index: String, targetIndex: String, body: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def rollover(alias: String, newIndex: Option[String], body: JsValue, dryRun: Boolean, target: ElasticServer): Future[ElasticResponse]
+
+  def reindex(body: JsValue, slices: Option[String], requestsPerSecond: Option[String], target: ElasticServer): Future[ElasticResponse]
+
+  def getTask(taskId: String, target: ElasticServer): Future[ElasticResponse]
+
 }

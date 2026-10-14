@@ -23,7 +23,8 @@ object ElasticResponse {
 
   def apply(response: WSResponse): ElasticResponse = {
     if (isSuccess(response.status)) {
-      Success(response.status, response.json)
+      // Text APIs (hot threads, _cat without format=json) answer plain text.
+      Success(response.status, Try(response.json).getOrElse(JsString(response.body)))
     } else {
       val body = Try(response.json).getOrElse(Json.obj("error" -> JsString(response.body)))
       Error(response.status, body)

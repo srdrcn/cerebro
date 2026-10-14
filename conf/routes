@@ -63,6 +63,7 @@ POST        /cluster_settings/save                    controllers.ClusterSetting
 # Index settings module
 POST        /index_settings                           controllers.IndexSettingsController.get
 POST        /index_settings/update                    controllers.IndexSettingsController.update
+POST        /index_settings/bulk_update               controllers.IndexSettingsController.bulkUpdate
 
 # Connect module
 GET         /connect/hosts                            controllers.ConnectController.index
@@ -100,6 +101,7 @@ POST        /index_detail                             controllers.IndexDetailCon
 
 # Tasks
 POST        /tasks                                    controllers.TasksController.list
+POST        /tasks/get                                controllers.TasksController.get
 POST        /tasks/cancel                             controllers.TasksController.cancel
 
 # Data streams
@@ -123,9 +125,22 @@ POST        /pipelines/simulate                       controllers.PipelinesContr
 # Shard recoveries
 POST        /recovery                                 controllers.RecoveryController.list
 
+# Live metrics
+POST        /metrics/nodes                            controllers.MetricsController.nodes
+
+# Performance diagnosis
+POST        /performance/hot_threads                  controllers.PerformanceController.hotThreads
+POST        /performance/thread_pools                 controllers.PerformanceController.threadPools
+POST        /performance/pending_tasks                controllers.PerformanceController.pendingTasks
+POST        /performance/slowlog                      controllers.PerformanceController.slowlog
+
+# Index operations
+POST        /index_ops/resize                         controllers.IndexOpsController.resize
+POST        /index_ops/rollover                       controllers.IndexOpsController.rollover
+POST        /index_ops/reindex                        controllers.IndexOpsController.reindex
+
 # Cluster doctor
 POST        /doctor                                   controllers.DoctorController.check
-POST        /doctor/index_settings                    controllers.DoctorController.updateIndexSettings
 POST        /doctor/retry_allocation                  controllers.DoctorController.retryAllocation
 
 # Auth

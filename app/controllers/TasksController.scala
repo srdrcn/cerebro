@@ -18,6 +18,12 @@ class TasksController @Inject()(val authentication: AuthenticationModule,
     }
   }
 
+  def get = process { request =>
+    client.getTask(request.get("task_id"), request.target).map { response =>
+      CerebroResponse(response.status, response.body)
+    }
+  }
+
   def cancel = process { request =>
     client.cancelTask(request.get("task_id"), request.target).map { response =>
       CerebroResponse(response.status, response.body)

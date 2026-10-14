@@ -17,6 +17,7 @@ object HTTPElasticClientSpec extends Specification {
       write disabled allocation as a persistent setting     $disableAllocation
       reset allocation to the default on enable             $enableAllocation
       build reroute commands as JSON                        $relocate
+      build insight and index operation paths               $insightPaths
       """
 
   private case class Call(uri: String, method: String, body: Option[String])
@@ -89,6 +90,19 @@ object HTTPElasticClientSpec extends Specification {
           "move" -> Json.obj("shard" -> 2, "index" -> "logs \"q\"", "from_node" -> "node-1", "to_node" -> "node-2")
         ))
       ))
+  }
+
+  def insightPaths = {
+    (record(_.hotThreads(None, 3, "500ms", "cpu", true, server)).uri mustEqual
+      "/_nodes/_all/hot_threads?threads=3&interval=500ms&type=cpu&ignore_idle_threads=true") and
+      (record(_.hotThreads(Some("es node"), 5, "2s", "wait", false, server)).uri mustEqual
+        "/_nodes/es%20node/hot_threads?threads=5&interval=2s&type=wait&ignore_idle_threads=false") and
+      (record(_.nodeMetrics(server)).uri must startWith("/_nodes/stats/indices,jvm,os,process,thread_pool?filter_path=nodes.*.name,")) and
+      (record(_.resizeIndex("shrink", "logs", "logs small", Json.obj(), server)) mustEqual Call("/logs/_shrink/logs%20small", "POST", Some("{}"))) and
+      (record(_.rollover("logs-write", None, Json.obj(), true, server)).uri mustEqual "/logs-write/_rollover?dry_run=true") and
+      (record(_.rollover("logs-write", Some("logs-000002"), Json.obj(), false, server)).uri mustEqual "/logs-write/_rollover/logs-000002?dry_run=false") and
+      (record(_.reindex(Json.obj(), Some("auto"), None, server)).uri mustEqual "/_reindex?wait_for_completion=false&slices=auto") and
+      (record(_.getTask("node:42", server)).uri mustEqual "/_tasks/node%3A42")
   }
 
 }

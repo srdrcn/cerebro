@@ -413,6 +413,54 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
 
   def retryFailedAllocations(target: ElasticServer) =
     execute("/_cluster/reroute?retry_failed=true&filter_path=acknowledged", "POST", None, target)
+
+  def nodeMetrics(target: ElasticServer) = {
+    val fields = Seq(
+      "name", "roles", "timestamp",
+      "indices.indexing.index_total", "indices.indexing.index_time_in_millis",
+      "indices.search.query_total", "indices.search.query_time_in_millis", "indices.search.fetch_total",
+      "indices.get.total", "indices.docs.count", "indices.store.size_in_bytes",
+      "jvm.mem.heap_used_percent", "os.cpu.percent", "os.cpu.load_average", "process.cpu.percent",
+      "thread_pool.write", "thread_pool.search"
+    ).map(field => s"nodes.*.$field").mkString(",")
+    execute(s"/_nodes/stats/indices,jvm,os,process,thread_pool?filter_path=$fields", "GET", None, target)
+  }
+
+  def hotThreads(node: Option[String], threads: Int, interval: String, kind: String, ignoreIdle: Boolean,
+                 target: ElasticServer) = {
+    val nodes = node.map(encoded).getOrElse("_all")
+    val params = s"threads=$threads&interval=$interval&type=$kind&ignore_idle_threads=$ignoreIdle"
+    execute(s"/_nodes/$nodes/hot_threads?$params", "GET", None, target)
+  }
+
+  def catThreadPools(target: ElasticServer) = {
+    val columns = "node_name,name,type,active,queue,rejected,completed,size,queue_size"
+    execute(s"/_cat/thread_pool?format=json&h=$columns", "GET", None, target)
+  }
+
+  def pendingClusterTasks(target: ElasticServer) =
+    execute("/_cluster/pending_tasks", "GET", None, target)
+
+  def slowlogSettings(target: ElasticServer) = {
+    val settings = "index.search.slowlog.*,index.indexing.slowlog.*"
+    execute(s"/_all/_settings/$settings?flat_settings=true&expand_wildcards=all", "GET", None, target)
+  }
+
+  def resizeIndex(kind: String, index: String, targetIndex: String, body: JsValue, target: ElasticServer) =
+    execute(s"/${encoded(index)}/_$kind/${encoded(targetIndex)}", "POST", Some(body.toString), target, Seq(JsonContentType))
+
+  def rollover(alias: String, newIndex: Option[String], body: JsValue, dryRun: Boolean, target: ElasticServer) = {
+    val path = s"/${encoded(alias)}/_rollover${newIndex.map(name => s"/${encoded(name)}").getOrElse("")}"
+    execute(s"$path?dry_run=$dryRun", "POST", Some(body.toString), target, Seq(JsonContentType))
+  }
+
+  def reindex(body: JsValue, slices: Option[String], requestsPerSecond: Option[String], target: ElasticServer) = {
+    val params = Seq(Some("wait_for_completion=false"), slices.map(s => s"slices=$s"), requestsPerSecond.map(r => s"requests_per_second=$r"))
+    execute(s"/_reindex?${params.flatten.mkString("&")}", "POST", Some(body.toString), target, Seq(JsonContentType))
+  }
+
+  def getTask(taskId: String, target: ElasticServer) =
+    execute(s"/_tasks/${encoded(taskId)}", "GET", None, target)
 }
 
 object HTTPElasticClient {

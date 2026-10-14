@@ -26,6 +26,9 @@ case class CerebroRequest(val target: ElasticServer, body: JsValue, val user: Op
   def getBooleanOpt(name: String): Option[Boolean] =
     (body \ name).asOpt[Boolean]
 
+  def getIntOpt(name: String): Option[Int] =
+    (body \ name).asOpt[Int]
+
   def getArrayValue(name: String): JsArray =
     (body \ name).asOpt[JsArray].getOrElse(throw MissingRequiredParamException(name))
 

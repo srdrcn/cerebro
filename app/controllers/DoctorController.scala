@@ -45,18 +45,6 @@ class DoctorController @Inject()(val authentication: AuthenticationModule,
     }
   }
 
-  def updateIndexSettings = process { request =>
-    val indices = request.getArray("indices").toSeq
-    val settings = request.getObj("settings")
-    if (indices.isEmpty) {
-      Future.successful(CerebroResponse(400, Json.obj("error" -> "No indices given")))
-    } else {
-      IndexBatches.run(indices)(batch => client.updateIndexSettings(batch, settings, request.target)).map { response =>
-        CerebroResponse(response.status, response.body)
-      }
-    }
-  }
-
   def retryAllocation = process { request =>
     client.retryFailedAllocations(request.target).map { response =>
       CerebroResponse(response.status, response.body)
