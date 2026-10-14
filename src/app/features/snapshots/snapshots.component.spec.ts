@@ -135,6 +135,46 @@ describe('SnapshotsComponent', () => {
     expect(target.snapshots()?.map((item) => item.snapshot)).toEqual(['two']);
   });
 
+  it('follows ?repository= when it changes while the page is open', async () => {
+    respond({ alpha: [snapshot('one')], beta: [snapshot('two')] });
+    const router = TestBed.inject(Router);
+    const target = component();
+    await target.load();
+    await vi.waitFor(() => expect(router.url).toContain('repository=alpha'));
+    // The page's own URL update is not mistaken for a navigation.
+    expect(target.repository()).toBe('alpha');
+
+    await router.navigateByUrl('/?repository=beta');
+    expect(target.repository()).toBe('beta');
+    await vi.waitFor(() => expect(target.snapshots()?.map((item) => item.snapshot)).toEqual(['two']));
+
+    // An unknown repository reloads the list and puts the shown one back.
+    const landingCalls = post.mock.calls.filter(([path]) => path === 'snapshots').length;
+    await router.navigateByUrl('/?repository=gone');
+    await vi.waitFor(() => expect(router.url).toContain('repository=beta'));
+    expect(post.mock.calls.filter(([path]) => path === 'snapshots').length).toBe(landingCalls + 1);
+    expect(target.repository()).toBe('beta');
+  });
+
+  it('opens a repository from the URL once it shows up in the list', async () => {
+    respond({ alpha: [] });
+    const router = TestBed.inject(Router);
+    const target = component();
+    await target.load();
+
+    post.mockImplementation(async (path: string, body?: { repository?: string }) => {
+      if (path === 'snapshots') {
+        return { ...landing, repositories: [...landing.repositories, 'fresh'] };
+      }
+      return body?.repository === 'fresh' ? [snapshot('new')] : [];
+    });
+    await router.navigateByUrl('/?repository=fresh');
+
+    await vi.waitFor(() => expect(target.repository()).toBe('fresh'));
+    await vi.waitFor(() => expect(target.snapshots()?.map((item) => item.snapshot)).toEqual(['new']));
+    expect(router.url).toContain('repository=fresh');
+  });
+
   it('never shows the snapshots of a repository that is no longer selected', async () => {
     respond({});
     const target = component();

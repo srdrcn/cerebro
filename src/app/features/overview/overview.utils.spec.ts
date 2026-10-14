@@ -8,10 +8,12 @@ import {
 } from './overview.models';
 import {
   OPERATIONS,
+  allocationExplainParams,
   canReceiveShard,
   describeShard,
   filterOverviewIndices,
   hasShardActivity,
+  healthLabel,
   healthTone,
   escapeRegExp,
   indexBreakdown,
@@ -24,11 +26,13 @@ import {
   normalizeOverview,
   operationConfirmation,
   operationSuccess,
+  operationTargets,
   pageOfIndex,
   primaryStoreSize,
   revealFlags,
   revealIndexFilter,
   shardChipClass,
+  shardHeading,
   shardMapLayout,
   shardsOn,
   stillRelocatable,
@@ -217,6 +221,54 @@ describe('overview helpers', () => {
     expect(shardChipClass({ ...relocating, state: 'weird', primary: false }, false)).toBe(
       'shard-chip is-unknown is-replica',
     );
+    expect(shardHeading({ ...relocating, state: 'STARTED' })).toBe('Shard 1 · primary');
+    expect(shardHeading(relocating)).toBe('Shard 1 · primary · relocating');
+    expect(shardHeading({ ...relocating, node: null, state: 'UNASSIGNED', primary: false })).toBe(
+      'Shard 1 · replica · unassigned',
+    );
+    expect(shardHeading({ ...relocating, state: 'STARTED' }, true)).toBe('Shard 1 · primary · closed');
+    expect(shardHeading({ ...relocating, node: null, state: 'UNASSIGNED', primary: false }, true)).toBe(
+      'Shard 1 · replica · unassigned (closed index)',
+    );
+  });
+
+  it('builds allocation explain links for every kind of shard copy', () => {
+    const shard = (overrides: Partial<OverviewShard>): OverviewShard => ({
+      shard: 2,
+      index: 'overflow-test',
+      node: 'n1',
+      state: 'STARTED',
+      primary: false,
+      ...overrides,
+    });
+    // An assigned replica names its node so the explanation is about that copy.
+    expect(allocationExplainParams(shard({}))).toEqual({
+      index: 'overflow-test',
+      shard: '2',
+      primary: 'false',
+      node: 'n1',
+    });
+    // Initializing and relocating replicas are assigned too.
+    expect(allocationExplainParams(shard({ state: 'RELOCATING', relocating_node: 'n2' }))['node']).toBe('n1');
+    expect(allocationExplainParams(shard({ state: 'INITIALIZING' }))['node']).toBe('n1');
+    // A primary is unique: no node needed.
+    expect(allocationExplainParams(shard({ primary: true }))).toEqual({
+      index: 'overflow-test',
+      shard: '2',
+      primary: 'true',
+    });
+    // Unassigned copies leave the node out so Elasticsearch picks the unassigned one.
+    expect(allocationExplainParams(shard({ node: null, state: 'UNASSIGNED' }))).toEqual({
+      index: 'overflow-test',
+      shard: '2',
+      primary: 'false',
+    });
+    expect(allocationExplainParams(shard({ node: 'n1', state: 'UNASSIGNED' }))).not.toHaveProperty('node');
+    expect(allocationExplainParams(shard({ node: undefined, state: 'UNASSIGNED', primary: true }))).toEqual({
+      index: 'overflow-test',
+      shard: '2',
+      primary: 'true',
+    });
   });
 
   it('sorts shards of a node with primaries first', () => {
@@ -291,6 +343,9 @@ describe('overview helpers', () => {
   it('summarizes health and sizes', () => {
     expect(healthTone('YELLOW')).toBe('yellow');
     expect(healthTone(undefined)).toBe('gray');
+    expect(healthLabel('yellow')).toBe('Yellow');
+    expect(healthLabel('GREEN')).toBe('Green');
+    expect(healthLabel(undefined)).toBe('Unknown');
     expect(
       primaryStoreSize([index('a', { size_in_bytes: 10 }), index('b', { size_in_bytes: 5, closed: true })]),
     ).toBe(10);
@@ -328,6 +383,28 @@ describe('overview helpers', () => {
     expect(operationConfirmation('merge', ['a']).tone).toBe('warning');
     expect(operationSuccess('refresh', ['a', 'b', 'c'])).toBe('3 indices refreshed');
     expect(operationSuccess('close', ['products'])).toBe('Index products closed');
+  });
+
+  it('leaves closed indices out of operations that fail on them', () => {
+    const indices = [index('a'), index('b', { closed: true }), index('c', { closed: true })];
+    for (const operation of ['merge', 'refresh', 'flush', 'cache'] as const) {
+      expect(operationTargets(operation, indices)).toEqual({ names: ['a'], skipped: 2 });
+    }
+    for (const operation of ['open', 'close', 'delete'] as const) {
+      expect(operationTargets(operation, indices)).toEqual({ names: ['a', 'b', 'c'], skipped: 0 });
+    }
+    expect(operationTargets('refresh', [index('b', { closed: true })])).toEqual({ names: [], skipped: 1 });
+
+    expect(operationConfirmation('refresh', ['a'], 2).message).toBe(
+      `${OPERATIONS.refresh.message} 2 closed indices are skipped.`,
+    );
+    expect(operationConfirmation('flush', ['a', 'd'], 1)).toMatchObject({
+      title: 'Flush 2 indices?',
+      message: `${OPERATIONS.flush.message} 1 closed index is skipped.`,
+      items: ['a', 'd'],
+    });
+    expect(operationSuccess('refresh', ['a', 'd'], 1)).toBe('2 indices refreshed, 1 closed index skipped');
+    expect(operationSuccess('cache', ['a'], 2)).toBe('Index a cache cleared, 2 closed indices skipped');
   });
 
   it('summarizes the index breakdown briefly with the full text as a title', () => {

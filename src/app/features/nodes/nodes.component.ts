@@ -10,12 +10,14 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { BytesPipe, DurationPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { MeterComponent } from '../../shared/meter.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
+import { createSort } from '../../shared/sort-state';
 import { NodeSortField, NodesFilter, NodesNode } from './nodes.models';
 import {
   attributeEntries,
@@ -72,8 +74,8 @@ export class NodesComponent {
     ingest: true,
     coordinating: true,
   });
-  readonly sortField = signal<NodeSortField>('name');
-  readonly reverse = signal(false);
+  // Resource columns are most useful with the busiest node first.
+  readonly sort = createSort<NodeSortField>('name', { descendingFirst: (field) => field !== 'name' });
   readonly showInternalAttributes = signal(false);
 
   readonly filter = computed<NodesFilter>(() => ({ name: this.name(), ...this.roles() }));
@@ -81,9 +83,14 @@ export class NodesComponent {
   readonly visibleNodes = computed(() =>
     sortNodes(
       (this.nodes() ?? []).filter((node) => matchesNode(node, this.filter())),
-      this.sortField(),
-      this.reverse(),
+      this.sort.field(),
+      this.sort.reverse(),
     ),
+  );
+
+  /** True while the name or role filters hide some nodes. */
+  readonly filtered = computed(
+    () => this.name().trim() !== '' || Object.values(this.roles()).some((enabled) => !enabled),
   );
 
   readonly summary = computed(() => summarizeNodes(this.nodes() ?? []));
@@ -121,7 +128,7 @@ export class NodesComponent {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Error while loading nodes data', error);
+        this.alerts.error('Could not load nodes', error);
       }
     } finally {
       if (sequence === this.loadSequence) {
@@ -139,30 +146,6 @@ export class NodesComponent {
     this.roles.set({ master: true, data: true, ingest: true, coordinating: true });
   }
 
-  sortBy(field: NodeSortField): void {
-    if (this.sortField() === field) {
-      this.reverse.update((value) => !value);
-    } else {
-      this.sortField.set(field);
-      // Resource columns are most useful with the busiest node first.
-      this.reverse.set(field !== 'name');
-    }
-  }
-
-  ariaSort(field: NodeSortField): 'ascending' | 'descending' | 'none' {
-    if (this.sortField() !== field) {
-      return 'none';
-    }
-    return this.reverse() ? 'descending' : 'ascending';
-  }
-
-  sortIcon(field: NodeSortField): string {
-    if (this.sortField() !== field) {
-      return 'bi-arrow-down-up';
-    }
-    return this.reverse() ? 'bi-arrow-down' : 'bi-arrow-up';
-  }
-
   async showStats(node: NodesNode): Promise<void> {
     try {
       const stats = await this.api.post<unknown>('commons/get_node_stats', { node: node.id });
@@ -172,8 +155,9 @@ export class NodesComponent {
     }
   }
 
-  roleBadges = nodeRoles;
-  bytesString = prettyByteString;
+  readonly roleBadges = nodeRoles;
+  readonly bytesString = prettyByteString;
+  readonly pluralize = pluralize;
 
   attributes(node: NodesNode): readonly (readonly [string, string])[] {
     return attributeEntries(node.attributes, this.showInternalAttributes());

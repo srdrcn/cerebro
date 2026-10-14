@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { SnapshotRecord } from './snapshots.models';
 import {
+  aliasesByIndex,
+  aliasesOf,
   badgeClass,
   errorReason,
   failedShards,
@@ -262,6 +264,42 @@ describe('restore targets', () => {
     // Without statuses every known index counts as open.
     expect(restoreTargetState('archive', null, known)).toBe('open');
     expect(restoreTargetState('other', null, known)).toBe('free');
+  });
+
+  it('reads aliases from a _cat/aliases response', () => {
+    const aliases = aliasesByIndex([
+      { alias: 'logs', index: 'logs-1', is_write_index: '-' },
+      { alias: 'logs', index: 'logs-2', is_write_index: 'true' },
+      { alias: 'current', index: 'logs-2', is_write_index: 'false' },
+      { alias: 'orphan' },
+      null,
+    ]);
+    expect([...aliases]).toEqual([
+      ['logs-1', [{ alias: 'logs', write: false }]],
+      [
+        'logs-2',
+        [
+          { alias: 'logs', write: true },
+          { alias: 'current', write: false },
+        ],
+      ],
+    ]);
+    expect(aliasesByIndex({ error: 'nope' }).size).toBe(0);
+  });
+
+  it('lists the aliases of a set of indices once and flags write aliases', () => {
+    const aliases = aliasesByIndex([
+      { alias: 'logs', index: 'logs-1', is_write_index: '-' },
+      { alias: 'logs', index: 'logs-2', is_write_index: 'true' },
+      { alias: 'current', index: 'logs-2', is_write_index: '-' },
+      { alias: 'catalog', index: 'products', is_write_index: '-' },
+    ]);
+    expect(aliasesOf(['logs-1', 'logs-2', 'missing'], aliases)).toEqual([
+      { alias: 'current', write: false },
+      { alias: 'logs', write: true },
+    ]);
+    expect(aliasesOf(['logs-1'], aliases)).toEqual([{ alias: 'logs', write: false }]);
+    expect(aliasesOf([], aliases)).toEqual([]);
   });
 });
 

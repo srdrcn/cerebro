@@ -122,7 +122,7 @@ export class ConnectComponent implements OnInit {
       }
     } catch (error: unknown) {
       this.feedback.set(`Could not reach ${target}.`);
-      this.alerts.error(`Error connecting to [${target}]`, this.errorDetails(error));
+      this.alerts.error(`Could not connect to ${target}`, this.errorDetails(error));
     } finally {
       this.connecting.set(undefined);
     }
@@ -154,7 +154,7 @@ export class ConnectComponent implements OnInit {
       }
     } catch (error: unknown) {
       this.feedback.set(`Could not reach ${target}.`);
-      this.alerts.error(`Error connecting to [${target}]`, this.errorDetails(error));
+      this.alerts.error(`Could not connect to ${target}`, this.errorDetails(error));
     } finally {
       this.connecting.set(undefined);
     }
@@ -197,7 +197,7 @@ export class ConnectComponent implements OnInit {
       const hosts = await this.api.getHosts();
       this.hosts.set([...hosts].sort((left, right) => left.localeCompare(right)));
     } catch (error: unknown) {
-      this.alerts.error('Error while fetching list of known hosts', this.errorDetails(error));
+      this.alerts.error('Could not load the list of known clusters', this.errorDetails(error));
     } finally {
       this.loadingHosts.set(false);
     }

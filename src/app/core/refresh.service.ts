@@ -73,14 +73,6 @@ export class RefreshService {
     this.tickState.update((last) => Math.max(last, Date.now()) + 1);
   }
 
-  getInterval(): number {
-    return this.intervalState();
-  }
-
-  lastUpdate(): number {
-    return this.tickState();
-  }
-
   private initialInterval(): RefreshInterval {
     const stored = Number(readPreference(REFRESH_STORAGE_KEY));
     return readPreference(REFRESH_STORAGE_KEY) !== null && isRefreshInterval(stored)

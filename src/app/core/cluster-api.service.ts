@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { AlertService } from './alert.service';
+import { AlertService, markErrorReported } from './alert.service';
 import {
   CerebroEnvelope,
   ClusterApiError,
@@ -48,6 +48,9 @@ export class ClusterApiService {
           ? (error.error ?? error.message)
           : error;
       this.alerts.error('Error connecting to the server', details);
+      // Callers may still pass this error to AlertService.error(); it will
+      // not raise a second toast for the same failure.
+      markErrorReported(error);
       throw error;
     }
 

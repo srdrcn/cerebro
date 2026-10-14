@@ -16,6 +16,9 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ChecklistOption, IndexChecklistComponent } from './index-checklist.component';
 import { SnapshotRecord, buildRestoreSnapshotPayload, defaultRestoreForm } from './snapshots.models';
 import {
+  IndexAlias,
+  aliasesByIndex,
+  aliasesOf,
   errorReason,
   formatTimestamp,
   indexStatuses,
@@ -60,7 +63,8 @@ export class SnapshotRestoreComponent {
   readonly renamePattern = signal(this.defaults.renamePattern);
   readonly renameReplacement = signal(this.defaults.renameReplacement);
   readonly ignoreUnavailable = signal(this.defaults.ignoreUnavailable);
-  readonly includeAliases = signal(this.defaults.includeAliases);
+  /** Set once the user flips "Restore aliases"; until then it follows the rename. */
+  private readonly aliasesChoice = signal<boolean | null>(null);
   // Elasticsearch defaults to false: restoring the global state replaces
   // persistent cluster settings, templates and pipelines, so opt in explicitly.
   readonly includeGlobalState = signal(false);
@@ -71,6 +75,8 @@ export class SnapshotRestoreComponent {
   readonly failure = signal<string | null>(null);
   /** `index → open|close` from `_cat/indices`, or null until it answered. */
   readonly indexStatus = signal<ReadonlyMap<string, string> | null>(null);
+  /** `index → aliases` from `_cat/aliases`, or null until it answered. */
+  readonly clusterAliases = signal<ReadonlyMap<string, readonly IndexAlias[]> | null>(null);
 
   readonly indexNames = computed(() => {
     const snapshot = this.snapshot();
@@ -97,6 +103,21 @@ export class SnapshotRestoreComponent {
   );
   /** Elasticsearch renames only with a valid pattern *and* a replacement. */
   readonly renaming = computed(() => isRenaming(this.renamePattern(), this.renameReplacement()));
+
+  /**
+   * Restored indices get the aliases they had in the snapshot, also under a
+   * new name: a renamed copy would join the live aliases of the original
+   * (duplicate search hits, or a second write index that fails the restore).
+   * So aliases are left out while renaming, unless the user asks for them.
+   */
+  readonly includeAliases = computed(
+    () => this.aliasesChoice() ?? (this.defaults.includeAliases && !this.renaming()),
+  );
+  /** Aliases were turned off because of the rename, not by the user. */
+  readonly aliasesSkippedForRename = computed(
+    () => this.renaming() && this.aliasesChoice() === null && !this.includeAliases(),
+  );
+  readonly aliasWarning = computed(() => this.renaming() && this.includeAliases());
 
   private readonly existing = computed(() => new Set(this.clusterIndices()));
 
@@ -135,6 +156,16 @@ export class SnapshotRestoreComponent {
     this.targets().filter(({ name, state }) => state === 'closed' && this.selected().has(name)),
   );
 
+  /**
+   * Aliases the selected indices have in the cluster today. The snapshot
+   * keeps the aliases from when it was taken, so this is only a hint.
+   */
+  readonly joinedAliases = computed(() => {
+    const aliases = this.clusterAliases();
+    return aliases ? aliasesOf(this.selectedNames(), aliases) : [];
+  });
+  readonly writeAliases = computed(() => this.joinedAliases().filter((alias) => alias.write));
+
   readonly selectionError = computed(() =>
     this.selectedNames().length === 0 ? 'Select at least one index to restore.' : null,
   );
@@ -170,6 +201,7 @@ export class SnapshotRestoreComponent {
         dialog.showModal();
       }
       void this.loadIndexStatus();
+      void this.loadAliases();
     });
   }
 
@@ -185,6 +217,20 @@ export class SnapshotRestoreComponent {
     } catch {
       // Best effort: the names from the landing call are still used.
     }
+  }
+
+  /** Best effort: names the aliases a renamed copy would join. */
+  async loadAliases(): Promise<void> {
+    try {
+      const rows = await this.api.post<unknown>('cat', { api: 'aliases' });
+      this.clusterAliases.set(aliasesByIndex(rows));
+    } catch {
+      // The warning still explains what happens, without names.
+    }
+  }
+
+  setIncludeAliases(value: boolean): void {
+    this.aliasesChoice.set(value);
   }
 
   /**

@@ -9,10 +9,12 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -32,6 +34,7 @@ import {
   upsertTemplate,
   validateTemplateName,
 } from './templates.models';
+import { registerTemplatesLeaveGuard } from './templates.guard';
 
 interface TemplateRow {
   readonly template: LegacyTemplate;
@@ -57,18 +60,18 @@ const NEW_BASELINE: EditorBaseline = { name: '', body: NEW_TEMPLATE_BODY };
 
 @Component({
   selector: 'cerebro-templates',
-  imports: [CodeEditorComponent, EmptyStateComponent, FormsModule, SearchInputComponent],
+  imports: [CodeEditorComponent, EmptyStateComponent, FormsModule, RouterLink, SearchInputComponent],
   host: { '(window:beforeunload)': 'onBeforeUnload($event)' },
   templateUrl: './templates.component.html',
   styleUrl: './templates.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TemplatesComponent {
+export class TemplatesComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
   private readonly refreshService = inject(RefreshService);
-  private readonly connection = inject(ConnectionService);
+  readonly connection = inject(ConnectionService);
 
   private readonly editor = viewChild(CodeEditorComponent);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
@@ -166,6 +169,9 @@ export class TemplatesComponent {
   private loadSequence = 0;
 
   constructor() {
+    // Asks before in-app navigation drops unsaved editor changes.
+    registerTemplatesLeaveGuard(inject(ActivatedRoute).routeConfig);
+
     effect(() => {
       this.refreshService.tick();
       if (this.connection.connected()) {
@@ -186,7 +192,7 @@ export class TemplatesComponent {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Could not load index templates', error);
+        this.alerts.error('Could not load legacy templates', error);
       }
     } finally {
       if (sequence === this.loadSequence) {
@@ -366,15 +372,12 @@ export class TemplatesComponent {
     }
   }
 
-  private resetEditor(): void {
-    this.selected.set(null);
-    this.name.set(NEW_BASELINE.name);
-    this.body.set(NEW_BASELINE.body);
-    this.baseline.set(NEW_BASELINE);
-    this.nameTouched.set(false);
-  }
-
-  private async confirmDiscard(): Promise<boolean> {
+  /**
+   * Resolves `true` when the editor holds nothing unsaved or the user agreed
+   * to drop it. Used when switching templates and, through the route's
+   * unsaved-changes guard, when leaving the page.
+   */
+  async confirmDiscard(): Promise<boolean> {
     if (!this.dirty()) {
       return true;
     }
@@ -386,6 +389,14 @@ export class TemplatesComponent {
       cancelLabel: 'Keep editing',
       tone: 'danger',
     });
+  }
+
+  private resetEditor(): void {
+    this.selected.set(null);
+    this.name.set(NEW_BASELINE.name);
+    this.body.set(NEW_BASELINE.body);
+    this.baseline.set(NEW_BASELINE);
+    this.nameTouched.set(false);
   }
 
   /** On the single-column layout the editor sits below the list. */

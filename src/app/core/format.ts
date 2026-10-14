@@ -74,6 +74,59 @@ export function formatDuration(milliseconds: number | null | undefined): string 
   return rest > 0 ? `${amount}${label} ${rest}${next[0]}` : `${amount}${label}`;
 }
 
+/** "1 node", "3 nodes", "1,204 shards". */
+export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${formatNumber(count)} ${count === 1 ? singular : plural}`;
+}
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+/** Local "2026-10-14 15:54", or "2026-10-14 15:54:10" with `seconds`. */
+export function formatTimestamp(
+  milliseconds: number | null | undefined,
+  options: { readonly seconds?: boolean } = {},
+): string {
+  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {
+    return '–';
+  }
+  const date = new Date(milliseconds);
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    (options.seconds ? `${time}:${pad(date.getSeconds())}` : time)
+  );
+}
+
+const RELATIVE_UNITS: readonly (readonly [string, number])[] = DURATION_UNITS.slice(0, -1);
+
+/** "just now", "5m ago", "3h ago", "2d ago" (or "in 5m" for clock skew). */
+export function formatRelative(milliseconds: number | null | undefined, now: number): string {
+  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {
+    return '–';
+  }
+  const delta = now - milliseconds;
+  const distance = Math.abs(delta);
+  const unit = RELATIVE_UNITS.find(([, size]) => distance >= size);
+  if (!unit) {
+    return 'just now';
+  }
+  const amount = `${Math.floor(distance / unit[1])}${unit[0]}`;
+  return delta >= 0 ? `${amount} ago` : `in ${amount}`;
+}
+
+/** Upper-cases the first letter of a sentence Elasticsearch wrote in lower case. */
+export function sentence(value: string): string {
+  const text = value.trim();
+  return text ? text.charAt(0).toLocaleUpperCase() + text.slice(1) : '';
+}
+
+/** "number_of_replicas" → "Number of replicas", "cluster.routing" → "Cluster routing". */
+export function humanize(value: string): string {
+  return sentence(value.replace(/[_.-]+/g, ' ').replace(/\s+/g, ' ').toLocaleLowerCase());
+}
+
 export function clampPercent(value: number | null | undefined): number {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return 0;

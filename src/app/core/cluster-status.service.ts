@@ -36,6 +36,11 @@ export class ClusterStatusService {
   readonly reachable = signal(true);
   /** Title of the current page, published by the shell. */
   readonly pageTitle = signal<string | undefined>(undefined);
+  /**
+   * Whether the application shell is shown. Screens without it (connect)
+   * keep the plain "cerebro" title and favicon even while a host is set.
+   */
+  readonly shellActive = signal(false);
 
   readonly displayName = computed(
     () => this.clusterName() ?? this.connection.host() ?? 'No cluster',
@@ -89,15 +94,16 @@ export class ClusterStatusService {
   }
 
   private updateDocument(): void {
-    const status = this.status();
-    const name = this.clusterName();
-    const page = this.pageTitle();
+    const inShell = this.shellActive();
+    const status = inShell ? this.status() : undefined;
+    const name = inShell ? this.clusterName() : undefined;
+    const page = inShell ? this.pageTitle() : undefined;
     const parts = [page, name ? `${name}${status ? ` [${status}]` : ''}` : undefined, 'cerebro'];
     this.document.title = parts.filter(Boolean).join(' · ');
 
     const icon = this.document.querySelector?.<HTMLLinkElement>('link[rel~="icon"]');
     if (icon) {
-      const color = status ?? (this.connection.connected() ? 'black' : undefined);
+      const color = status ?? (inShell && this.connection.connected() ? 'black' : undefined);
       icon.type = 'image/png';
       icon.href = color ? `img/${color}-favicon.png` : 'img/favicon.png';
     }

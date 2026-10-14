@@ -688,6 +688,13 @@
 
 /* Pane width, not viewport width: the panes are narrow both just above the
    two-column breakpoint and on phones. */
+/* Three request tabs leave less room for the body actions. */
+@container pane (max-width: 640px) {
+  .pane-actions__label--long {
+    display: none;
+  }
+}
+
 @container pane (max-width: 500px) {
   .pane-actions__label,
   .response-meta__size {
@@ -783,5 +790,149 @@
 
   .quick-starts {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Saved requests                                                      */
+/* ------------------------------------------------------------------ */
+
+.save-button {
+  flex: none;
+}
+
+/* The saved request loaded in the editor, right under the request bar. */
+.saved-context {
+  flex: none;
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  padding: 3px 4px 3px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: var(--text-sm);
+  animation: fade-in 160ms ease;
+}
+
+.saved-context.is-dirty {
+  border-color: color-mix(in srgb, var(--yellow) 40%, var(--border));
+  background: var(--yellow-soft);
+}
+
+.saved-context__icon {
+  flex: none;
+  color: var(--accent-text);
+}
+
+.saved-context.is-dirty .saved-context__icon {
+  color: var(--yellow-text);
+}
+
+.saved-context__label {
+  flex: none;
+  color: var(--text-3);
+}
+
+.saved-context__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-context__state {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.saved-context__dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--yellow-text);
+  font-weight: 560;
+}
+
+.saved-context__dirty .dot {
+  width: 6px;
+  height: 6px;
+  box-shadow: none;
+}
+
+.saved-context__clean {
+  color: var(--text-3);
+}
+
+.saved-context__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .saved-context__label,
+  .saved-context__clean,
+  .saved-context__action-label {
+    display: none;
+  }
+}
+
+/* Three tabs and the body actions share the pane header. */
+@container pane (max-width: 540px) {
+  .pane-tabs > button > .bi {
+    display: none;
+  }
+}
+
+@container pane (max-width: 420px) {
+  .pane-tabs {
+    margin-left: calc(-1 * var(--space-3));
+  }
+
+  .pane-tabs > button {
+    gap: 5px;
+    padding: 0 8px;
+  }
+
+  .pane-tabs .badge {
+    padding: 0 5px;
+  }
+
+  .pane-header {
+    gap: var(--space-2);
+    padding-right: var(--space-2);
+  }
+}
+
+@media (max-width: 560px) {
+  .saved-context__dirty-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .save-button {
+    width: var(--control-height);
+    padding: 0;
+  }
+
+  .save-button__label {
+    display: none;
+  }
+
+  .saved-context__dirty {
+    font-size: var(--text-xs);
   }
 }

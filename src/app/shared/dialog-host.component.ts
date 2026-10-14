@@ -63,7 +63,7 @@ import { CodeEditorComponent } from './code-editor.component';
             </div>
           }
           <footer class="dialog__footer">
-            <button type="button" class="btn" (click)="dialogs.close()">
+            <button #cancelButton type="button" class="btn" (click)="dialogs.close()">
               {{ dialog.cancelLabel }}
             </button>
             <button
@@ -174,6 +174,7 @@ export class DialogHostComponent {
   private readonly alerts = inject(AlertService);
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   private readonly confirmButton = viewChild<ElementRef<HTMLButtonElement>>('confirmButton');
+  private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>('cancelButton');
 
   readonly state = this.dialogs.state;
   readonly visibleItems = computed(() => {
@@ -200,9 +201,12 @@ export class DialogHostComponent {
     });
 
     effect(() => {
-      // Focus the primary action of confirmations for quick keyboard use.
-      if (this.state()?.kind === 'confirm') {
-        this.confirmButton()?.nativeElement.focus();
+      // Focus the primary action of confirmations for quick keyboard use,
+      // except destructive ones: there a stray Enter must not delete anything.
+      const state = this.state();
+      if (state?.kind === 'confirm') {
+        const target = state.tone === 'danger' ? this.cancelButton() : this.confirmButton();
+        target?.nativeElement.focus();
       }
     });
   }

@@ -47,14 +47,22 @@ describe('SnapshotRestoreComponent', () => {
     });
   });
 
-  /** Routes `cat` (index statuses) and `snapshots/restore` calls. */
-  function api(options: { cat?: unknown; catError?: Error; restore?: unknown; restoreError?: Error } = {}): void {
-    post.mockImplementation(async (path: string) => {
+  /** Routes `cat` (index statuses, aliases) and `snapshots/restore` calls. */
+  function api(
+    options: {
+      cat?: unknown;
+      catError?: Error;
+      aliases?: unknown;
+      restore?: unknown;
+      restoreError?: Error;
+    } = {},
+  ): void {
+    post.mockImplementation(async (path: string, body?: { api?: string }) => {
       if (path === 'cat') {
         if (options.catError) {
           throw options.catError;
         }
-        return options.cat ?? [];
+        return (body?.api === 'aliases' ? options.aliases : options.cat) ?? [];
       }
       if (options.restoreError) {
         throw options.restoreError;
@@ -126,10 +134,60 @@ describe('SnapshotRestoreComponent', () => {
       renamePattern: '(.+)',
       renameReplacement: 'restored-$1',
       ignoreUnavailable: true,
-      includeAliases: true,
+      // Renamed copies must not join the aliases of the originals.
+      includeAliases: false,
       includeGlobalState: true,
       indices: ['logs-a', 'logs-b'],
     });
+  });
+
+  it('leaves aliases out while renaming unless the user asks for them', async () => {
+    api({
+      aliases: [
+        { alias: 'logs', index: 'logs-a', is_write_index: '-' },
+        { alias: 'logs', index: 'logs-b', is_write_index: 'true' },
+        { alias: 'sales', index: 'orders', is_write_index: '-' },
+      ],
+    });
+    const fixture = await render(['logs-a', 'logs-b', 'orders']);
+    const component = fixture.componentInstance;
+    const element: HTMLElement = fixture.nativeElement;
+    const aliasSwitch = () => element.querySelector<HTMLInputElement>('input[name=includeAliases]');
+
+    expect(post).toHaveBeenCalledWith('cat', { api: 'aliases' });
+    expect(component.includeAliases()).toBe(true);
+    expect(component.aliasWarning()).toBe(false);
+
+    component.usePrefix();
+    await fixture.whenStable();
+    expect(component.includeAliases()).toBe(false);
+    expect(component.aliasesSkippedForRename()).toBe(true);
+    expect(aliasSwitch()?.checked).toBe(false);
+    expect(element.textContent).toContain('Off while renaming');
+
+    // Clearing the rename brings the default back.
+    component.clearRename();
+    expect(component.includeAliases()).toBe(true);
+
+    // An explicit choice sticks, and renaming with aliases is called out.
+    component.usePrefix();
+    component.setIncludeAliases(true);
+    component.selected.set(new Set(['logs-a', 'logs-b']));
+    await fixture.whenStable();
+    expect(component.aliasWarning()).toBe(true);
+    expect(component.joinedAliases()).toEqual([{ alias: 'logs', write: true }]);
+    const callout = element.querySelector('.restore-side .callout-danger');
+    expect(callout?.textContent).toContain('join the aliases of the original indices');
+    expect(callout?.querySelector('.tag')?.textContent).toContain('logs');
+
+    component.renamePattern.set('');
+    component.renamePattern.set('(.+)');
+    expect(component.includeAliases()).toBe(true);
+
+    (callout?.querySelector('.link-button') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(component.includeAliases()).toBe(false);
+    expect(element.querySelector('.restore-side .callout-danger')).toBeNull();
   });
 
   it('treats closed indices as replaced, not as conflicts', async () => {

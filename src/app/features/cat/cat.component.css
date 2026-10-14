@@ -34,7 +34,9 @@
 }
 
 /* Compact two-line items: all sixteen endpoints fit a 900px tall viewport
-   without a scrollbar of their own (the list still scrolls on shorter ones). */
+   without a scrollbar of their own (the list still scrolls on shorter ones).
+   Only the padding shrinks: the icon keeps the design system size, which the
+   two text lines are taller than anyway. */
 .cat-api {
   gap: 10px;
   padding: 4px var(--space-4);
@@ -48,15 +50,6 @@
 .cat-api:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 2px var(--accent);
-}
-
-.cat-api .list-item__icon {
-  width: 28px;
-  height: 28px;
-  font-size: 13.5px;
-  transition:
-    background var(--duration-fast) ease,
-    color var(--duration-fast) ease;
 }
 
 .cat-api .list-item__title,

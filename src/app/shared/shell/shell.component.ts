@@ -2,7 +2,10 @@ import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -25,12 +28,17 @@ import { LogoComponent } from '../logo.component';
 import { MenuComponent } from '../menu.component';
 
 const COLLAPSED_STORAGE_KEY = 'cerebro.sidebar-collapsed';
+/** Below this width the sidebar becomes an off-canvas drawer (see shell.css). */
+const DRAWER_MEDIA_QUERY = '(max-width: 900px)';
 
 @Component({
   selector: 'cerebro-shell',
   imports: [RouterLink, RouterLinkActive, LogoComponent, MenuComponent],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.css',
+  host: {
+    '(document:keydown.escape)': 'onEscape($event)',
+  },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ShellComponent {
@@ -38,7 +46,11 @@ export class ShellComponent {
   private readonly document = inject(DOCUMENT);
   private readonly clipboard = inject(ClipboardService);
   private readonly alerts = inject(AlertService);
+  private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
+  private readonly sidebar = viewChild.required<ElementRef<HTMLElement>>('sidebar');
+  private readonly menuButton = viewChild.required<ElementRef<HTMLButtonElement>>('menuButton');
 
   readonly connection = inject(ConnectionService);
   readonly status = inject(ClusterStatusService);
@@ -49,6 +61,8 @@ export class ShellComponent {
   readonly navigation = NAVIGATION;
   readonly collapsed = signal(readPreference(COLLAPSED_STORAGE_KEY) === 'true');
   readonly drawerOpen = signal(false);
+  /** True while the sidebar is rendered as an off-canvas drawer. */
+  readonly drawerLayout = signal(false);
   readonly version =
     this.document.querySelector<HTMLMetaElement>('meta[name="cerebro-version"]')?.content ?? '';
   readonly csrfToken =
@@ -71,6 +85,14 @@ export class ShellComponent {
       return `dot-${status}`;
     }
     return this.status.reachable() ? 'dot-gray dot-pulse' : 'dot-red';
+  });
+
+  readonly healthLabel = computed(() => {
+    const status = this.status.status();
+    if (status) {
+      return `health ${status}`;
+    }
+    return this.status.reachable() ? 'connecting' : 'unreachable';
   });
 
   readonly healthBadgeClass = computed(() => {
@@ -109,6 +131,13 @@ export class ShellComponent {
   });
 
   constructor() {
+    this.status.shellActive.set(true);
+    this.destroyRef.onDestroy(() => {
+      // The connect screen has no shell; do not leave this page's title behind.
+      this.status.shellActive.set(false);
+      this.status.pageTitle.set(undefined);
+    });
+
     effect(() => {
       this.status.pageTitle.set(this.currentPage()?.label);
     });
@@ -117,6 +146,7 @@ export class ShellComponent {
       this.url();
       this.drawerOpen.set(false);
     });
+    this.watchDrawerLayout();
   }
 
   toggleCollapsed(): void {
@@ -128,12 +158,73 @@ export class ShellComponent {
     this.main().nativeElement.focus();
   }
 
-  closeDrawer(): void {
+  openDrawer(): void {
+    this.drawerOpen.set(true);
+    this.afterRender(() => {
+      const sidebar = this.sidebar().nativeElement;
+      const target =
+        sidebar.querySelector<HTMLElement>('.nav-link[aria-current="page"]') ??
+        sidebar.querySelector<HTMLElement>('.nav-link');
+      target?.focus();
+    });
+  }
+
+  /** Closes the drawer; `restoreFocus` returns focus to the menu button. */
+  closeDrawer(restoreFocus = false): void {
+    if (!this.drawerOpen()) {
+      return;
+    }
     this.drawerOpen.set(false);
+    if (restoreFocus) {
+      this.afterRender(() => this.menuButton().nativeElement.focus());
+    }
+  }
+
+  /** Navigating from the drawer moves focus to the new page. */
+  onNavigate(): void {
+    if (this.drawerOpen()) {
+      this.closeDrawer();
+      this.afterRender(() => this.focusMain());
+    }
+  }
+
+  onEscape(event: Event): void {
+    // A menu or dialog open inside the drawer handles its own Escape first.
+    if (!this.drawerOpen() || event.defaultPrevented) {
+      return;
+    }
+    const target = event.target;
+    if (target instanceof Element && target.closest('dialog[open], [popover]')) {
+      return;
+    }
+    event.preventDefault();
+    this.closeDrawer(true);
   }
 
   intervalLabel(interval: number): string {
     return refreshIntervalLabel(interval);
+  }
+
+  /** Runs `focus` once the inert attributes of the new drawer state are rendered. */
+  private afterRender(focus: () => void): void {
+    afterNextRender({ write: focus }, { injector: this.injector });
+  }
+
+  private watchDrawerLayout(): void {
+    const media = this.document.defaultView?.matchMedia?.(DRAWER_MEDIA_QUERY);
+    if (!media) {
+      return;
+    }
+    const update = () => {
+      this.drawerLayout.set(media.matches);
+      if (!media.matches) {
+        // Never leave the page inert after resizing past the breakpoint.
+        this.drawerOpen.set(false);
+      }
+    };
+    update();
+    media.addEventListener('change', update);
+    this.destroyRef.onDestroy(() => media.removeEventListener('change', update));
   }
 
   async copyHost(): Promise<void> {

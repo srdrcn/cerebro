@@ -10,6 +10,7 @@ import {
   untracked,
   viewChildren,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
@@ -272,7 +273,12 @@ export class SnapshotsComponent {
   private snapshotSequence = 0;
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
-  /** `?repository=` from links such as the Repositories page, used once. */
+  /** Pending URL updates of our own: their echoes are not user navigation. */
+  private urlWrites = 0;
+  /**
+   * `?repository=` from a link, a bookmark or a hash pasted into the address
+   * bar; it wins over the current repository on the next landing load.
+   */
   private requestedRepository = this.route.snapshot.queryParamMap.get('repository') ?? '';
 
   constructor() {
@@ -291,6 +297,25 @@ export class SnapshotsComponent {
             this.applySnapshots(pending.repository, pending.list);
           }
         });
+      }
+    });
+    // The page stays mounted when only the query changes, so follow
+    // `?repository=` while it is open.
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
+      const requested = params.get('repository');
+      if (this.urlWrites > 0 || !requested || requested === untracked(this.repository)) {
+        return;
+      }
+      if (untracked(this.repositories).includes(requested)) {
+        this.requestedRepository = '';
+        this.selectRepository(requested);
+        return;
+      }
+      // Not loaded yet, or unknown (maybe registered since): the next
+      // landing load opens it, or puts the repository it shows in the URL.
+      this.requestedRepository = requested;
+      if (untracked(this.landing) !== undefined) {
+        void this.load();
       }
     });
     inject(DestroyRef).onDestroy(() => {
@@ -394,6 +419,7 @@ export class SnapshotsComponent {
     if (this.destroyed || this.route.snapshot.queryParamMap.get('repository') === repository) {
       return;
     }
+    this.urlWrites++;
     this.router
       .navigate([], {
         relativeTo: this.route,
@@ -401,7 +427,8 @@ export class SnapshotsComponent {
         queryParamsHandling: 'merge',
         replaceUrl: true,
       })
-      .catch(() => false);
+      .catch(() => false)
+      .finally(() => this.urlWrites--);
   }
 
   retrySnapshots(): void {
@@ -580,8 +607,8 @@ export class SnapshotsComponent {
 
   private pickRepository(repositories: readonly string[]): string {
     const candidates = [
-      this.repository(),
       this.requestedRepository,
+      this.repository(),
       readPreference(REPOSITORY_PREFERENCE) ?? '',
     ];
     this.requestedRepository = '';

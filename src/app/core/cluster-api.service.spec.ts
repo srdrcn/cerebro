@@ -7,7 +7,7 @@ import {
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { AlertService } from './alert.service';
+import { AlertService, isErrorReported } from './alert.service';
 import { ClusterApiService } from './cluster-api.service';
 import { ConnectionService } from './connection.service';
 
@@ -107,6 +107,16 @@ describe('ClusterApiService', () => {
         unauthorized: true,
       },
     });
+  });
+
+  it('reports a network failure once and marks the error as reported', async () => {
+    const result = service.post('nodes');
+    http.expectOne('nodes').error(new ProgressEvent('error'));
+
+    const error = await result.catch((caught: unknown) => caught);
+    expect(alertError).toHaveBeenCalledTimes(1);
+    expect(alertError).toHaveBeenCalledWith('Error connecting to the server', expect.anything());
+    expect(isErrorReported(error)).toBe(true);
   });
 
   it('performs a full relative login redirect for inner 303', async () => {

@@ -1,4 +1,7 @@
+import { isInternalAttribute } from '../../core/node-attributes';
 import { NodeSortField, NodesFilter, NodesNode } from './nodes.models';
+
+export { isInternalAttribute };
 
 export function matchesNode(node: NodesNode, filter: NodesFilter): boolean {
   const matchesName = node.name
@@ -55,13 +58,7 @@ export function sortNodes(
   });
 }
 
-/** Attributes Elasticsearch adds on its own; hidden unless asked for. */
-const INTERNAL_ATTRIBUTE_PREFIXES = ['ml.', 'xpack.', 'transform.'] as const;
-
-export function isInternalAttribute(name: string): boolean {
-  return INTERNAL_ATTRIBUTE_PREFIXES.some((prefix) => name.startsWith(prefix));
-}
-
+/** Built-in attributes (`ml.*`, `xpack.*`, …) are hidden unless asked for. */
 export function attributeEntries(
   attributes: Readonly<Record<string, unknown>>,
   includeInternal = false,

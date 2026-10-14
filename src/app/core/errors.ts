@@ -1,0 +1,49 @@
+import { isRecord } from './json';
+
+const MAX_DEPTH = 6;
+
+/**
+ * The most specific human readable reason of a failed request, or `null`.
+ *
+ * Accepts what pages catch: a `ClusterApiError` (reason read from its `body`),
+ * an Elasticsearch error body (`{ error: { root_cause, caused_by, reason } }`),
+ * a plain string or an `Error`. The root cause is preferred over generic
+ * wrappers such as "failed to create repository", and parser positions such
+ * as "[1:40] " are removed.
+ */
+export function elasticsearchReason(error: unknown): string | null {
+  return reasonOf(error, 0);
+}
+
+/** "Could not delete index: no such index [logs]", or just the action. */
+export function failureMessage(action: string, error: unknown): string {
+  const reason = elasticsearchReason(error);
+  return reason ? `${action}: ${reason}` : action;
+}
+
+function reasonOf(value: unknown, depth: number): string | null {
+  if (depth > MAX_DEPTH || value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    return value.replace(/^\[\d+:\d+\]\s*/, '').trim() || null;
+  }
+  if (!isRecord(value) && !(value instanceof Error)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const rootCause = record['root_cause'];
+  for (const candidate of [
+    Array.isArray(rootCause) ? rootCause[0] : undefined,
+    record['caused_by'],
+    record['reason'],
+    record['error'],
+    record['body'],
+  ]) {
+    const reason = reasonOf(candidate, depth + 1);
+    if (reason) {
+      return reason;
+    }
+  }
+  return value instanceof Error && value.message ? value.message : null;
+}

@@ -5,7 +5,6 @@ import {
   ElementRef,
   inject,
   input,
-  output,
   signal,
   viewChild,
 } from '@angular/core';
@@ -16,7 +15,9 @@ let nextMenuId = 0;
  * Dropdown menu rendered in the browser's top layer (Popover API), so it is
  * never clipped by scrolling tables or cards. Project the trigger content
  * with the `trigger` attribute and menu entries as `.menu-item` buttons or
- * links; clicking an entry closes the menu.
+ * links; clicking an entry closes the menu. Entries without an explicit
+ * role get `role="menuitem"` when the menu opens (use `menuitemradio` /
+ * `menuitemcheckbox` with `aria-checked` for options).
  *
  *   <cerebro-menu label="Index actions" align="end">
  *     <i trigger class="bi bi-three-dots"></i>
@@ -70,7 +71,6 @@ export class MenuComponent {
   readonly disabled = input(false);
   readonly tooltip = input(true);
   readonly minWidth = input(200);
-  readonly opened = output<void>();
 
   readonly id = `cerebro-menu-${nextMenuId++}`;
   readonly open = signal(false);
@@ -98,6 +98,7 @@ export class MenuComponent {
 
   onBeforeToggle(event: Event): void {
     if ((event as ToggleEvent).newState === 'open') {
+      this.applyRoles();
       this.placeBelowTrigger();
     }
   }
@@ -109,7 +110,6 @@ export class MenuComponent {
       this.adjustToViewport();
       this.attachViewportListeners();
       this.items()[0]?.focus({ preventScroll: true });
-      this.opened.emit();
     } else {
       this.detachViewportListeners();
       const active = document.activeElement;
@@ -159,9 +159,23 @@ export class MenuComponent {
   private items(): HTMLElement[] {
     return Array.from(
       this.panel().nativeElement.querySelectorAll<HTMLElement>(
-        '.menu-item:not(:disabled), [role="menuitem"]:not(:disabled), [role="menuitemradio"]:not(:disabled)',
+        '.menu-item:not(:disabled), [role="menuitem"]:not(:disabled), [role="menuitemradio"]:not(:disabled), [role="menuitemcheckbox"]:not(:disabled)',
       ),
     );
+  }
+
+  /**
+   * A `role="menu"` container may only own menu items, so give projected
+   * entries their roles (content can change between openings).
+   */
+  private applyRoles(): void {
+    const panel = this.panel().nativeElement;
+    for (const item of Array.from(panel.querySelectorAll<HTMLElement>('.menu-item:not([role])'))) {
+      item.setAttribute('role', 'menuitem');
+    }
+    for (const separator of Array.from(panel.querySelectorAll<HTMLElement>('.menu-separator:not([role])'))) {
+      separator.setAttribute('role', 'separator');
+    }
   }
 
   private placeBelowTrigger(): void {

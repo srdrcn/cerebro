@@ -43,10 +43,12 @@ import {
   OPERATIONS,
   UNASSIGNED,
   activeShardPercent,
+  allocationExplainParams,
   canReceiveShard,
   describeShard,
   filterOverviewIndices,
   hasShardActivity,
+  healthLabel,
   healthTone,
   indexBreakdown,
   indexSummary,
@@ -58,11 +60,14 @@ import {
   normalizeOverview,
   operationConfirmation,
   operationSuccess,
+  operationTargets,
   pageOfIndex,
   primaryStoreSize,
+  requiresOpenIndex,
   revealFlags,
   revealIndexFilter,
   shardChipClass,
+  shardHeading,
   shardMapLayout,
   shardState,
   shardsOn,
@@ -77,8 +82,12 @@ interface ShardView {
   readonly shard: OverviewShard;
   readonly chipClass: string;
   readonly label: string;
-  /** Assigned shards of open indices open a menu (stats, relocation). */
+  /** Short heading of the chip menu: "Shard 0 · replica · unassigned". */
+  readonly heading: string;
+  /** Assigned shards of open indices also offer stats and relocation. */
   readonly interactive: boolean;
+  /** Query params of the allocation explain link (every chip offers one). */
+  readonly explainQuery: Readonly<Record<string, string | null>>;
   readonly started: boolean;
   readonly selected: boolean;
 }
@@ -240,6 +249,11 @@ export class OverviewComponent {
     })),
   );
 
+  /** Filtered open indices: merge, refresh, flush and cache skip closed ones. */
+  readonly openFilteredCount = computed(
+    () => this.filteredIndices().filter((index) => !index.closed).length,
+  );
+
   readonly fillerColumn = computed(() => this.pageIndices().length < this.pageSize());
 
   readonly tableWidth = computed(() => {
@@ -259,6 +273,7 @@ export class OverviewComponent {
     const indices = this.pageIndices();
     const selected = this.selected();
     const names = this.nodeNames();
+    const host = this.connection.hostQuery();
     return this.nodes().map((node) => ({
       node,
       roles: nodeRoleIcons(node),
@@ -266,7 +281,7 @@ export class OverviewComponent {
       load: loadPercent(node),
       cells: indices.map((index) => ({
         index,
-        shards: this.shardViews(index, node.id, selected, names),
+        shards: this.shardViews(index, node.id, selected, names, host),
         target: !this.relocating() && canReceiveShard(selected, index, node.id),
       })),
     }));
@@ -274,9 +289,10 @@ export class OverviewComponent {
 
   readonly unassignedCells = computed<readonly CellView[]>(() => {
     const names = this.nodeNames();
+    const host = this.connection.hostQuery();
     return this.pageIndices().map((index) => ({
       index,
-      shards: this.shardViews(index, UNASSIGNED, undefined, names),
+      shards: this.shardViews(index, UNASSIGNED, undefined, names, host),
       target: false,
     }));
   });
@@ -305,6 +321,7 @@ export class OverviewComponent {
   });
   readonly primarySize = computed(() => primaryStoreSize(this.data()?.indices ?? []));
   readonly health = computed(() => healthTone(this.data()?.status));
+  readonly healthLabel = computed(() => healthLabel(this.data()?.status));
   readonly indicesMeta = computed(() => {
     const data = this.data();
     return indexBreakdown(data?.total_indices ?? 0, data?.closed_indices ?? 0, data?.special_indices ?? 0);
@@ -522,20 +539,25 @@ export class OverviewComponent {
   }
 
   async operateOnFiltered(operation: IndexOperation): Promise<void> {
-    const names = this.filteredIndices().map((index) => index.name);
-    if (names.length === 0) {
+    const filtered = this.filteredIndices();
+    if (filtered.length === 0) {
       this.alerts.warn('No index matches the current filters');
       return;
     }
-    if (!(await this.dialogs.confirm(operationConfirmation(operation, names)))) {
+    const definition = OPERATIONS[operation];
+    const { names, skipped } = operationTargets(operation, filtered);
+    if (names.length === 0) {
+      this.alerts.warn(`${definition.label} only works on open indices, and every filtered index is closed`);
       return;
     }
-    const definition = OPERATIONS[operation];
+    if (!(await this.dialogs.confirm(operationConfirmation(operation, names, skipped)))) {
+      return;
+    }
     const done = await this.run(
       'bulk',
       definition.path,
       indicesPayload(names),
-      operationSuccess(operation, names),
+      operationSuccess(operation, names, skipped),
       `${definition.label} failed`,
     );
     this.keepClosedVisible(operation, done);
@@ -639,8 +661,19 @@ export class OverviewComponent {
 
   // ---- Template helpers --------------------------------------------------
 
+  /** Bulk menu hint: how many filtered indices an open-only operation reaches. */
+  bulkHint(operation: IndexOperation): string {
+    const open = this.openFilteredCount();
+    return requiresOpenIndex(operation) && open < this.filteredIndices().length ? `${open} open` : '';
+  }
+
   indexSettingsQuery(index: OverviewIndex): Record<string, string | null> {
     return { ...this.connection.hostQuery(), index: index.name };
+  }
+
+  /** `/index_detail` takes the same `?index=` parameter as `/index_settings`. */
+  indexDetailQuery(index: OverviewIndex): Record<string, string | null> {
+    return this.indexSettingsQuery(index);
   }
 
   bytes(value: number | null | undefined): string {
@@ -652,6 +685,7 @@ export class OverviewComponent {
     nodeId: string,
     selected: OverviewShard | undefined,
     names: ReadonlyMap<string, string>,
+    host: Readonly<Record<string, string | null>>,
   ): ShardView[] {
     return shardsOn(index, nodeId).map((shard, position) => {
       const state = shardState(shard);
@@ -661,7 +695,9 @@ export class OverviewComponent {
         shard,
         chipClass: shardChipClass(shard, index.closed, isSelected),
         label: describeShard(shard, names, index.closed),
+        heading: shardHeading(shard, index.closed),
         interactive: !index.closed && nodeId !== UNASSIGNED && Boolean(shard.node),
+        explainQuery: { ...host, ...allocationExplainParams(shard) },
         started: !index.closed && state === 'started',
         selected: isSelected,
       };

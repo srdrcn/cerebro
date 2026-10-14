@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { AlertService } from './alert.service';
+import { AlertService, isErrorReported, markErrorReported } from './alert.service';
 
 describe('AlertService', () => {
   afterEach(() => {
@@ -48,6 +48,23 @@ describe('AlertService', () => {
 
     expect(service.alerts().map((alert) => alert.id)).toEqual([pinned]);
     expect(service.alerts().some((alert) => alert.id === transient)).toBe(false);
+  });
+
+  it('does not show a second toast for an error that was already reported', () => {
+    const service = TestBed.inject(AlertService);
+    const networkFailure = new Error('connection refused');
+    service.error('Error connecting to the server', 'connection refused', 0);
+    markErrorReported(networkFailure);
+
+    expect(service.error('Could not load nodes', networkFailure, 0)).toBe('');
+    service.error('Could not load nodes', new Error('other failure'), 0);
+
+    expect(isErrorReported(networkFailure)).toBe(true);
+    expect(isErrorReported('a string')).toBe(false);
+    expect(service.alerts().map((alert) => alert.message)).toEqual([
+      'Could not load nodes',
+      'Error connecting to the server',
+    ]);
   });
 
   it('renders response values as plain JSON text', () => {

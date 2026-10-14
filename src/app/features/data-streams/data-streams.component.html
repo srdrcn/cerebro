@@ -1,0 +1,314 @@
+<section class="page" aria-labelledby="data-streams-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="data-streams-title" class="page-title">Data streams</h1>
+      <p class="page-subtitle">Append-only time series data, written to the newest of a stream's rolling backing indices.</p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn" routerLink="/index_templates" [queryParams]="connection.hostQuery()">
+        <i class="bi bi-layers" aria-hidden="true"></i> Index templates
+      </a>
+    </div>
+  </header>
+
+  @if (streams(); as all) {
+    @if (all.length === 0) {
+      <div class="card">
+        <cerebro-empty
+          icon="bi-water"
+          heading="No data streams yet"
+          text="A data stream is created automatically when you index a document with a @timestamp into a name that matches an index template with data_stream enabled. Elasticsearch then rolls the data over into new backing indices for you."
+        >
+          <a class="btn btn-sm btn-primary" routerLink="/index_templates" [queryParams]="connection.hostQuery()">
+            <i class="bi bi-layers" aria-hidden="true"></i> Set up an index template
+          </a>
+        </cerebro-empty>
+      </div>
+    } @else {
+      <div class="stat-grid ds-stats">
+        <div class="stat">
+          <div class="stat__label"><i class="bi bi-water" aria-hidden="true"></i> Data streams</div>
+          <div class="stat__value">{{ summary().streams | num }}</div>
+          <div class="stat__meta">
+            @if (summary().unhealthy > 0) {
+              <span class="text-warning">{{ summary().unhealthy }} not green</span>
+            } @else {
+              all green
+            }
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat__label"><i class="bi bi-stack" aria-hidden="true"></i> Backing indices</div>
+          <div class="stat__value">{{ summary().backingIndices | num }}</div>
+          <div class="stat__meta">
+            avg {{ summary().streams > 0 ? (summary().backingIndices / summary().streams).toFixed(1) : '0' }} per stream
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat__label"><i class="bi bi-device-hdd" aria-hidden="true"></i> Total size</div>
+          <div class="stat__value">{{ summary().sizeBytes | bytes }}</div>
+          <div class="stat__meta">{{ statsMissing() ? 'stats unavailable' : 'incl. replicas' }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat__label"><i class="bi bi-clock-history" aria-hidden="true"></i> Latest event</div>
+          <div class="stat__value" [title]="absolute(summary().lastEvent)">{{ summary().lastEvent === null ? '–' : relative(summary().lastEvent) }}</div>
+          <div class="stat__meta" title="Newest @timestamp across the streams">newest &#64;timestamp</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header ds-toolbar">
+          <div class="toolbar">
+            <cerebro-search
+              [(value)]="query"
+              placeholder="Filter by stream, template or policy"
+              ariaLabel="Filter data streams by name, index template or lifecycle policy"
+            />
+            <label class="switch ds-switch">
+              <input type="checkbox" [ngModel]="showInternal()" (ngModelChange)="showInternal.set($event)" />
+              Show hidden and system streams
+              <span class="count">{{ internalCount() }}</span>
+            </label>
+          </div>
+          <span class="count-label">
+            <strong>{{ rows().length }}</strong> of {{ scopedRows().length }} {{ scopedRows().length === 1 ? 'stream' : 'streams' }}
+          </span>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table ds-table" [attr.aria-busy]="loading() ? true : null">
+            <thead>
+              <tr>
+                <th scope="col" class="ds-expand-col"><span class="visually-hidden">Expand</span></th>
+                @for (column of [columns.name, columns.health, columns.indices]; track column.field) {
+                  <th scope="col" [class.num]="column.numeric" [attr.aria-sort]="ariaSort(column.field)">
+                    <button type="button" class="sort-button" [class.is-active]="sortField() === column.field" (click)="sortBy(column.field)">
+                      {{ column.label }} <i class="bi" [class]="'bi ' + sortIcon(column.field)" aria-hidden="true"></i>
+                    </button>
+                  </th>
+                }
+                <th scope="col">Index template</th>
+                <th scope="col">Lifecycle</th>
+                @for (column of [columns.size, columns.lastEvent]; track column.field) {
+                  <th scope="col" [class.num]="column.numeric" [attr.aria-sort]="ariaSort(column.field)">
+                    <button type="button" class="sort-button" [class.is-active]="sortField() === column.field" (click)="sortBy(column.field)">
+                      {{ column.label }} <i class="bi" [class]="'bi ' + sortIcon(column.field)" aria-hidden="true"></i>
+                    </button>
+                  </th>
+                }
+                <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.name; let i = $index) {
+                @let open = isExpanded(row.name);
+                @let action = busyAction(row.name);
+                <tr [class.is-selected]="open" [class.is-muted]="action === 'delete'">
+                  <td class="ds-expand-col">
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-icon btn-sm ds-expand"
+                      [class.is-open]="open"
+                      [attr.aria-expanded]="open"
+                      [attr.aria-controls]="open ? 'ds-detail-' + i : null"
+                      [attr.aria-label]="(open ? 'Hide' : 'Show') + ' the backing indices of ' + row.name"
+                      [title]="open ? 'Hide backing indices' : 'Show backing indices'"
+                      (click)="toggle(row.name)"
+                    >
+                      <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
+                  </td>
+                  <th scope="row" class="ds-name-cell">
+                    <div class="ds-name">
+                      <button
+                        type="button"
+                        class="ds-name__button truncate"
+                        [title]="row.name"
+                        [attr.aria-expanded]="open"
+                        [attr.aria-controls]="open ? 'ds-detail-' + i : null"
+                        (click)="toggle(row.name)"
+                      >{{ row.name }}</button>
+                      @if (row.hidden) {
+                        <span class="badge badge-outline" title="Hidden: left out of wildcard expressions">hidden</span>
+                      }
+                      @if (row.system) {
+                        <span class="badge badge-purple">system</span>
+                      }
+                      @if (row.replicated) {
+                        <span class="badge badge-blue" title="Replicated from a remote cluster (CCR follower)">replicated</span>
+                      }
+                    </div>
+                    <div class="ds-sub truncate" [title]="row.writeIndex ? 'Write index ' + row.writeIndex : 'No backing index'">
+                      @if (row.writeIndex; as writeIndex) {
+                        <span class="ds-sub__label">writes to</span> <span class="mono">{{ shortName(writeIndex, row.name) }}</span>
+                      } @else {
+                        no backing index
+                      }
+                    </div>
+                  </th>
+                  <td>
+                    <span class="badge" [class]="'badge badge-' + (row.health === 'gray' ? 'outline' : row.health)" [title]="healthTitle(row)">
+                      <span class="dot" [class]="'dot dot-' + row.health" aria-hidden="true"></span>
+                      {{ row.healthLabel }}
+                    </span>
+                  </td>
+                  <td class="num">
+                    <div class="ds-count">{{ row.indexCount | num }}</div>
+                    <div class="ds-count-sub" [title]="'Generation ' + row.generation + ': number of times the stream was created or rolled over'">generation {{ row.generation | num }}</div>
+                  </td>
+                  <td>
+                    @if (row.template; as template) {
+                      <a
+                        class="ds-link mono"
+                        routerLink="/index_templates"
+                        [queryParams]="{ ...connection.hostQuery(), name: template }"
+                        [title]="'Open index template ' + template"
+                      >{{ template }}</a>
+                    } @else {
+                      <span class="text-muted">–</span>
+                    }
+                  </td>
+                  <td>
+                    @switch (row.lifecycle.kind) {
+                      @case ('ilm') {
+                        @if (row.lifecycle.kind === 'ilm') {
+                          <a
+                            class="ds-lifecycle"
+                            routerLink="/ilm"
+                            [queryParams]="{ ...connection.hostQuery(), policy: row.lifecycle.policy }"
+                            [title]="'Open lifecycle policy ' + row.lifecycle.policy"
+                          >
+                            <span class="badge badge-accent">ILM</span>
+                            <span class="mono truncate">{{ row.lifecycle.policy }}</span>
+                          </a>
+                        }
+                      }
+                      @case ('dsl') {
+                        @if (row.lifecycle.kind === 'dsl') {
+                          <span class="ds-lifecycle" title="Managed by the built-in data stream lifecycle">
+                            <span class="badge badge-blue">Lifecycle</span>
+                            <span class="text-secondary">{{ row.lifecycle.retention ? 'keep ' + row.lifecycle.retention : 'keep forever' }}</span>
+                          </span>
+                        }
+                      }
+                      @default {
+                        <span class="text-muted" title="Data is kept until you delete it">None</span>
+                      }
+                    }
+                  </td>
+                  <td class="num ds-nowrap">{{ row.sizeBytes | bytes }}</td>
+                  <td>
+                    @if (row.lastEvent !== null) {
+                      <span class="ds-time" [title]="absolute(row.lastEvent)">{{ relative(row.lastEvent) }}</span>
+                    } @else {
+                      <span class="text-muted" title="No documents yet">–</span>
+                    }
+                  </td>
+                  <td class="actions">
+                    @if (action) {
+                      <span class="spinner" role="status" [attr.aria-label]="(action === 'delete' ? 'Deleting ' : 'Rolling over ') + row.name"></span>
+                    } @else {
+                      <cerebro-menu [label]="'Actions for ' + row.name" align="end" [minWidth]="220">
+                        <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+                        <div class="menu-label">{{ row.name }}</div>
+                        <button type="button" class="menu-item" (click)="rollover(row)" [disabled]="row.replicated">
+                          <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Roll over
+                        </button>
+                        <button type="button" class="menu-item" (click)="viewJson(row)">
+                          <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                        </button>
+                        <div class="menu-separator"></div>
+                        <button type="button" class="menu-item menu-item--danger" (click)="remove(row)">
+                          <i class="bi bi-trash" aria-hidden="true"></i> Delete data stream
+                        </button>
+                      </cerebro-menu>
+                    }
+                  </td>
+                </tr>
+                @if (open) {
+                  <tr class="ds-detail-row">
+                    <td colspan="9" [id]="'ds-detail-' + i">
+                      <div class="ds-detail">
+                        <div class="ds-detail__head">
+                          <span class="ds-detail__title">Backing indices</span>
+                          <span class="text-muted text-sm">oldest first · new documents go to the write index</span>
+                          <span class="spacer"></span>
+                          <span class="ds-detail__fact text-sm"><span class="text-muted">Timestamp field</span> <span class="mono">{{ row.timestampField }}</span></span>
+                        </div>
+                        <ol class="ds-indices">
+                          @for (index of row.backingIndices; track index.name) {
+                            <li class="ds-index" [class.is-write]="index.write">
+                              <span class="ds-index__position tabular" aria-hidden="true">{{ index.position }}</span>
+                              <span class="ds-index__body min-w-0">
+                                <a
+                                  class="ds-link mono truncate"
+                                  routerLink="/index_detail"
+                                  [queryParams]="{ ...connection.hostQuery(), index: index.name }"
+                                  [title]="'Open index ' + index.name"
+                                >{{ index.name }}</a>
+                                <span class="ds-index__meta">
+                                  @if (index.managedBy) {
+                                    {{ index.managedBy }}
+                                  }
+                                  @if (index.policy) {
+                                    · <span class="mono">{{ index.policy }}</span>
+                                  }
+                                </span>
+                              </span>
+                              @if (index.write) {
+                                <span class="badge badge-accent"><i class="bi bi-pencil-square" aria-hidden="true"></i> write index</span>
+                              }
+                            </li>
+                          } @empty {
+                            <li class="ds-index text-muted">No backing indices reported.</li>
+                          }
+                        </ol>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              } @empty {
+                <tr>
+                  <td colspan="9">
+                    @if (linkedMissing() && missingMessage(); as missing) {
+                      <cerebro-empty icon="bi-water" [heading]="missing.heading" [text]="missing.text">
+                        <button type="button" class="btn btn-sm" (click)="resetFilters()">Show all data streams</button>
+                      </cerebro-empty>
+                    } @else if (query().trim()) {
+                      <cerebro-empty icon="bi-funnel" heading="No matching data streams" text="No stream name, template or lifecycle policy matches this filter.">
+                        <button type="button" class="btn btn-sm" (click)="resetFilters()">Clear filter</button>
+                      </cerebro-empty>
+                    } @else {
+                      <cerebro-empty icon="bi-eye-slash" heading="Only hidden or system streams" text="This cluster only has hidden or system data streams.">
+                        <button type="button" class="btn btn-sm" (click)="showInternal.set(true)">Show them</button>
+                      </cerebro-empty>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+  } @else if (failed()) {
+    <div class="card">
+      <cerebro-empty
+        icon="bi-exclamation-triangle"
+        heading="Could not load data streams"
+        text="The cluster did not answer the data stream request. Data streams need Elasticsearch 7.9 or later."
+      >
+        <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
+    </div>
+  } @else {
+    <div class="stat-grid ds-stats" aria-hidden="true">
+      @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+        <div class="stat"><span class="skeleton" style="height: 62px"></span></div>
+      }
+    </div>
+    <div class="card loading-block" role="status"><span class="spinner"></span> Loading data streams…</div>
+  }
+</section>

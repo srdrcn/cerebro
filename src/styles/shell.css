@@ -69,8 +69,13 @@ cerebro-root {
   color: var(--accent-text);
 }
 
-.sidebar__collapse {
+.sidebar__collapse,
+.sidebar__close {
   margin-left: auto;
+}
+
+.sidebar__close {
+  display: none;
 }
 
 .sidebar > cerebro-menu {
@@ -338,8 +343,11 @@ cerebro-root {
 }
 
 .breadcrumb a {
+  min-width: 0;
+  display: inline-block;
   overflow: hidden;
-  color: var(--text-3);
+  color: var(--text-2);
+  line-height: 24px;
   text-overflow: ellipsis;
 }
 
@@ -684,16 +692,23 @@ cerebro-root {
 }
 
 .palette__item-label {
-  min-width: 0;
-  flex: 1;
+  max-width: 70%;
+  flex: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* The hint gives way first, so the page name stays readable on phones. */
 .palette__item-hint {
+  min-width: 0;
+  margin-left: auto;
+  padding-left: 12px;
+  overflow: hidden;
   color: var(--text-3);
   font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .palette__footer {
@@ -733,17 +748,23 @@ cerebro-root {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Hidden (not just off-screen) while closed so its links leave the tab order. */
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
     width: min(290px, 86vw);
     box-shadow: var(--shadow-xl);
+    visibility: hidden;
     transform: translateX(-105%);
-    transition: transform 240ms var(--ease-out);
+    transition:
+      transform 240ms var(--ease-out),
+      visibility 0s linear 240ms;
   }
 
   .shell.is-drawer-open .sidebar {
+    visibility: visible;
     transform: none;
+    transition: transform 240ms var(--ease-out);
   }
 
   /* The rail never applies to the off-canvas drawer. */
@@ -792,6 +813,10 @@ cerebro-root {
 
   .sidebar__collapse {
     display: none;
+  }
+
+  .sidebar__close {
+    display: inline-flex;
   }
 
   .shell__backdrop {

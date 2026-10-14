@@ -1,0 +1,1094 @@
+<section class="page" aria-labelledby="index-detail-title">
+  <header class="page-header">
+    <div class="page-header__text min-w-0">
+      @if (index()) {
+        <p class="page-header__eyebrow"><i class="bi bi-database" aria-hidden="true"></i> Index details</p>
+        <h1 id="index-detail-title" class="page-title index-title">
+          <span class="truncate" [title]="name()">{{ name() }}</span>
+          @if (detail()) {
+            <span class="index-badges">
+              @switch (health()) {
+                @case ('green') {
+                  <span class="badge badge-lg badge-green"><span class="dot dot-green" aria-hidden="true"></span> Green</span>
+                }
+                @case ('yellow') {
+                  <span class="badge badge-lg badge-yellow"><span class="dot dot-yellow" aria-hidden="true"></span> Yellow</span>
+                }
+                @case ('red') {
+                  <span class="badge badge-lg badge-red"><span class="dot dot-red" aria-hidden="true"></span> Red</span>
+                }
+              }
+              @switch (settings()?.openState) {
+                @case ('closed') {
+                  <span class="badge badge-lg badge-outline"><i class="bi bi-lock" aria-hidden="true"></i> Closed</span>
+                }
+                @case ('open') {
+                  <span class="badge badge-lg badge-outline"><i class="bi bi-unlock" aria-hidden="true"></i> Open</span>
+                }
+              }
+            </span>
+          }
+        </h1>
+        @if (settings(); as meta) {
+          <div class="index-meta">
+            @if (detail()?.name !== index()) {
+              <span class="tag" [title]="index() + ' resolves to ' + name()">
+                <span class="tag-key">via alias</span><span class="mono">{{ index() }}</span>
+              </span>
+            }
+            @if (meta.createdAt) {
+              <span class="tag" [title]="meta.createdAt.toISOString()">
+                <span class="tag-key">created</span><span>{{ age(meta.createdAt) }}</span>
+              </span>
+            }
+            @if (dataStream(); as stream) {
+              <a class="tag tag-link" routerLink="/data_streams" [queryParams]="linkParams({ name: stream })" [title]="'Backing index of data stream ' + stream">
+                <span class="tag-key">data stream</span><span class="mono">{{ stream }}</span>
+              </a>
+            }
+            @if (meta.lifecyclePolicy) {
+              <span class="tag"><span class="tag-key">policy</span><span class="mono">{{ meta.lifecyclePolicy }}</span></span>
+            }
+            @if (meta.hidden) {
+              <span class="tag"><i class="bi bi-eye-slash" aria-hidden="true"></i><span>hidden</span></span>
+            }
+            @for (block of meta.blocks; track block) {
+              <span class="badge badge-yellow"><i class="bi bi-slash-circle" aria-hidden="true"></i> {{ block }}</span>
+            }
+          </div>
+        }
+      } @else {
+        <h1 id="index-detail-title" class="page-title">Index details</h1>
+        <p class="page-subtitle">Settings, mappings, statistics, shards and aliases of a single index.</p>
+      }
+    </div>
+    <div class="page-header__actions">
+      <div class="index-picker">
+        <label class="visually-hidden" for="index-detail-picker">Index</label>
+        <i class="bi bi-database index-picker__icon" aria-hidden="true"></i>
+        <select
+          #picker
+          id="index-detail-picker"
+          class="select"
+          [disabled]="indices() === undefined && !index()"
+          (change)="pick(picker)"
+        >
+          <option value="" [selected]="!index()">
+            {{ indicesFailed() ? 'Indices unavailable' : indices() === undefined ? 'Loading indices…' : 'Choose an index…' }}
+          </option>
+          @if (options().extra) {
+            <option [value]="options().extra" [selected]="true">{{ options().extra }}</option>
+          }
+          @if (options().regular.length > 0) {
+            <optgroup label="Indices">
+              @for (option of options().regular; track option) {
+                <option [value]="option" [selected]="option === index()">{{ option }}</option>
+              }
+            </optgroup>
+          }
+          @if (options().system.length > 0) {
+            <optgroup label="System and hidden indices">
+              @for (option of options().system; track option) {
+                <option [value]="option" [selected]="option === index()">{{ option }}</option>
+              }
+            </optgroup>
+          }
+        </select>
+      </div>
+      @if (detail(); as current) {
+        <a class="btn" routerLink="/index_settings" [queryParams]="linkParams({ index: current.name })">
+          <i class="bi bi-sliders" aria-hidden="true"></i> Edit settings
+        </a>
+        <cerebro-menu label="Index actions" triggerClass="btn" align="end" [tooltip]="false" [minWidth]="220">
+          <span trigger class="row">
+            @if (busy()) {
+              <span class="spinner" aria-hidden="true"></span>
+            }
+            Actions <i class="bi bi-chevron-down" aria-hidden="true"></i>
+          </span>
+          <div class="menu-label">{{ current.name }}</div>
+          <a class="menu-item" role="menuitem" routerLink="/index_settings" [queryParams]="linkParams({ index: current.name })">
+            <i class="bi bi-sliders" aria-hidden="true"></i> Edit settings
+          </a>
+          <div class="menu-separator" role="separator"></div>
+          @for (operation of maintenance; track operation) {
+            <button
+              type="button"
+              class="menu-item"
+              role="menuitem"
+              [disabled]="busy() !== null || settings()?.closed"
+              (click)="run(operation)"
+            >
+              <i class="bi" [class]="'bi ' + operations[operation].icon" aria-hidden="true"></i>
+              {{ operations[operation].label }}
+            </button>
+          }
+          <div class="menu-separator" role="separator"></div>
+          @if (settings()?.closed) {
+            <button type="button" class="menu-item" role="menuitem" [disabled]="busy() !== null" (click)="run('open')">
+              <i class="bi bi-unlock" aria-hidden="true"></i> Open index
+            </button>
+          } @else {
+            <button type="button" class="menu-item" role="menuitem" [disabled]="busy() !== null" (click)="run('close')">
+              <i class="bi bi-lock" aria-hidden="true"></i> Close index
+            </button>
+          }
+          <button type="button" class="menu-item menu-item--danger" role="menuitem" [disabled]="busy() !== null" (click)="run('delete')">
+            <i class="bi bi-trash3" aria-hidden="true"></i> Delete index
+          </button>
+        </cerebro-menu>
+      }
+    </div>
+  </header>
+
+  @switch (state()) {
+    @case ('idle') {
+      <div class="card">
+        @if (indicesFailed()) {
+          <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load indices" text="The cluster did not answer the request for its index list.">
+            <button type="button" class="btn btn-sm" (click)="retryIndices()">
+              <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+            </button>
+          </cerebro-empty>
+        } @else if (indices(); as all) {
+          @if (all.length === 0) {
+            <cerebro-empty icon="bi-database" heading="No indices yet" text="This cluster does not have any index to inspect.">
+              <a class="btn btn-sm btn-primary" routerLink="/create" [queryParams]="connection.hostQuery()">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Create index
+              </a>
+            </cerebro-empty>
+          } @else {
+            <cerebro-empty
+              icon="bi-search"
+              heading="Choose an index"
+              text="Pick an index in the list above to see its settings, mappings, statistics, shards and aliases, or jump straight to one of these."
+            >
+              <div class="quick-picks">
+                @for (option of quickPicks(); track option) {
+                  <button type="button" class="chip-toggle mono" (click)="navigate(option)">{{ option }}</button>
+                }
+              </div>
+            </cerebro-empty>
+          }
+        } @else {
+          <div class="loading-block" role="status"><span class="spinner"></span> Loading indices…</div>
+        }
+      </div>
+    }
+    @case ('loading') {
+      <div class="stat-grid detail-stats" aria-hidden="true">
+        @for (placeholder of [1, 2, 3, 4, 5]; track placeholder) {
+          <div class="stat"><span class="skeleton" style="height: 62px"></span></div>
+        }
+      </div>
+      <div class="card loading-block" role="status"><span class="spinner"></span> Loading {{ index() }}…</div>
+    }
+    @case ('missing') {
+      <div class="card">
+        <cerebro-empty icon="bi-question-circle" heading="Index not found" [text]="'No index or alias named “' + index() + '” exists on this cluster.'">
+          <button type="button" class="btn btn-sm" (click)="focusPicker()">Choose another index</button>
+          <button type="button" class="btn btn-sm btn-ghost" (click)="retry()">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+          </button>
+        </cerebro-empty>
+      </div>
+    }
+    @case ('multiple') {
+      <div class="card">
+        <cerebro-empty
+          icon="bi-diagram-3"
+          [heading]="'“' + index() + '” points to ' + candidates().length + ' indices'"
+          text="Index details are shown one index at a time. Choose the index to open."
+        >
+          <div class="quick-picks">
+            @for (option of candidates(); track option) {
+              <button type="button" class="chip-toggle mono" (click)="navigate(option)">{{ option }}</button>
+            }
+          </div>
+        </cerebro-empty>
+      </div>
+    }
+    @case ('error') {
+      <div class="card">
+        <cerebro-empty
+          icon="bi-exclamation-triangle"
+          heading="Could not load the index"
+          [text]="loadError() ?? 'The cluster did not answer the request for “' + index() + '”.'"
+        >
+          <button type="button" class="btn btn-sm" (click)="retry()">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+          </button>
+        </cerebro-empty>
+      </div>
+    }
+    @case ('ready') {
+      @if (detail(); as current) {
+        @if (summary(); as totals) {
+          <div class="stat-grid detail-stats">
+            <div class="stat">
+              <div class="stat__label"><i class="bi bi-files" aria-hidden="true"></i> Documents</div>
+              <div class="stat__value">{{ totals.docs | num }}</div>
+              <div class="stat__meta">{{ totals.estimated ? 'Counted from primary shards' : 'In primary shards' }}</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label"><i class="bi bi-file-earmark-x" aria-hidden="true"></i> Deleted docs</div>
+              <div class="stat__value">{{ totals.deletedDocs | num }}</div>
+              <div class="stat__meta">
+                @if (totals.deletedDocs === null) {
+                  {{ settings()?.closed ? 'Unavailable while closed' : 'Statistics unavailable' }}
+                } @else if (totals.deletedDocs > 0 && totals.docs !== null) {
+                  {{ ((totals.deletedDocs / (totals.docs + totals.deletedDocs)) * 100).toFixed(1) }}% awaiting merge
+                } @else {
+                  Nothing to reclaim
+                }
+              </div>
+            </div>
+            <div class="stat">
+              <div class="stat__label"><i class="bi bi-hdd" aria-hidden="true"></i> Primary size</div>
+              <div class="stat__value">{{ totals.primarySize | bytes }}</div>
+              <div class="stat__meta">{{ totals.totalSize | bytes }} with replicas</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i> Shards</div>
+              <div class="stat__value">
+                {{ totals.primaries ?? '–' }}<span class="stat__unit">pri</span>
+                <span class="stat__times" aria-hidden="true">×</span>
+                {{ totals.replicas ?? '–' }}<span class="stat__unit">{{ totals.replicas === 1 ? 'replica' : 'replicas' }}</span>
+              </div>
+              <div class="stat__meta">
+                {{ pluralize(shardSummary().total, 'copy', 'copies') }}
+                @if (shardSummary().unassigned > 0) {
+                  · <span [class.text-danger]="shardSummary().unassignedPrimaries > 0" [class.text-warning]="shardSummary().unassignedPrimaries === 0">{{ shardSummary().unassigned }} unassigned</span>
+                } @else if (shardSummary().total > 0) {
+                  · all assigned
+                }
+              </div>
+            </div>
+            <div class="stat">
+              <div class="stat__label"><i class="bi bi-layers" aria-hidden="true"></i> Segments</div>
+              <div class="stat__value">{{ totals.segments | num }}</div>
+              <div class="stat__meta">{{ totals.segments === null ? (settings()?.closed ? 'Unavailable while closed' : 'Statistics unavailable') : 'Across all copies' }}</div>
+            </div>
+          </div>
+        }
+
+        @if (settings()?.closed) {
+          <div class="callout callout-info detail-callout" role="note">
+            <i class="bi bi-lock" aria-hidden="true"></i>
+            <div>
+              <strong>This index is closed.</strong> Reads, writes and statistics are unavailable until it is opened again.
+            </div>
+            <button type="button" class="btn btn-sm detail-callout__action" [class.is-loading]="busy() === 'open'" [disabled]="busy() !== null" (click)="run('open')">
+              <i class="bi bi-unlock" aria-hidden="true"></i> Open index
+            </button>
+          </div>
+        }
+
+        <div class="card detail-card">
+          <div #tablist class="tabs detail-tabs" role="tablist" aria-label="Index sections">
+            @for (definition of tabs; track definition.key) {
+              <button
+                type="button"
+                role="tab"
+                [id]="'index-tab-' + definition.key"
+                [attr.aria-controls]="tab() === definition.key ? 'index-panel-' + definition.key : null"
+                [attr.aria-selected]="tab() === definition.key"
+                [attr.tabindex]="tab() === definition.key ? 0 : -1"
+                (click)="selectTab(definition.key)"
+                (keydown)="onTabKeydown($event)"
+              >
+                <i class="bi" [class]="'bi ' + definition.icon" aria-hidden="true"></i>
+                <span>{{ definition.label }}</span>
+                @if (tabCount(definition.key); as count) {
+                  <span
+                    class="badge tabular"
+                    [class.badge-yellow]="definition.key === 'shards' && problemShards() > 0 && shardSummary().unassignedPrimaries === 0"
+                    [class.badge-red]="definition.key === 'shards' && shardSummary().unassignedPrimaries > 0"
+                  >{{ count }}</span>
+                }
+                @if (definition.key === 'lifecycle') {
+                  @if (lifecycle(); as life) {
+                    @if (life.kind === 'managed') {
+                      @if (life.error) {
+                        <span class="badge badge-red" title="The lifecycle policy stopped on an error">error</span>
+                      } @else {
+                        <span class="dot dot-green" title="Managed by a lifecycle policy" aria-hidden="true"></span>
+                        <span class="visually-hidden">(managed)</span>
+                      }
+                    }
+                  }
+                }
+              </button>
+            }
+          </div>
+
+          <div
+            class="tab-panel"
+            role="tabpanel"
+            [id]="'index-panel-' + tab()"
+            [attr.aria-labelledby]="'index-tab-' + tab()"
+            [attr.aria-busy]="loading()"
+            tabindex="0"
+          >
+            @switch (tab()) {
+              <!-- ================= Overview ================= -->
+              @case ('overview') {
+                @if (settings(); as meta) {
+                  <div class="overview-grid">
+                    <section class="panel-section" aria-labelledby="key-settings-title">
+                      <div class="panel-section__header">
+                        <h2 id="key-settings-title" class="section-title">Key settings</h2>
+                        <button type="button" class="link-button text-sm" (click)="selectTab('settings')">All settings</button>
+                      </div>
+                      <dl class="kv-list">
+                        <div class="kv-row">
+                          <dt>Primary shards</dt>
+                          <dd class="tabular">{{ meta.primaries ?? '–' }}</dd>
+                        </div>
+                        <div class="kv-row">
+                          <dt>Replicas</dt>
+                          <dd class="tabular">
+                            {{ meta.replicas ?? '–' }}
+                            @if (meta.autoExpandReplicas) {
+                              <span class="tag" title="index.auto_expand_replicas"><span class="tag-key">auto-expand</span><span>{{ meta.autoExpandReplicas }}</span></span>
+                            }
+                          </dd>
+                        </div>
+                        <div class="kv-row">
+                          <dt>Refresh interval</dt>
+                          <dd>
+                            <span class="mono">{{ meta.refreshInterval }}</span>
+                            @if (meta.refreshIntervalIsDefault) {
+                              <span class="text-muted text-sm">default</span>
+                            }
+                          </dd>
+                        </div>
+                        <div class="kv-row">
+                          <dt>Created</dt>
+                          <dd>
+                            @if (meta.createdAt) {
+                              {{ meta.createdAt | date: 'medium' }} <span class="text-muted text-sm">· {{ age(meta.createdAt) }}</span>
+                            } @else {
+                              –
+                            }
+                          </dd>
+                        </div>
+                        <div class="kv-row">
+                          <dt>UUID</dt>
+                          <dd class="kv-copy">
+                            <span class="mono truncate" [title]="meta.uuid ?? ''">{{ meta.uuid ?? '–' }}</span>
+                            @if (meta.uuid) {
+                              <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Copy UUID" title="Copy UUID" (click)="copy(meta.uuid, 'UUID')">
+                                <i class="bi bi-clipboard" aria-hidden="true"></i>
+                              </button>
+                            }
+                          </dd>
+                        </div>
+                        <div class="kv-row">
+                          <dt>Version created</dt>
+                          <dd>
+                            @if (meta.versionCreated) {
+                              Elasticsearch {{ meta.versionCreated }}
+                            } @else if (meta.versionCreatedRaw) {
+                              <span title="Index format id (Elasticsearch 8.11 and later)">Index version <span class="mono">{{ meta.versionCreatedRaw }}</span></span>
+                            } @else {
+                              –
+                            }
+                          </dd>
+                        </div>
+                        <div class="kv-row">
+                          <dt>Lifecycle policy</dt>
+                          <dd>
+                            @if (meta.lifecyclePolicy) {
+                              <a class="mono" routerLink="/ilm" [queryParams]="linkParams({ policy: meta.lifecyclePolicy })">{{ meta.lifecyclePolicy }}</a>
+                              <button type="button" class="link-button text-sm" (click)="selectTab('lifecycle')">status</button>
+                            } @else {
+                              <span class="text-muted">Not managed</span>
+                            }
+                          </dd>
+                        </div>
+                        @if (meta.tierPreference) {
+                          <div class="kv-row">
+                            <dt>Tier preference</dt>
+                            <dd class="mono">{{ meta.tierPreference }}</dd>
+                          </div>
+                        }
+                        @if (meta.defaultPipeline) {
+                          <div class="kv-row">
+                            <dt>Default pipeline</dt>
+                            <dd><a class="mono" routerLink="/pipelines" [queryParams]="linkParams({ pipeline: meta.defaultPipeline })">{{ meta.defaultPipeline }}</a></dd>
+                          </div>
+                        }
+                      </dl>
+                    </section>
+
+                    <div class="overview-side">
+                      <section class="panel-section" aria-labelledby="shard-health-title">
+                        <div class="panel-section__header">
+                          <h2 id="shard-health-title" class="section-title">Shard health</h2>
+                          <button type="button" class="link-button text-sm" (click)="selectTab('shards')">View shards</button>
+                        </div>
+                        @if (shardSummary(); as shardInfo) {
+                          @if (shardInfo.total === 0) {
+                            <p class="text-muted">No shard information is available for this index.</p>
+                          } @else {
+                            <div class="shard-legend">
+                              <span class="legend-item"><span class="dot dot-green" aria-hidden="true"></span> {{ shardInfo.started }} started</span>
+                              @if (shardInfo.initializing > 0) {
+                                <span class="legend-item"><span class="legend-swatch is-initializing" aria-hidden="true"></span> {{ shardInfo.initializing }} initializing</span>
+                              }
+                              @if (shardInfo.relocating > 0) {
+                                <span class="legend-item"><span class="legend-swatch is-relocating" aria-hidden="true"></span> {{ shardInfo.relocating }} relocating</span>
+                              }
+                              @if (shardInfo.unassigned > 0) {
+                                <span class="legend-item" [class.text-danger]="shardInfo.unassignedPrimaries > 0">
+                                  <span class="dot" [class.dot-red]="shardInfo.unassignedPrimaries > 0" [class.dot-yellow]="shardInfo.unassignedPrimaries === 0" aria-hidden="true"></span>
+                                  {{ shardInfo.unassigned }} unassigned
+                                </span>
+                              }
+                            </div>
+                            <ul class="shard-groups" aria-label="Shard copies by shard number">
+                              @for (group of shardInfo.groups; track group.shard) {
+                                <li class="shard-group">
+                                  <span class="shard-group__label">Shard {{ group.shard }}</span>
+                                  <span class="shard-group__chips">
+                                    @for (copy of group.copies; track copy.key) {
+                                      @let chipLabel = (copy.primary ? 'Primary' : 'Replica') + ' of shard ' + copy.shard + ' · ' + copy.stateLabel + (copy.node ? ' on ' + copy.node : '');
+                                      <span
+                                        role="img"
+                                        [class]="'shard-chip is-' + copy.state + (copy.primary ? ' is-primary' : ' is-replica')"
+                                        [title]="chipLabel"
+                                        [attr.aria-label]="chipLabel"
+                                      >{{ copy.primary ? 'P' : 'R' }}</span>
+                                    }
+                                  </span>
+                                </li>
+                              }
+                            </ul>
+                            @if (shardInfo.nodes.length > 0) {
+                              <ul class="node-spread" aria-label="Shard copies per node">
+                                @for (node of shardInfo.nodes; track node.name) {
+                                  <li>
+                                    <i class="bi bi-hdd" aria-hidden="true"></i>
+                                    <span class="truncate">{{ node.name }}</span>
+                                    <span class="text-muted text-sm tabular">
+                                      {{ pluralize(node.primaries, 'primary', 'primaries') }} · {{ pluralize(node.replicas, 'replica') }}
+                                    </span>
+                                  </li>
+                                }
+                              </ul>
+                            }
+                          }
+                        }
+                      </section>
+
+                      <section class="panel-section" aria-labelledby="alias-summary-title">
+                        <div class="panel-section__header">
+                          <h2 id="alias-summary-title" class="section-title">Aliases</h2>
+                          @if (aliases().length > 0) {
+                            <button type="button" class="link-button text-sm" (click)="selectTab('aliases')">Details</button>
+                          }
+                        </div>
+                        @if (aliases().length > 0) {
+                          <div class="row-wrap">
+                            @for (alias of aliases(); track alias.name) {
+                              <span class="tag alias-tag" [title]="alias.filter ? 'Filtered alias' : alias.name">
+                                <i class="bi bi-link-45deg" aria-hidden="true"></i>
+                                <span class="mono">{{ alias.name }}</span>
+                                @if (alias.filter) {
+                                  <i class="bi bi-funnel" aria-hidden="true"></i><span class="visually-hidden">(filtered)</span>
+                                }
+                                @if (alias.isWriteIndex) {
+                                  <i class="bi bi-pencil" aria-hidden="true"></i><span class="visually-hidden">(write index)</span>
+                                }
+                              </span>
+                            }
+                          </div>
+                        } @else {
+                          <p class="text-muted">No alias points to this index.
+                            <a routerLink="/aliases" [queryParams]="connection.hostQuery()">Manage aliases</a>
+                          </p>
+                        }
+                      </section>
+                    </div>
+                  </div>
+                }
+              }
+
+              <!-- ================= Mappings ================= -->
+              @case ('mappings') {
+                <div class="panel-toolbar">
+                  <cerebro-search [(value)]="mappingQuery" [small]="true" placeholder="Filter fields by name or type" ariaLabel="Filter mapped fields" />
+                  <div class="row-wrap mapping-flags">
+                    @if (mapping().dynamic !== null) {
+                      <span class="tag" title="mappings.dynamic"><span class="tag-key">dynamic</span><span>{{ mapping().dynamic }}</span></span>
+                    }
+                    @if (!mapping().sourceEnabled) {
+                      <span class="badge badge-yellow">_source disabled</span>
+                    }
+                    @if (mapping().dataStreamTimestamp) {
+                      <span class="badge badge-blue">data stream</span>
+                    }
+                    @if (mapping().routingRequired) {
+                      <span class="badge">routing required</span>
+                    }
+                    @if (mapping().dynamicTemplates > 0) {
+                      <span class="tag"><span class="tag-key">dynamic templates</span><span>{{ mapping().dynamicTemplates }}</span></span>
+                    }
+                  </div>
+                  <span class="spacer"></span>
+                  <span class="count-label">
+                    @if (mappingQuery().trim()) {
+                      <strong>{{ visibleFields().length }}</strong> matching {{ visibleFields().length === 1 ? 'entry' : 'entries' }}
+                    } @else {
+                      <strong>{{ leafFieldCount() }}</strong> {{ leafFieldCount() === 1 ? 'field' : 'fields' }}
+                    }
+                  </span>
+                  <button type="button" class="btn btn-sm" (click)="showMappingsJson()">
+                    <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                  </button>
+                </div>
+                @if (mapping().fields.length === 0) {
+                  <cerebro-empty icon="bi-diagram-3" heading="No fields mapped yet" text="Fields appear here once documents are indexed or the mapping is updated." [compact]="true" />
+                } @else {
+                  <div class="table-wrap">
+                    <table class="data-table data-table--compact mapping-table">
+                      <caption class="visually-hidden">Mapped fields of {{ current.name }}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Field</th>
+                          <th scope="col">Type</th>
+                          <th scope="col">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (field of visibleFields(); track field.path) {
+                          <tr [class.is-multi]="field.multiField">
+                            <th scope="row" class="field-cell">
+                              <span class="field-name" [style.padding-left.px]="fieldIndent(field) * 20" [title]="field.path">
+                                <i
+                                  class="bi field-icon"
+                                  [class.bi-braces]="field.type === 'object'"
+                                  [class.bi-diagram-2]="field.type === 'nested'"
+                                  [class.bi-arrow-return-right]="field.multiField"
+                                  [class.bi-lightning]="field.runtime"
+                                  [class.bi-dot]="!field.multiField && !field.runtime && !isObjectType(field.type)"
+                                  [class.bi-box]="field.type === 'flattened'"
+                                  aria-hidden="true"
+                                ></i>
+                                <span class="mono">{{ mappingQuery().trim() ? field.path : field.name }}</span>
+                              </span>
+                            </th>
+                            <td>
+                              <span class="badge" [class]="'badge badge-' + typeTone(field.type)">{{ field.type }}</span>
+                            </td>
+                            <td class="field-details">
+                              @if (field.multiField) {
+                                <span class="tag"><span>multi-field</span></span>
+                              }
+                              @if (field.runtime) {
+                                <span class="tag"><span>runtime</span></span>
+                              }
+                              @for (detail of field.details; track detail.key) {
+                                <span class="tag" [title]="detail.key + ': ' + detail.value">
+                                  <span class="tag-key">{{ detail.key }}</span><span class="mono">{{ detail.value }}</span>
+                                </span>
+                              }
+                            </td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td colspan="3">
+                              <cerebro-empty icon="bi-funnel" heading="No matching fields" text="No field name, type or option matches the filter." [compact]="true">
+                                <button type="button" class="btn btn-sm" (click)="mappingQuery.set('')">Clear filter</button>
+                              </cerebro-empty>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              }
+
+              <!-- ================= Settings ================= -->
+              @case ('settings') {
+                <div class="panel-toolbar">
+                  <cerebro-search [(value)]="settingsQuery" [small]="true" placeholder="Filter settings" ariaLabel="Filter settings by name or value" />
+                  <span class="spacer"></span>
+                  <span class="count-label">
+                    @if (settingsQuery().trim()) {
+                      <strong>{{ visibleSettings().length }}</strong> of {{ flatSettings().length }} settings
+                    } @else {
+                      <strong>{{ flatSettings().length }}</strong> settings
+                    }
+                  </span>
+                  <a class="btn btn-sm" routerLink="/index_settings" [queryParams]="linkParams({ index: current.name })">
+                    <i class="bi bi-pencil" aria-hidden="true"></i> Edit
+                  </a>
+                  <button type="button" class="btn btn-sm" (click)="showSettingsJson()">
+                    <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                  </button>
+                </div>
+                <p class="panel-note text-sm text-muted">
+                  Settings explicitly set on this index. Defaults are listed on the
+                  <a routerLink="/index_settings" [queryParams]="linkParams({ index: current.name })">settings editor</a>.
+                </p>
+                <div class="table-wrap">
+                  <table class="data-table data-table--compact settings-table">
+                    <caption class="visually-hidden">Settings of {{ current.name }}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Setting</th>
+                        <th scope="col">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of visibleSettings(); track row.key) {
+                        <tr>
+                          <th scope="row" class="setting-key mono break-all">
+                            @if (row.key.startsWith('index.')) {
+                              <span class="text-muted">index.</span>{{ row.key.slice(6) }}
+                            } @else {
+                              {{ row.key }}
+                            }
+                          </th>
+                          <td class="break-all">
+                            <span class="mono">{{ row.value }}</span>
+                            @if (settingHint(row.key, row.value); as hint) {
+                              <span class="text-muted text-sm setting-hint">{{ hint }}</span>
+                            }
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td colspan="2">
+                            <cerebro-empty icon="bi-funnel" heading="No matching settings" text="No setting name or value matches the filter." [compact]="true">
+                              <button type="button" class="btn btn-sm" (click)="settingsQuery.set('')">Clear filter</button>
+                            </cerebro-empty>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+
+              <!-- ================= Stats ================= -->
+              @case ('stats') {
+                @if (current.stats) {
+                  <div class="panel-toolbar">
+                    <div class="segmented segmented-sm" role="group" aria-label="Statistics scope">
+                      <button type="button" [attr.aria-pressed]="statsScope() === 'primaries'" (click)="statsScope.set('primaries')">Primaries</button>
+                      <button type="button" [attr.aria-pressed]="statsScope() === 'total'" (click)="statsScope.set('total')">All copies</button>
+                    </div>
+                    <span class="text-sm text-muted">
+                      {{ statsScope() === 'primaries' ? 'Primary shards only.' : 'Primaries and replicas combined.' }}
+                      Counters accumulate since each shard last started.
+                    </span>
+                    <span class="spacer"></span>
+                    <button type="button" class="btn btn-sm" (click)="showStatsJson()">
+                      <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                    </button>
+                  </div>
+                  <div class="stat-sections">
+                    @for (section of statGroups(); track section.key) {
+                      <section class="stat-section" [attr.aria-labelledby]="'stat-' + section.key">
+                        <h3 class="stat-section__title" [id]="'stat-' + section.key">
+                          <i class="bi" [class]="'bi ' + section.icon" aria-hidden="true"></i> {{ section.title }}
+                        </h3>
+                        <dl class="kv-list kv-list--dense">
+                          @for (item of section.items; track item.label) {
+                            <div class="kv-row" [attr.title]="item.hint ?? null">
+                              <dt>{{ item.label }}</dt>
+                              <dd class="tabular">{{ item.value }}</dd>
+                            </div>
+                          }
+                        </dl>
+                      </section>
+                    }
+                  </div>
+                } @else {
+                  <cerebro-empty
+                    icon="bi-bar-chart-line"
+                    heading="Statistics are unavailable"
+                    [text]="settings()?.closed ? 'Closed indices do not report statistics. Open the index to see them.' : 'The cluster did not return statistics for this index.'"
+                  >
+                    @if (settings()?.closed) {
+                      <button type="button" class="btn btn-sm" [disabled]="busy() !== null" (click)="run('open')">
+                        <i class="bi bi-unlock" aria-hidden="true"></i> Open index
+                      </button>
+                    } @else {
+                      <button type="button" class="btn btn-sm" (click)="reload()">
+                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                      </button>
+                    }
+                  </cerebro-empty>
+                }
+              }
+
+              <!-- ================= Shards ================= -->
+              @case ('shards') {
+                @if (shards().length === 0) {
+                  <cerebro-empty icon="bi-grid-3x3-gap" heading="No shard information" text="The cluster did not list any shard for this index." [compact]="true" />
+                } @else {
+                  <div class="panel-toolbar">
+                    <div class="segmented segmented-sm" role="group" aria-label="Show shard copies">
+                      <button type="button" [attr.aria-pressed]="shardFilter() === 'all'" (click)="shardFilter.set('all')">All</button>
+                      <button type="button" [attr.aria-pressed]="shardFilter() === 'primaries'" (click)="shardFilter.set('primaries')">Primaries</button>
+                      <button type="button" [attr.aria-pressed]="shardFilter() === 'replicas'" (click)="shardFilter.set('replicas')">Replicas</button>
+                      <button type="button" [attr.aria-pressed]="shardFilter() === 'problems'" (click)="shardFilter.set('problems')">
+                        Not started @if (problemShards() > 0) { <span class="badge badge-yellow">{{ problemShards() }}</span> }
+                      </button>
+                    </div>
+                    <span class="spacer"></span>
+                    <span class="count-label"><strong>{{ visibleShards().length }}</strong> of {{ shards().length }} copies</span>
+                    <button type="button" class="btn btn-sm" (click)="showShardsJson()">
+                      <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                    </button>
+                  </div>
+                  <div class="table-wrap">
+                    <table class="data-table shards-table">
+                      <caption class="visually-hidden">Shard copies of {{ current.name }}</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col" [attr.aria-sort]="ariaSort('shard')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'shard'" (click)="sortShardsBy('shard')">
+                              Shard <i [class]="'bi ' + sortIcon('shard')" aria-hidden="true"></i>
+                            </button>
+                          </th>
+                          <th scope="col">Copy</th>
+                          <th scope="col" [attr.aria-sort]="ariaSort('state')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'state'" (click)="sortShardsBy('state')">
+                              State <i [class]="'bi ' + sortIcon('state')" aria-hidden="true"></i>
+                            </button>
+                          </th>
+                          <th scope="col" class="num" [attr.aria-sort]="ariaSort('docs')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'docs'" (click)="sortShardsBy('docs')">
+                              Docs <i [class]="'bi ' + sortIcon('docs')" aria-hidden="true"></i>
+                            </button>
+                          </th>
+                          <th scope="col" class="num" [attr.aria-sort]="ariaSort('size')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'size'" (click)="sortShardsBy('size')">
+                              Size <i [class]="'bi ' + sortIcon('size')" aria-hidden="true"></i>
+                            </button>
+                          </th>
+                          <th scope="col" [attr.aria-sort]="ariaSort('node')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'node'" (click)="sortShardsBy('node')">
+                              Node <i [class]="'bi ' + sortIcon('node')" aria-hidden="true"></i>
+                            </button>
+                          </th>
+                          <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (row of visibleShards(); track row.key) {
+                          <tr [class.is-problem]="row.state === 'unassigned'">
+                            <th scope="row" class="tabular">{{ row.shard }}</th>
+                            <td>
+                              @if (row.primary) {
+                                <span class="badge badge-accent">Primary</span>
+                              } @else {
+                                <span class="badge badge-outline">Replica</span>
+                              }
+                            </td>
+                            <td>
+                              <span class="badge" [class]="'badge badge-' + shardTone(row)">{{ row.stateLabel }}</span>
+                            </td>
+                            <td class="num tabular">{{ row.docs | num }}</td>
+                            <td class="num tabular">{{ row.size | bytes }}</td>
+                            <td class="node-cell">
+                              @if (row.state === 'unassigned') {
+                                <div class="unassigned-reason">
+                                  <span [class.text-danger]="row.primary" [class.text-warning]="!row.primary">
+                                    {{ row.unassignedReasonLabel ?? 'Not allocated' }}
+                                  </span>
+                                  <span class="text-muted text-sm">
+                                    @if (row.unassignedFor) { for {{ row.unassignedFor }} }
+                                    @if (row.unassignedReason) { · <span class="mono">{{ row.unassignedReason }}</span> }
+                                  </span>
+                                </div>
+                              } @else {
+                                <span class="row">
+                                  <i class="bi bi-hdd text-muted" aria-hidden="true"></i>
+                                  <span>{{ row.node ?? '–' }}</span>
+                                  @if (row.relocatingTo) {
+                                    <i class="bi bi-arrow-right text-muted" aria-hidden="true"></i><span class="visually-hidden">relocating to</span>
+                                    <span>{{ row.relocatingTo }}</span>
+                                  }
+                                </span>
+                              }
+                            </td>
+                            <td class="actions">
+                              @if (row.state === 'unassigned') {
+                                <a class="btn btn-sm btn-soft" routerLink="/allocation" [queryParams]="explainParams(row)">
+                                  <i class="bi bi-question-circle" aria-hidden="true"></i> Explain
+                                </a>
+                              } @else {
+                                <a
+                                  class="btn btn-sm btn-ghost btn-icon"
+                                  routerLink="/allocation"
+                                  [queryParams]="explainParams(row)"
+                                  [attr.aria-label]="'Explain allocation of ' + (row.primary ? 'primary' : 'replica') + ' shard ' + row.shard"
+                                  [title]="'Explain allocation of ' + (row.primary ? 'primary' : 'replica') + ' shard ' + row.shard"
+                                >
+                                  <i class="bi bi-question-circle" aria-hidden="true"></i>
+                                </a>
+                              }
+                            </td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td colspan="7">
+                              <cerebro-empty icon="bi-check2-circle" heading="Nothing to show" text="No shard copy matches this filter." [compact]="true">
+                                <button type="button" class="btn btn-sm" (click)="shardFilter.set('all')">Show all copies</button>
+                              </cerebro-empty>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              }
+
+              <!-- ================= Aliases ================= -->
+              @case ('aliases') {
+                <div class="panel-toolbar">
+                  <span class="count-label"><strong>{{ aliases().length }}</strong> {{ aliases().length === 1 ? 'alias' : 'aliases' }}</span>
+                  <span class="spacer"></span>
+                  <a class="btn btn-sm" routerLink="/aliases" [queryParams]="connection.hostQuery()">
+                    <i class="bi bi-pencil" aria-hidden="true"></i> Manage aliases
+                  </a>
+                  <button type="button" class="btn btn-sm" (click)="showAliasesJson()">
+                    <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                  </button>
+                </div>
+                @if (aliases().length === 0) {
+                  <cerebro-empty icon="bi-link-45deg" heading="No aliases" text="No alias points to this index. Aliases let clients search or write through a stable name." [compact]="true">
+                    <a class="btn btn-sm" routerLink="/aliases" [queryParams]="connection.hostQuery()">
+                      <i class="bi bi-plus-lg" aria-hidden="true"></i> Add an alias
+                    </a>
+                  </cerebro-empty>
+                } @else {
+                  <ul class="list alias-list" [attr.aria-label]="'Aliases of ' + current.name">
+                    @for (alias of aliases(); track alias.name) {
+                      <li class="list-item alias-item">
+                        <span class="list-item__icon" aria-hidden="true"><i class="bi bi-link-45deg"></i></span>
+                        <div class="list-item__body">
+                          <div class="alias-head">
+                            <span class="list-item__title mono">{{ alias.name }}</span>
+                            @if (alias.isWriteIndex === true) {
+                              <span class="badge badge-accent"><i class="bi bi-pencil" aria-hidden="true"></i> write index</span>
+                            } @else if (alias.isWriteIndex === false) {
+                              <span class="badge badge-outline">read only</span>
+                            }
+                            @if (alias.hidden) {
+                              <span class="badge badge-outline"><i class="bi bi-eye-slash" aria-hidden="true"></i> hidden</span>
+                            }
+                            @if (alias.filter) {
+                              <span class="badge badge-blue"><i class="bi bi-funnel" aria-hidden="true"></i> filtered</span>
+                            }
+                          </div>
+                          <div class="alias-meta">
+                            @if (alias.indexRouting) {
+                              <span class="tag"><span class="tag-key">index routing</span><span class="mono">{{ alias.indexRouting }}</span></span>
+                            }
+                            @if (alias.searchRouting) {
+                              <span class="tag"><span class="tag-key">search routing</span><span class="mono">{{ alias.searchRouting }}</span></span>
+                            }
+                            @if (!alias.filter && !alias.indexRouting && !alias.searchRouting) {
+                              <span class="text-muted text-sm">Plain alias: every document, no routing.</span>
+                            }
+                          </div>
+                          @if (alias.filter) {
+                            <div class="alias-filter">
+                              <span class="text-sm text-secondary">Filter: {{ describeFilter(alias.filter) }}</span>
+                              <pre class="code-snippet mono" tabindex="0" [attr.aria-label]="'Filter of alias ' + alias.name">{{ alias.filter | json }}</pre>
+                            </div>
+                          }
+                        </div>
+                        <div class="list-item__actions">
+                          <button
+                            type="button"
+                            class="btn btn-ghost btn-icon btn-sm"
+                            [attr.aria-label]="'View JSON of alias ' + alias.name"
+                            [title]="'View JSON of alias ' + alias.name"
+                            (click)="showAliasJson(alias)"
+                          >
+                            <i class="bi bi-braces" aria-hidden="true"></i>
+                          </button>
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                }
+              }
+
+              <!-- ================= Lifecycle ================= -->
+              @case ('lifecycle') {
+                @if (lifecycle(); as life) {
+                  @switch (life.kind) {
+                    @case ('unmanaged') {
+                      <cerebro-empty
+                        icon="bi-recycle"
+                        heading="Not managed by index lifecycle management"
+                        text="No lifecycle policy is attached to this index. Set index.lifecycle.name to let a policy roll it over, shrink, move or delete it over time."
+                      >
+                        <a class="btn btn-sm" routerLink="/ilm" [queryParams]="connection.hostQuery()">
+                          <i class="bi bi-recycle" aria-hidden="true"></i> Browse policies
+                        </a>
+                        <a class="btn btn-sm btn-ghost" routerLink="/index_settings" [queryParams]="linkParams({ index: current.name })">Edit settings</a>
+                      </cerebro-empty>
+                    }
+                    @case ('unavailable') {
+                      <cerebro-empty
+                        icon="bi-exclamation-triangle"
+                        heading="Lifecycle status unavailable"
+                        [text]="life.reason ?? 'The cluster did not answer the lifecycle explain request.'"
+                      >
+                        <button type="button" class="btn btn-sm" (click)="reload()">
+                          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                        </button>
+                      </cerebro-empty>
+                    }
+                    @case ('managed') {
+                      <div class="panel-toolbar">
+                        <span class="text-secondary row-wrap">
+                          Policy
+                          @if (life.policy) {
+                            <a class="mono" routerLink="/ilm" [queryParams]="linkParams({ policy: life.policy })">{{ life.policy }}</a>
+                          }
+                          @if (life.policyVersion !== null) {
+                            <span class="text-muted text-sm">version {{ life.policyVersion }}</span>
+                          }
+                        </span>
+                        <span class="spacer"></span>
+                        @if (life.age) {
+                          <span class="tag"><span class="tag-key">age</span><span>{{ life.age }}</span></span>
+                        }
+                        <button type="button" class="btn btn-sm" (click)="showLifecycleJson()">
+                          <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                        </button>
+                      </div>
+
+                      @if (life.error; as stepError) {
+                        <div class="callout callout-danger lifecycle-error" role="alert">
+                          <i class="bi bi-x-octagon" aria-hidden="true"></i>
+                          <div class="stack-sm">
+                            <div>
+                              <strong>The policy is stuck{{ stepError.failedStep ? ' at step ' + lifecycleLabel(stepError.failedStep) : '' }}.</strong>
+                              {{ stepError.reason }}
+                            </div>
+                            <div class="row-wrap text-sm">
+                              @if (stepError.type) {
+                                <span class="tag"><span class="tag-key">type</span><span class="mono">{{ stepError.type }}</span></span>
+                              }
+                              @if (stepError.retries !== null) {
+                                <span class="tag"><span class="tag-key">retries</span><span>{{ stepError.retries }}</span></span>
+                              }
+                              @if (stepError.autoRetryable !== null) {
+                                <span class="tag"><span>{{ stepError.autoRetryable ? 'Retried automatically' : 'Needs a manual retry (POST /' + current.name + '/_ilm/retry)' }}</span></span>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      }
+
+                      @if (stepInfo(); as info) {
+                        <div class="callout callout-info lifecycle-error" role="note">
+                          <i class="bi bi-info-circle" aria-hidden="true"></i>
+                          <div class="stack-sm">
+                            <div>{{ info.message ?? 'Elasticsearch reported details about the current step.' }}</div>
+                            @if (info.details.length > 0 || info.hasNested || !info.message) {
+                              <div class="row-wrap text-sm">
+                                @for (fact of info.details; track fact.key) {
+                                  <span class="tag"><span class="tag-key">{{ fact.key }}</span><span>{{ fact.value }}</span></span>
+                                }
+                                @if (info.hasNested || !info.message) {
+                                  <button type="button" class="link-button text-sm" (click)="showStepInfoJson()">View details</button>
+                                }
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+
+                      <ol class="lifecycle-steps" aria-label="Current lifecycle position">
+                        <li class="lifecycle-step" [class.is-error]="life.error">
+                          <span class="lifecycle-step__label">Phase</span>
+                          <span class="lifecycle-step__value">
+                            <span class="phase-dot" [attr.data-phase]="life.phase" aria-hidden="true"></span>
+                            {{ lifecycleLabel(life.phase) }}
+                          </span>
+                        </li>
+                        <li class="lifecycle-step" [class.is-error]="life.error">
+                          <span class="lifecycle-step__label">Action</span>
+                          <span class="lifecycle-step__value">{{ lifecycleLabel(life.action) }}</span>
+                        </li>
+                        <li class="lifecycle-step" [class.is-error]="life.error">
+                          <span class="lifecycle-step__label">Step</span>
+                          <span class="lifecycle-step__value">{{ lifecycleLabel(life.step) }}</span>
+                          @if (life.step) {
+                            <span class="mono text-xs text-muted">{{ life.step }}</span>
+                          }
+                        </li>
+                      </ol>
+
+                      <div class="lifecycle-grid">
+                        <section class="panel-section" aria-labelledby="lifecycle-timeline-title">
+                          <h3 id="lifecycle-timeline-title" class="section-title">Timeline</h3>
+                          <dl class="kv-list">
+                            @for (time of life.times; track time.label) {
+                              <div class="kv-row">
+                                <dt>{{ time.label }}</dt>
+                                <dd [title]="time.at.toISOString()">
+                                  {{ time.at | date: 'MMM d, HH:mm:ss' }} <span class="text-muted text-sm">· {{ age(time.at) }}</span>
+                                </dd>
+                              </div>
+                            }
+                          </dl>
+                        </section>
+                        <section class="panel-section" aria-labelledby="lifecycle-phase-title">
+                          <h3 id="lifecycle-phase-title" class="section-title">
+                            {{ lifecycleLabel(life.phase) }} phase definition
+                          </h3>
+                          @if (life.phaseMinAge) {
+                            <p class="text-sm text-muted">Entered after <span class="mono">{{ life.phaseMinAge }}</span></p>
+                          }
+                          @if (life.phaseActions.length > 0) {
+                            <ul class="phase-actions">
+                              @for (action of life.phaseActions; track action.name) {
+                                <li [class.is-current]="action.name === life.action">
+                                  <span class="phase-actions__name">
+                                    {{ lifecycleLabel(action.name) }}
+                                    @if (action.name === life.action) {
+                                      <span class="badge badge-accent">current</span>
+                                    }
+                                  </span>
+                                  <span class="row-wrap">
+                                    @for (param of action.params; track param.key) {
+                                      <span class="tag"><span class="tag-key">{{ param.key }}</span><span class="mono">{{ param.value }}</span></span>
+                                    }
+                                  </span>
+                                </li>
+                              }
+                            </ul>
+                          } @else {
+                            <p class="text-muted">This phase has no actions.</p>
+                          }
+                        </section>
+                      </div>
+                    }
+                  }
+                } @else {
+                  <div class="loading-block" role="status"><span class="spinner"></span> Loading lifecycle status…</div>
+                }
+              }
+            }
+          </div>
+        </div>
+      }
+    }
+  }
+</section>

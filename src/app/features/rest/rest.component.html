@@ -7,6 +7,7 @@
     <div class="page-header__actions rest-shortcuts" aria-hidden="true">
       <span class="shortcut"><kbd>{{ modKey }}</kbd><kbd>Enter</kbd> send</span>
       <span class="shortcut"><kbd>{{ modKey }}</kbd><kbd>Shift</kbd><kbd>F</kbd> format</span>
+      <span class="shortcut"><kbd>{{ modKey }}</kbd><kbd>S</kbd> save</span>
     </div>
   </header>
 
@@ -84,12 +85,17 @@
       <span id="rest-path-help" class="visually-hidden">
         Use the up and down arrow keys to pick a suggestion and Enter to accept it.
       </span>
+      <!-- Options are reached through aria-activedescendant on the input, so the
+           scrollable list stays out of the tab order (Chrome would otherwise make
+           it a tab stop that disappears as soon as the input loses focus). -->
       <ul
         id="rest-path-suggestions"
         class="suggestions"
         role="listbox"
         aria-label="Path suggestions"
+        tabindex="-1"
         [hidden]="!showSuggestions()"
+        (mousedown)="$event.preventDefault()"
       >
         @for (option of suggestions(); track $index; let index = $index) {
           <li
@@ -98,7 +104,6 @@
             [id]="'rest-path-option-' + index"
             [attr.aria-selected]="index === activeSuggestion()"
             [class.is-active]="index === activeSuggestion()"
-            (mousedown)="$event.preventDefault()"
             (mouseenter)="activeSuggestion.set(index)"
             (click)="acceptSuggestion(option)"
           >
@@ -116,6 +121,17 @@
     </div>
 
     <button
+      type="button"
+      class="btn save-button"
+      aria-label="Save request"
+      [title]="saveTitle()"
+      (click)="openSaveDialog()"
+    >
+      <i class="bi bi-bookmark-plus" aria-hidden="true"></i>
+      <span class="save-button__label">Save</span>
+    </button>
+
+    <button
       #sendButton
       type="submit"
       class="btn btn-primary send-button"
@@ -129,6 +145,50 @@
       <span class="send-button__label">Send</span>
     </button>
   </form>
+
+  @if (linked(); as current) {
+    <div class="saved-context" [class.is-dirty]="linkedDirty()" role="group" aria-label="Loaded saved request">
+      <i class="bi saved-context__icon" [class]="linkedDirty() ? 'bi saved-context__icon bi-bookmark' : 'bi saved-context__icon bi-bookmark-check-fill'" aria-hidden="true"></i>
+      <span class="saved-context__label">Saved request</span>
+      <strong class="saved-context__name" [title]="current.name">{{ current.name }}</strong>
+      <span class="saved-context__state" aria-live="polite">
+        @if (linkedDirty()) {
+          <span class="saved-context__dirty" title="The editor differs from the saved request">
+            <span class="dot dot-yellow" aria-hidden="true"></span>
+            <span class="saved-context__dirty-text">Unsaved changes</span>
+          </span>
+        } @else {
+          <span class="saved-context__clean">Up to date</span>
+        }
+      </span>
+      <span class="saved-context__actions">
+        @if (linkedDirty()) {
+          <button type="button" class="btn btn-ghost btn-sm" title="Put the saved version back into the editor" (click)="revertLinked()">
+            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+            <span class="saved-context__action-label">Revert</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-soft btn-sm"
+            [title]="'Save the changes to “' + current.name + '” (' + modKey + '+S)'"
+            (click)="updateLinked()"
+          >
+            <i class="bi bi-check2" aria-hidden="true"></i>
+            <span>Update<span class="saved-context__action-label"> saved request</span></span>
+          </button>
+        }
+        <button
+          type="button"
+          class="btn btn-ghost btn-icon btn-sm"
+          aria-label="Stop tracking this saved request"
+          title="Stop tracking this saved request (the editor keeps its content)"
+          (click)="unlink()"
+        >
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+      </span>
+    </div>
+  }
 
   <div class="rest-workspace">
     <!-- Request -->
@@ -164,6 +224,21 @@
               <span class="spinner tab-spinner" aria-hidden="true"></span>
             }
           </button>
+          <button
+            type="button"
+            role="tab"
+            id="rest-tab-saved"
+            aria-controls="rest-panel-saved"
+            [attr.aria-selected]="tab() === 'saved'"
+            [attr.tabindex]="tab() === 'saved' ? 0 : -1"
+            (click)="tab.set('saved')"
+            (keydown)="onTabKeydown($event)"
+          >
+            <i class="bi bi-bookmark" aria-hidden="true"></i> Saved
+            @if (saved.count() > 0) {
+              <span class="badge">{{ saved.count() }}</span>
+            }
+          </button>
         </div>
 
         @if (tab() === 'body') {
@@ -187,7 +262,7 @@
               (click)="copyAsCurl()"
             >
               <i class="bi bi-terminal" aria-hidden="true"></i>
-              <span class="pane-actions__label">Copy as cURL</span>
+              <span class="pane-actions__label pane-actions__label--long">Copy as cURL</span>
             </button>
             <cerebro-menu label="More body actions" align="end">
               <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
@@ -198,6 +273,32 @@
                 <i class="bi bi-eraser" aria-hidden="true"></i> Clear body
               </button>
             </cerebro-menu>
+          </div>
+        } @else if (tab() === 'saved') {
+          <div class="pane-actions">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              aria-label="Import saved requests"
+              title="Import saved requests from a JSON file"
+              [class.is-loading]="importing()"
+              [disabled]="importing()"
+              (click)="chooseImportFile()"
+            >
+              <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>
+              <span class="pane-actions__label">Import</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              aria-label="Export saved requests"
+              title="Download every saved request as a JSON file"
+              [disabled]="saved.count() === 0"
+              (click)="exportSaved()"
+            >
+              <i class="bi bi-box-arrow-up" aria-hidden="true"></i>
+              <span class="pane-actions__label">Export</span>
+            </button>
           </div>
         } @else {
           <div class="pane-actions">
@@ -353,6 +454,24 @@
           }
         </div>
       </div>
+
+      <div
+        id="rest-panel-saved"
+        class="pane-panel"
+        role="tabpanel"
+        aria-labelledby="rest-tab-saved"
+        [hidden]="tab() !== 'saved'"
+      >
+        <cerebro-rest-saved
+          [modKey]="modKey"
+          [canSaveCurrent]="canSave()"
+          [dirty]="linkedDirty()"
+          (load)="loadSaved($event)"
+          (rename)="openRenameDialog($event)"
+          (saveCurrent)="openSaveDialog()"
+          (importFile)="chooseImportFile()"
+        />
+      </div>
     </section>
 
     <!-- Response -->
@@ -462,4 +581,35 @@
       }
     </section>
   </div>
+
+  <input
+    #importInput
+    type="file"
+    class="visually-hidden"
+    accept="application/json,.json"
+    tabindex="-1"
+    aria-hidden="true"
+    (change)="onImportFile(importInput)"
+  />
+
+  @if (nameDialog(); as dialog) {
+    <cerebro-rest-name-dialog
+      [mode]="dialog.mode"
+      [initialName]="dialog.initialName"
+      [renaming]="dialog.renaming"
+      [request]="dialog.request"
+      [requests]="saved.requests()"
+      (submitted)="onNameSubmitted(dialog, $event)"
+      (closed)="nameDialog.set(null)"
+    />
+  }
+
+  @if (importState(); as state) {
+    <cerebro-rest-import-dialog
+      [plan]="state.plan"
+      [fileName]="state.fileName"
+      (confirmed)="onImportConfirmed(state, $event)"
+      (closed)="importState.set(null)"
+    />
+  }
 </section>

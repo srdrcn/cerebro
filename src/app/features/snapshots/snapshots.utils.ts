@@ -331,6 +331,49 @@ export function indexStatuses(rows: unknown): Map<string, string> {
   return statuses;
 }
 
+export interface IndexAlias {
+  readonly alias: string;
+  /** The index is the alias' explicit write index (`is_write_index: true`). */
+  readonly write: boolean;
+}
+
+/** `index → aliases` from a `_cat/aliases?format=json` response. */
+export function aliasesByIndex(rows: unknown): Map<string, IndexAlias[]> {
+  const aliases = new Map<string, IndexAlias[]>();
+  if (!Array.isArray(rows)) {
+    return aliases;
+  }
+  for (const row of rows as unknown[]) {
+    if (row && typeof row === 'object') {
+      const { alias, index, is_write_index: write } = row as Record<string, unknown>;
+      if (typeof alias === 'string' && typeof index === 'string') {
+        const entry = { alias, write: write === true || write === 'true' };
+        aliases.set(index, [...(aliases.get(index) ?? []), entry]);
+      }
+    }
+  }
+  return aliases;
+}
+
+/**
+ * The aliases the given indices belong to, sorted by name. An alias counts
+ * as a write alias when it is the write alias of any of them.
+ */
+export function aliasesOf(
+  indices: readonly string[],
+  aliases: ReadonlyMap<string, readonly IndexAlias[]>,
+): IndexAlias[] {
+  const merged = new Map<string, boolean>();
+  for (const index of indices) {
+    for (const { alias, write } of aliases.get(index) ?? []) {
+      merged.set(alias, (merged.get(alias) ?? false) || write);
+    }
+  }
+  return [...merged]
+    .map(([alias, write]) => ({ alias, write }))
+    .sort((left, right) => left.alias.localeCompare(right.alias));
+}
+
 /** `2026-10-14 15:30` in local time. */
 export function formatTimestamp(milliseconds: number | null | undefined): string {
   if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {

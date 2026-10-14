@@ -32,12 +32,17 @@ src/
 | `ClusterApiService` | `post<T>(path, payload)` calls a Play endpoint. The connected host and credentials are merged into every payload. Resolves with the inner `body` for 2xx, rejects with `ClusterApiError` (`status`, `body`) otherwise. Network failures are already reported with a toast. |
 | `ConnectionService` | `host()`, `connected()`, `hostQuery()` (query params every in-app link must carry), `connect()`, `disconnect()`. |
 | `RefreshService` | `tick()` signal increments on every auto refresh / manual refresh. Views that show live data read it inside an `effect` to reload. `refresh()` forces a reload after a mutation. |
-| `AlertService` | Toasts: `success(msg, details?)`, `info`, `warn`, `error(msg, error)`. Pass the caught error as the second argument so the user can expand the details. |
+| `AlertService` | Toasts: `success(msg, details?)`, `info`, `warn`, `error(msg, error)`. Pass the caught error as the second argument so the user can expand the details. Identical toasts are folded together, and an error already reported by `ClusterApiService` ("Error connecting to the server") is not shown a second time. |
 | `DialogService` | `confirm({ title, message?, items?, confirmLabel?, tone? })` → `Promise<boolean>`; `showJson(title, value, subtitle?)` opens a read-only JSON viewer. |
 | `ClipboardService` | `copy(text, onSuccess?, onFailure?)`. |
 | `ClusterStatusService` | Cluster health/name polled by the shell; also sets the document title and favicon. |
 | `ThemeService` | `preference()`, `resolved()`, `set()`, `cycle()`. |
-| `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `severity`, `matchesText` (regex-or-substring filter), `sortByName`. |
+| `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `formatTimestamp`, `formatRelative`, `pluralize`, `sentence`, `humanize`, `severity`, `clampPercent`, `matchesText` (regex-or-substring filter), `sortByName`. |
+| `errors.ts` | `elasticsearchReason(error)` extracts the most specific readable reason from a `ClusterApiError`, an Elasticsearch error body, a string or an `Error`; `failureMessage(action, error)` builds "Could not delete index: no such index [logs]". |
+| `json.ts` | `isRecord`, `stringList` for defensive parsing of Elasticsearch responses. |
+| `names.ts` | `validateResourceName(name, noun)` and the invalid character lists for index, template, policy and pipeline names. |
+| `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
+| `pending-changes.guard.ts` | `PendingChangesAware` (`confirmDiscard()`) and the `confirmDiscardPendingChanges` route guard. |
 | `preferences.ts` | best-effort `localStorage` helpers for per-browser UI preferences. |
 
 ### Shared components (`src/app/shared`)
@@ -45,11 +50,12 @@ src/
 | Selector | Usage |
 | --- | --- |
 | `<cerebro-menu>` | Dropdown rendered in the top layer (never clipped). Project `<i trigger class="bi …">` (or any element with the `trigger` attribute) and `.menu-item` buttons/links, `.menu-label`, `.menu-separator`. Inputs: `label` (aria-label), `align="start|end"`, `triggerClass` (defaults to an icon button), `minWidth`. Clicking a `.menu-item` closes the menu. |
-| `<cerebro-code-editor>` | Ace JSON/text editor. `[(value)]`, `mode`, `readOnly`, `placeholder`, `minLines`/`maxLines` (auto height) or `fill` (fills the CSS height of the host), `flush`, `wrap`, `(submit)` on Ctrl/⌘+Enter. Call `format()` via a template reference to pretty-print. |
+| `<cerebro-code-editor>` | Ace JSON/text editor. `[(value)]`, `mode`, `readOnly`, `placeholder`, `minLines`/`maxLines` (auto height) or `fill` (fills the CSS height of the host), `flush`, `wrap`, `(submit)` on Ctrl/⌘+Enter. Call `format()` via a template reference to pretty-print. Tab and Shift+Tab move focus out of the editor (it never traps the keyboard); Ctrl+] and Ctrl+[ indent and outdent. |
 | `<cerebro-search>` | Search field with icon and clear button: `[(value)]`, `placeholder`, `ariaLabel`, `small`. |
 | `<cerebro-empty>` | Empty/error state: `icon`, `heading`, `text`, optional projected action buttons, `compact`. |
 | `<cerebro-meter>` | Usage bar: `[value]` (percent), `warn`/`danger` thresholds, `small`, `label`. |
 | `<cerebro-pager>` | "1–20 of 143" + previous/next: `[page] [pageSize] [total] noun (pageChange)`; helpers `clampPage()` and `pageSlice()`. |
+| `createSort()` | Sortable table state from `shared/sort-state.ts`: `sortBy`, `isActive`, `ariaSort` and `icon` for `.sort-button` headers. |
 | Pipes | `bytes`, `num`, `compact`, `duration` (from `shared/format.pipes`). |
 
 ### Component conventions
@@ -88,13 +94,22 @@ light and dark themes** and down to phone width.
    `.stat__label` styles which apply the casing in CSS.
 5. Destructive actions always go through `DialogService.confirm` with
    `tone: 'danger'` and a specific confirm label ("Delete index").
-6. Every page handles four states: loading (`.loading-block` or skeletons),
+6. Forms validate on submit: the primary button stays enabled (disabled only
+   while the request is in flight, with `.is-loading`); submitting an invalid
+   form shows `.field-error` messages and moves focus to the first invalid
+   field. Errors of a field may also show live once the user has edited it.
+7. Pages that hold unsaved edits implement `PendingChangesAware` and their
+   route declares `canDeactivate: [confirmDiscardPendingChanges]`; closing the
+   tab is covered with a `beforeunload` handler while edits are pending.
+8. Show Elasticsearch failures with their reason (`failureMessage`,
+   `elasticsearchReason`) rather than a generic "request failed".
+9. Every page handles four states: loading (`.loading-block` or skeletons),
    empty (`<cerebro-empty>`), error (`<cerebro-empty icon="bi-exclamation-triangle">`
    with a retry button) and data.
-7. Accessibility: every control has a label (`<label for>` or `aria-label`),
+10. Accessibility: every control has a label (`<label for>` or `aria-label`),
    icon-only buttons have `aria-label` and `title`, tables use `<th scope>`
    and `aria-sort` on sortable headers, focus styles are never removed.
-8. Responsive: layouts collapse to one column under 1180px
+11. Responsive: layouts collapse to one column under 1180px
    (`.layout-split`, `.layout-sidebar-*`) and controls stack under 760px.
    Wide tables scroll horizontally inside `.table-wrap`.
 
@@ -128,7 +143,9 @@ light and dark themes** and down to phone width.
 ### Class reference
 
 * Layout: `.page`, `.page--wide`, `.page-header`, `.page-title`,
-  `.page-subtitle`, `.page-header__actions`, `.layout-split`,
+  `.page-subtitle`, `.page-header__actions`, `.context-picker` (header select
+  with a leading icon that picks the page's index or repository),
+  `.section-label`, `.layout-split`,
   `.layout-sidebar-start`, `.layout-sidebar-end`, `.stack`, `.stack-sm`,
   `.stack-lg`, `.row`, `.row-wrap`, `.spacer`, `.grid-2`, `.grid-3`,
   `.col-span-all`, `.section-title`, `.section-subtitle`.
@@ -145,7 +162,8 @@ light and dark themes** and down to phone width.
   `.check-description`; `.switch`; `.segmented` (+ `.segmented-sm`, buttons with
   `aria-pressed` / `.is-active`); `.chip-toggle[aria-pressed]` for filter
   chips; `.input-group` for icon inputs.
-* Surfaces: `.card`, `.card-header` (`--plain`), `.card-title`,
+* Surfaces: `.card`, `.card-header` (`--plain`), `.card-icon` (tinted icon
+  tile before a card title), `.card-title`,
   `.card-subtitle`, `.card-body` (`--flush`), `.card-footer` (`--between`);
   `.callout` + `-info` | `-warning` | `-danger` | `-success`;
   `.stat-grid` > `.stat` > `.stat__label`, `.stat__value`, `.stat__meta`.

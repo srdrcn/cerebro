@@ -26,6 +26,10 @@ export type CodeEditorMode = 'json' | 'text';
  *
  * Height: either set `fill` and size the host with CSS, or use
  * `minLines`/`maxLines` to grow with the content.
+ *
+ * Keyboard: Tab and Shift+Tab move focus in and out of the editor like in any
+ * other form field (no keyboard trap); Ctrl/⌘+] and Ctrl/⌘+[ indent and
+ * outdent, and Enter keeps the indentation of the current line.
  */
 @Component({
   selector: 'cerebro-code-editor',
@@ -71,7 +75,6 @@ export class CodeEditorComponent {
   readonly fill = input(false);
   readonly flush = input(false);
   readonly wrap = input(false);
-  readonly showGutter = input(true);
   /** Emitted on Ctrl/⌘ + Enter. */
   readonly submit = output<void>();
 
@@ -105,6 +108,7 @@ export class CodeEditorComponent {
       const mode = this.mode();
       const wrap = this.wrap();
       const placeholder = this.placeholder();
+      const ariaLabel = this.ariaLabel();
       const editor = this.editor;
       if (!editor) {
         return;
@@ -113,6 +117,7 @@ export class CodeEditorComponent {
       editor.session.setMode(`ace/mode/${mode}`);
       editor.session.setUseWrapMode(wrap);
       editor.setOption('placeholder', placeholder);
+      this.applyAriaLabel(editor, ariaLabel);
     });
 
     this.destroyRef.onDestroy(() => {
@@ -152,7 +157,7 @@ export class CodeEditorComponent {
       showPrintMargin: false,
       highlightActiveLine: !this.readOnly(),
       highlightGutterLine: !this.readOnly(),
-      showGutter: this.showGutter(),
+      showGutter: true,
       tabSize: 2,
       useSoftTabs: true,
       wrap: this.wrap(),
@@ -168,7 +173,12 @@ export class CodeEditorComponent {
     editor.session.setUseWorker(false);
     editor.renderer.setScrollMargin(8, 8, 0, 0);
     editor.renderer.setPadding(10);
-    editor.textInput.getElement().setAttribute('aria-label', this.ariaLabel());
+    this.applyAriaLabel(editor, this.ariaLabel());
+    // Ace binds Tab/Shift+Tab to indent/outdent, which traps keyboard users
+    // inside the editor (WCAG 2.1.2). Let the browser move focus instead;
+    // block indentation stays on Ctrl/⌘+] and Ctrl/⌘+[.
+    editor.commands.removeCommand('indent');
+    editor.commands.removeCommand('outdent');
     editor.selection.clearSelection();
     editor.session.getUndoManager().reset();
 
@@ -193,5 +203,15 @@ export class CodeEditorComponent {
       this.resizeObserver = new ResizeObserver(() => editor.resize());
       this.resizeObserver.observe(this.hostRef().nativeElement);
     }
+  }
+
+  /**
+   * Ace rewrites the text area's aria-label to "Cursor at row N" whenever
+   * the selection changes; `textInputAriaLabel` keeps the field's name in
+   * front of it.
+   */
+  private applyAriaLabel(editor: Ace.Editor, label: string): void {
+    editor.setOption('textInputAriaLabel', label);
+    editor.textInput.getElement().setAttribute('aria-label', label);
   }
 }

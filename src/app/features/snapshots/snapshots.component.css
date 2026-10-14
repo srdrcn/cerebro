@@ -5,32 +5,25 @@
 /* Header ------------------------------------------------------------ */
 
 .repo-picker {
+  position: relative;
+  flex: 0 1 280px;
+  width: 280px;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
 }
 
-.repo-picker__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-2);
-  font-size: var(--text-sm);
-  font-weight: 580;
-  white-space: nowrap;
-}
-
-.repo-picker__label .bi {
+.repo-picker__icon {
+  position: absolute;
+  left: 11px;
+  z-index: 1;
   color: var(--text-3);
+  pointer-events: none;
 }
 
-.repo-picker__select {
-  width: auto;
-  min-width: 200px;
-  max-width: 320px;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+.repo-picker .select {
+  padding-left: 33px;
 }
 
 /* Stats ------------------------------------------------------------- */
@@ -296,14 +289,13 @@
 }
 
 @media (max-width: 760px) {
-  .snapshots-actions,
-  .repo-picker {
+  .snapshots-actions {
     width: 100%;
   }
 
-  .repo-picker__select {
-    flex: 1;
-    max-width: none;
+  .repo-picker {
+    flex: 1 1 100%;
+    width: 100%;
   }
 }
 

@@ -1,0 +1,647 @@
+<section class="page" aria-labelledby="pipelines-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="pipelines-title" class="page-title">Ingest pipelines</h1>
+      <p class="page-subtitle">
+        Pipelines transform documents before they are indexed. Edit their processors and try them on sample documents.
+      </p>
+    </div>
+    <div class="page-header__actions">
+      <button type="button" class="btn btn-primary" [disabled]="saving()" (click)="newPipeline()">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> New pipeline
+      </button>
+    </div>
+  </header>
+
+  <div class="layout-sidebar-start pipelines-layout">
+    <!-- ================= Pipeline list ================= -->
+    <div class="card list-card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="bi bi-funnel" aria-hidden="true"></i> Pipelines
+          @if (pipelines()) {
+            @if (query().trim()) {
+              <span class="badge tabular" [attr.aria-label]="visiblePipelines().length + ' of ' + listTotal() + ' pipelines match'">
+                {{ visiblePipelines().length }} of {{ listTotal() }}
+              </span>
+            } @else {
+              <span class="badge tabular">{{ listTotal() }}</span>
+            }
+          }
+        </h2>
+        @if (loading() && pipelines()) {
+          <span class="spinner" role="status" aria-label="Refreshing pipelines"></span>
+        }
+      </div>
+
+      @if (pipelines()) {
+        <div class="list-toolbar">
+          <cerebro-search
+            [(value)]="query"
+            [small]="true"
+            placeholder="Filter by id or description"
+            ariaLabel="Filter pipelines by id or description"
+          />
+          @if (managedCount() > 0) {
+            <label class="switch text-sm">
+              <input
+                #managedToggle
+                type="checkbox"
+                role="switch"
+                [checked]="showManaged()"
+                (change)="setShowManaged(managedToggle.checked)"
+              />
+              Show managed pipelines
+              <span class="count">{{ managedCount() }}</span>
+            </label>
+          }
+        </div>
+
+        <ul class="list pipeline-list" aria-label="Ingest pipelines" [attr.aria-busy]="saving() ? true : null">
+          @for (pipeline of visiblePipelines(); track pipeline.id) {
+            <li>
+              <button
+                type="button"
+                class="list-item list-item--interactive pipeline-item"
+                [class.is-selected]="selected() === pipeline.id"
+                [attr.aria-current]="selected() === pipeline.id ? 'true' : null"
+                [disabled]="saving()"
+                (click)="select(pipeline)"
+              >
+                <span class="list-item__icon" aria-hidden="true">
+                  <i class="bi" [class.bi-funnel]="!pipeline.managed" [class.bi-gear-wide-connected]="pipeline.managed"></i>
+                </span>
+                <span class="list-item__body">
+                  <span class="list-item__title pipeline-item__name">
+                    <span class="truncate min-w-0">{{ pipeline.id }}</span>
+                    @if (pipeline.managed) {
+                      <span class="badge badge-blue pipeline-item__flag" title="Built-in pipeline managed by Elasticsearch">Managed</span>
+                    }
+                    @if (selected() === pipeline.id && dirty()) {
+                      <span class="dot dot-yellow" title="Unsaved changes"></span>
+                      <span class="visually-hidden">(unsaved changes)</span>
+                    }
+                  </span>
+                  <span class="list-item__meta" [class.is-empty]="!pipeline.description" [title]="pipeline.description ?? ''">
+                    {{ pipeline.description ?? 'No description' }}
+                  </span>
+                </span>
+                <span class="pipeline-item__count">
+                  <span class="badge tabular" [title]="pipeline.processorCount + (pipeline.processorCount === 1 ? ' processor' : ' processors')">
+                    {{ pipeline.processorCount }}
+                    <span class="visually-hidden">{{ pipeline.processorCount === 1 ? 'processor' : 'processors' }}</span>
+                  </span>
+                </span>
+              </button>
+            </li>
+          } @empty {
+            <li>
+              @if (query().trim()) {
+                <cerebro-empty icon="bi-funnel" heading="No matching pipelines" text="No pipeline id or description contains this text." [compact]="true">
+                  <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+                </cerebro-empty>
+              } @else {
+                <cerebro-empty
+                  icon="bi-funnel"
+                  heading="No custom pipelines"
+                  [text]="managedCount() > 0 ? 'Only built-in pipelines exist. Create your own or show the managed ones.' : 'Create a pipeline to parse, enrich or clean documents as they are indexed.'"
+                  [compact]="true"
+                >
+                  <button type="button" class="btn btn-sm btn-primary" (click)="newPipeline()">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i> New pipeline
+                  </button>
+                  @if (managedCount() > 0) {
+                    <button type="button" class="btn btn-sm" (click)="setShowManaged(true)">Show managed</button>
+                  }
+                </cerebro-empty>
+              }
+            </li>
+          }
+        </ul>
+      } @else if (failed()) {
+        <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load pipelines" text="The cluster did not answer the ingest pipelines request.">
+          <button type="button" class="btn btn-sm" (click)="load()">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+          </button>
+        </cerebro-empty>
+      } @else {
+        <div class="list-skeleton" role="status" aria-label="Loading pipelines">
+          @for (placeholder of [1, 2, 3, 4, 5]; track placeholder) {
+            <div class="list-skeleton__row" aria-hidden="true">
+              <span class="skeleton list-skeleton__icon"></span>
+              <span class="list-skeleton__lines">
+                <span class="skeleton" style="height: 12px; width: 62%"></span>
+                <span class="skeleton" style="height: 10px; width: 80%"></span>
+              </span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="stack detail-column">
+      <!-- ================= Editor ================= -->
+      <div #editorCard class="card editor-card" role="region" aria-labelledby="pipeline-editor-title">
+        <div class="card-header editor-card__header">
+          <div class="editor-card__heading min-w-0">
+            <span class="editor-card__icon" [class.is-new]="selected() === null" aria-hidden="true">
+              <i class="bi" [class.bi-plus-lg]="selected() === null" [class.bi-pencil]="selected() !== null"></i>
+            </span>
+            <div class="min-w-0">
+              <h2 id="pipeline-editor-title" class="card-title">
+                @if (selected(); as current) {
+                  <span class="truncate">{{ current }}</span>
+                } @else {
+                  New pipeline
+                }
+                @if (selectedPipeline()?.managed) {
+                  <span class="badge badge-blue" title="Built-in pipeline managed by Elasticsearch">Managed</span>
+                }
+                @if (selectedPipeline()?.deprecated) {
+                  <span class="badge badge-yellow">Deprecated</span>
+                }
+              </h2>
+              <p class="card-subtitle truncate">
+                @if (selectedPipeline(); as pipeline) {
+                  {{ pipeline.processorCount }} {{ pipeline.processorCount === 1 ? 'processor' : 'processors' }}
+                  @if (pipeline.hasOnFailure) {
+                    · pipeline-level failure handler
+                  }
+                  @if (pipeline.version !== null) {
+                    · version {{ pipeline.version }}
+                  }
+                } @else if (selected() === null) {
+                  Not saved yet
+                } @else {
+                  No longer on the cluster
+                }
+              </p>
+            </div>
+          </div>
+          <div class="row editor-card__actions">
+            @if (dirty()) {
+              <span class="badge badge-yellow unsaved-badge" role="status">
+                <span class="dot dot-yellow" aria-hidden="true"></span> Unsaved changes
+              </span>
+            }
+            @if (selectedPipeline()) {
+              <button type="button" class="btn btn-sm" (click)="viewJson()">
+                <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-danger-soft"
+                [class.is-loading]="deleting()"
+                [disabled]="deleting() || saving()"
+                (click)="remove()"
+              >
+                <i class="bi bi-trash" aria-hidden="true"></i> Delete
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="card-body stack">
+          @if (selectedMissing()) {
+            <div class="callout callout-warning">
+              <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+              <p><strong>{{ selected() }}</strong> no longer exists on the cluster. Saving creates it again.</p>
+            </div>
+          }
+          @if (selectedPipeline()?.managed) {
+            <div class="callout callout-info">
+              <i class="bi bi-info-circle" aria-hidden="true"></i>
+              <p>This built-in pipeline is managed by Elasticsearch, which may overwrite your changes on upgrade. Save a copy under a new id instead.</p>
+            </div>
+          }
+
+          <div class="grid-2 meta-fields">
+            <div class="field">
+              <label class="field-label" for="pipeline-id">Id</label>
+              <input
+                #idInput
+                id="pipeline-id"
+                class="input input-mono"
+                [class.is-invalid]="idError()"
+                [ngModel]="id()"
+                (ngModelChange)="id.set($event)"
+                (blur)="idTouched.set(true)"
+                (keydown.enter)="save()"
+                placeholder="e.g. logs-enrich"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                required
+                aria-required="true"
+                [attr.aria-invalid]="idError() ? true : null"
+                aria-describedby="pipeline-id-help"
+              />
+              <div id="pipeline-id-help" aria-live="polite">
+                @if (idError(); as error) {
+                  <p class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+                } @else {
+                  @switch (mode()) {
+                    @case ('overwrite') {
+                      <p class="field-hint text-warning">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                        <span class="mono">{{ id() }}</span> already exists. Saving overwrites it.
+                      </p>
+                    }
+                    @case ('copy') {
+                      <p class="field-hint">
+                        <i class="bi bi-copy" aria-hidden="true"></i>
+                        Saving creates <span class="mono">{{ id() }}</span>; <span class="mono">{{ selected() }}</span> stays unchanged.
+                      </p>
+                    }
+                    @case ('update') {
+                      <p class="field-hint">Change the id to save a copy.</p>
+                    }
+                    @default {
+                      <p class="field-hint">Referenced by <span class="mono">?pipeline=</span> and <span class="mono">index.default_pipeline</span>.</p>
+                    }
+                  }
+                }
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label" for="pipeline-description">Description <span class="optional">optional</span></label>
+              <input
+                #descriptionInput
+                id="pipeline-description"
+                class="input"
+                [value]="description()"
+                (input)="setDescription(descriptionInput.value)"
+                [disabled]="bodyError() !== null"
+                placeholder="What does this pipeline do?"
+                autocomplete="off"
+                aria-describedby="pipeline-description-help"
+              />
+              <p id="pipeline-description-help" class="field-hint">
+                {{ bodyError() ? 'Fix the JSON to edit the description' : 'Stored as "description" in the JSON.' }}
+              </p>
+            </div>
+          </div>
+
+          <div class="pipeline-grid">
+            <!-- Processor list -->
+            <section class="processors-panel" aria-labelledby="processors-title">
+              <div class="panel-head">
+                <h3 id="processors-title" class="section-title">Processors</h3>
+                <span class="count-label"><strong>{{ processors().length }}</strong> in order</span>
+              </div>
+              @if (processors().length > 0) {
+                <ol class="processor-list">
+                  @for (processor of processors(); track processor.position) {
+                    <li class="processor" [class.is-invalid]="processor.invalid">
+                      <span class="processor__index" aria-hidden="true">{{ processor.position }}</span>
+                      <div class="processor__body min-w-0">
+                        <div class="processor__head">
+                          <span class="processor__type">{{ processor.type }}</span>
+                          @if (processor.tag) {
+                            <span class="tag" title="Tag"><span class="tag-key">tag</span><span>{{ processor.tag }}</span></span>
+                          }
+                        </div>
+                        @if (processor.description) {
+                          <p class="processor__description">{{ processor.description }}</p>
+                        }
+                        @if (processor.summary) {
+                          <p class="processor__summary mono" [title]="processor.summary">{{ processor.summary }}</p>
+                        }
+                        @if (processor.fields.length > 0) {
+                          <dl class="processor__fields">
+                            @for (field of processor.fields; track field.label) {
+                              <div>
+                                <dt>{{ field.label }}</dt>
+                                <dd class="mono" [title]="field.value">{{ field.value }}</dd>
+                              </div>
+                            }
+                          </dl>
+                        }
+                        @if (processor.condition || processor.ignoreFailure || processor.onFailureCount > 0 || processor.invalid) {
+                          <div class="processor__flags">
+                            @if (processor.condition; as condition) {
+                              <span class="flag flag--if" [title]="condition"><span class="flag__key">if</span><span class="mono truncate">{{ condition }}</span></span>
+                            }
+                            @if (processor.ignoreFailure) {
+                              <span class="flag"><i class="bi bi-shield-check" aria-hidden="true"></i> Ignores failures</span>
+                            }
+                            @if (processor.onFailureCount > 0) {
+                              <span class="flag flag--failure"><i class="bi bi-life-preserver" aria-hidden="true"></i> On failure: {{ processor.onFailureCount }} {{ processor.onFailureCount === 1 ? 'processor' : 'processors' }}</span>
+                            }
+                            @if (processor.invalid) {
+                              <span class="flag flag--invalid"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Malformed processor</span>
+                            }
+                          </div>
+                        }
+                      </div>
+                    </li>
+                  }
+                </ol>
+              } @else {
+                <p class="text-sm text-muted panel-empty">No processors yet. Add them to <span class="mono">"processors"</span> in the JSON.</p>
+              }
+
+              @if (onFailure().length > 0) {
+                <div class="panel-head panel-head--sub">
+                  <h3 class="section-title"><i class="bi bi-life-preserver" aria-hidden="true"></i> On failure</h3>
+                  <span class="text-xs text-muted">Runs when any processor fails</span>
+                </div>
+                <ol class="processor-list processor-list--failure">
+                  @for (processor of onFailure(); track processor.position) {
+                    <li class="processor">
+                      <span class="processor__index" aria-hidden="true">{{ processor.position }}</span>
+                      <div class="processor__body min-w-0">
+                        <div class="processor__head"><span class="processor__type">{{ processor.type }}</span></div>
+                        @if (processor.summary) {
+                          <p class="processor__summary mono" [title]="processor.summary">{{ processor.summary }}</p>
+                        }
+                      </div>
+                    </li>
+                  }
+                </ol>
+              }
+            </section>
+
+            <!-- JSON editor -->
+            <section class="json-panel field" aria-labelledby="pipeline-json-label">
+              <div class="panel-head">
+                <h3 id="pipeline-json-label" class="section-title">Pipeline JSON</h3>
+                <span class="spacer"></span>
+                <button type="button" class="btn btn-sm btn-ghost" (click)="format()" title="Format JSON (Ctrl+Shift+F)">
+                  <i class="bi bi-text-indent-left" aria-hidden="true"></i> Format
+                </button>
+              </div>
+              <cerebro-code-editor
+                #pipelineEditor
+                [value]="body()"
+                (valueChange)="body.set($event)"
+                [minLines]="16"
+                [maxLines]="48"
+                [wrap]="true"
+                ariaLabel="Pipeline JSON"
+                (submit)="save()"
+              />
+              <div class="editor-status" aria-live="polite">
+                @if (bodyError(); as error) {
+                  <span class="status-pill status-pill--danger"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid</span>
+                  <span class="editor-status__message text-danger">{{ error }}</span>
+                } @else if (bodyWarnings().length > 0) {
+                  <span class="status-pill status-pill--warning"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check</span>
+                  <span class="editor-status__message">{{ bodyWarnings().join(' · ') }}</span>
+                } @else {
+                  <span class="status-pill status-pill--ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON</span>
+                  <span class="editor-status__message text-muted">The JSON is what gets saved</span>
+                }
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="card-footer card-footer--between">
+          <span class="footer-keys text-muted"><kbd>Ctrl</kbd><kbd>Enter</kbd> to save</span>
+          <div class="row footer-buttons">
+            @if (dirty()) {
+              <button type="button" class="btn btn-ghost" (click)="discardChanges()" [disabled]="saving()">Discard changes</button>
+            }
+            <button
+              type="button"
+              class="btn btn-primary"
+              [class.is-loading]="saving()"
+              [disabled]="!canSave()"
+              [attr.title]="blocker()"
+              [attr.aria-busy]="saving() ? true : null"
+              (click)="save()"
+            >
+              <i class="bi" [class.bi-floppy]="mode() === 'update' || mode() === 'overwrite'" [class.bi-plus-lg]="mode() === 'create' || mode() === 'copy'" aria-hidden="true"></i>
+              {{ saveLabel() }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= Test pipeline ================= -->
+      <div class="card test-card" role="region" aria-labelledby="test-title">
+        <div class="card-header">
+          <div class="min-w-0">
+            <h2 id="test-title" class="card-title"><i class="bi bi-play-circle" aria-hidden="true"></i> Test pipeline</h2>
+            <p class="card-subtitle">Runs the pipeline in the editor, unsaved changes included, on sample documents. Nothing is indexed.</p>
+          </div>
+        </div>
+        <div class="card-body test-grid">
+          <div class="field test-input">
+            <div class="panel-head">
+              <span class="field-label" id="sample-docs-label">Sample documents</span>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-sm btn-ghost" (click)="regenerateSamples()" title="Replace with examples based on the fields the pipeline reads">
+                <i class="bi bi-magic" aria-hidden="true"></i> Example
+              </button>
+              <button type="button" class="btn btn-sm btn-ghost" (click)="formatSamples()" title="Format JSON">
+                <i class="bi bi-text-indent-left" aria-hidden="true"></i> Format
+              </button>
+            </div>
+            <cerebro-code-editor
+              #docsEditor
+              [value]="sampleDocs()"
+              (valueChange)="setSampleDocs($event)"
+              [minLines]="10"
+              [maxLines]="30"
+              ariaLabel="Sample documents JSON"
+              (submit)="simulate()"
+            />
+            <p class="field-hint" [class.text-danger]="docsError()">
+              @if (docsError(); as error) {
+                <i class="bi bi-x-circle" aria-hidden="true"></i> {{ error }}
+              } @else {
+                A JSON array of <span class="mono">_source</span> objects ({{ docsCount() }} {{ docsCount() === 1 ? 'document' : 'documents' }}).
+              }
+            </p>
+            <div class="test-actions">
+              <label class="switch">
+                <input #verboseToggle type="checkbox" role="switch" [checked]="verbose()" (change)="setVerbose(verboseToggle.checked)" />
+                <span>
+                  Verbose
+                  <span class="check-description">Show the document after every processor</span>
+                </span>
+              </label>
+              <button
+                type="button"
+                class="btn btn-primary"
+                [class.is-loading]="simulating()"
+                [disabled]="simulating() || bodyError() !== null || docsError() !== null"
+                [attr.title]="bodyError() ? 'Fix the pipeline JSON first' : docsError() ? 'Fix the sample documents first' : null"
+                (click)="simulate()"
+              >
+                <i class="bi bi-play-fill" aria-hidden="true"></i> Run
+              </button>
+            </div>
+          </div>
+
+          <div class="test-results" role="region" aria-labelledby="results-title">
+            <p class="visually-hidden" role="status">{{ announcement() }}</p>
+            <div class="panel-head">
+              <h3 #resultsHeading id="results-title" class="section-title results-title" tabindex="-1">Results</h3>
+              @if (results()) {
+                <span class="result-summary">
+                  @if (resultSummary().ok > 0) {
+                    <span class="badge badge-green">{{ resultSummary().ok }} processed</span>
+                  }
+                  @if (resultSummary().error > 0) {
+                    <span class="badge badge-red">{{ resultSummary().error }} failed</span>
+                  }
+                  @if (resultSummary().dropped > 0) {
+                    <span class="badge badge-purple">{{ resultSummary().dropped }} dropped</span>
+                  }
+                </span>
+              }
+            </div>
+
+            @if (resultsStale() && !simulating()) {
+              <div class="callout callout-warning stale-callout">
+                <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                <p>The pipeline changed since this run. <button type="button" class="link-button" (click)="simulate()">Run again</button></p>
+              </div>
+            }
+
+            @if (simError(); as error) {
+              <div class="callout callout-danger" role="alert">
+                <i class="bi bi-x-octagon" aria-hidden="true"></i>
+                <div>
+                  <strong>Elasticsearch rejected the simulation</strong>
+                  <p class="sim-error">{{ error }}</p>
+                </div>
+              </div>
+            } @else if (results()) {
+              <ol class="sim-docs">
+                @for (view of resultViews(); track view.result.position) {
+                  <li class="sim-doc" [attr.data-outcome]="view.result.outcome">
+                    <div class="sim-doc__head">
+                      <span class="sim-doc__title">Document {{ view.result.position }}</span>
+                      @switch (view.result.outcome) {
+                        @case ('ok') { <span class="badge badge-green"><i class="bi bi-check-circle" aria-hidden="true"></i> Processed</span> }
+                        @case ('error') { <span class="badge badge-red"><i class="bi bi-x-circle" aria-hidden="true"></i> Failed</span> }
+                        @case ('dropped') { <span class="badge badge-purple"><i class="bi bi-trash3" aria-hidden="true"></i> Dropped</span> }
+                      }
+                      @if (view.steps) {
+                        <span class="text-xs text-muted">{{ view.ran }} of {{ view.steps.length }} processors ran</span>
+                      }
+                      <span class="spacer"></span>
+                      <button type="button" class="btn btn-sm btn-ghost btn-icon" (click)="showResultJson(view)" [attr.aria-label]="'View raw result of document ' + view.result.position" title="View JSON">
+                        <i class="bi bi-braces" aria-hidden="true"></i>
+                      </button>
+                    </div>
+
+                    @if (view.result.outcome === 'error') {
+                      <div class="callout callout-danger sim-doc__callout">
+                        <i class="bi bi-x-octagon" aria-hidden="true"></i>
+                        <p>
+                          @if (view.result.failedProcessor) {
+                            <strong class="mono">{{ view.result.failedProcessor }}</strong> failed:
+                          }
+                          {{ view.result.error }}
+                        </p>
+                      </div>
+                    } @else if (view.result.outcome === 'dropped') {
+                      <div class="callout callout-info sim-doc__callout">
+                        <i class="bi bi-trash3" aria-hidden="true"></i>
+                        <p>A <span class="mono">drop</span> processor discarded this document; it would not be indexed.</p>
+                      </div>
+                    }
+
+                    @if (view.steps; as steps) {
+                      <ol class="steps">
+                        @for (step of steps; track step.key) {
+                          <li class="step" [attr.data-status]="step.status">
+                            <div class="step__row">
+                              <span class="step__index" aria-hidden="true">{{ step.position }}</span>
+                              <span class="processor__type">{{ step.type }}</span>
+                              @if (step.tag) {
+                                <span class="tag"><span class="tag-key">tag</span><span>{{ step.tag }}</span></span>
+                              }
+                              <span class="status-badge" [attr.data-status]="step.status">{{ statusLabel(step.status) }}</span>
+                              <span class="spacer"></span>
+                              @if (step.sourceText) {
+                                <button
+                                  type="button"
+                                  class="btn btn-sm btn-ghost step__toggle"
+                                  [attr.aria-expanded]="isStepOpen(step.key)"
+                                  [attr.aria-controls]="'step-doc-' + step.key"
+                                  (click)="toggleStep(step.key)"
+                                >
+                                  <i class="bi" [class.bi-chevron-down]="!isStepOpen(step.key)" [class.bi-chevron-up]="isStepOpen(step.key)" aria-hidden="true"></i>
+                                  {{ isStepOpen(step.key) ? 'Hide document' : 'Document' }}
+                                </button>
+                              }
+                            </div>
+                            @if (step.changes.length > 0) {
+                              <ul class="changes" aria-label="Changed fields">
+                                @for (change of step.changes; track change.path) {
+                                  <li class="change" [attr.data-kind]="change.kind" [title]="change.kind + ' ' + change.path">
+                                    <span aria-hidden="true">{{ changeSymbol(change) }}</span>
+                                    <span class="visually-hidden">{{ change.kind }}</span>
+                                    {{ change.path }}
+                                  </li>
+                                }
+                              </ul>
+                            } @else if (step.status === 'success' || step.status === 'error_ignored') {
+                              <p class="step__note">No field changed</p>
+                            }
+                            @if (step.status === 'skipped' && step.condition) {
+                              <p class="step__note">Condition was false: <span class="mono">{{ step.condition }}</span></p>
+                            }
+                            @if (step.error && step.status !== 'skipped') {
+                              <p class="step__error" [class.is-ignored]="step.status === 'error_ignored'">
+                                <i class="bi" [class.bi-x-circle]="step.status === 'error'" [class.bi-shield-exclamation]="step.status !== 'error'" aria-hidden="true"></i>
+                                {{ step.error }}
+                              </p>
+                            }
+                            @if (isStepOpen(step.key) && step.sourceText; as sourceText) {
+                              <div [id]="'step-doc-' + step.key" class="step__doc">
+                                <cerebro-code-editor [value]="sourceText" [readOnly]="true" [minLines]="3" [maxLines]="20" [wrap]="true" [ariaLabel]="'Document after step ' + step.position" />
+                              </div>
+                            }
+                          </li>
+                        }
+                      </ol>
+                    }
+
+                    @if (view.sourceText; as sourceText) {
+                      <div class="sim-doc__final">
+                        <div class="sim-doc__label">
+                          <span>{{ view.steps ? 'Final document' : 'Resulting document' }}</span>
+                          @if (view.result.targetIndex; as target) {
+                            <span class="tag" title="The pipeline changed _index"><span class="tag-key">index</span><span class="mono">{{ target }}</span></span>
+                          }
+                          @if (view.changes.length > 0) {
+                            <ul class="changes changes--inline" aria-label="Changed fields">
+                              @for (change of view.changes; track change.path) {
+                                <li class="change" [attr.data-kind]="change.kind" [title]="change.kind + ' ' + change.path">
+                                  <span aria-hidden="true">{{ changeSymbol(change) }}</span>
+                                  <span class="visually-hidden">{{ change.kind }}</span>
+                                  {{ change.path }}
+                                </li>
+                              }
+                            </ul>
+                          }
+                        </div>
+                        <cerebro-code-editor [value]="sourceText" [readOnly]="true" [minLines]="3" [maxLines]="24" [wrap]="true" [ariaLabel]="'Resulting document ' + view.result.position" />
+                      </div>
+                    }
+                  </li>
+                }
+              </ol>
+            } @else if (simulating()) {
+              <div class="loading-block" role="status"><span class="spinner"></span> Running the pipeline…</div>
+            } @else {
+              <cerebro-empty
+                icon="bi-play-circle"
+                heading="Try the pipeline before saving it"
+                text="Run it on the sample documents to see the resulting documents, and with Verbose on, what every processor changed."
+                [compact]="true"
+              />
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -5,7 +5,12 @@ import {
   formatCompact,
   formatDuration,
   formatNumber,
+  formatRelative,
+  formatTimestamp,
+  humanize,
   matchesText,
+  pluralize,
+  sentence,
   severity,
   sortByName,
 } from './format';
@@ -53,5 +58,30 @@ describe('format helpers', () => {
 
   it('sorts and de-duplicates names', () => {
     expect(sortByName(['b', 'a', 'b'])).toEqual(['a', 'b']);
+  });
+
+  it('pluralizes counts with grouped digits', () => {
+    expect(pluralize(1, 'node')).toBe('1 node');
+    expect(pluralize(0, 'node')).toBe('0 nodes');
+    expect(pluralize(1204, 'shard')).toBe('1,204 shards');
+    expect(pluralize(2, 'index', 'indices')).toBe('2 indices');
+  });
+
+  it('formats local timestamps and relative times', () => {
+    const time = new Date(2026, 9, 14, 15, 4, 9).getTime();
+    expect(formatTimestamp(time)).toBe('2026-10-14 15:04');
+    expect(formatTimestamp(time, { seconds: true })).toBe('2026-10-14 15:04:09');
+    expect(formatTimestamp(null)).toBe('–');
+    expect(formatRelative(time - 30_000, time)).toBe('just now');
+    expect(formatRelative(time - 5 * 60_000, time)).toBe('5m ago');
+    expect(formatRelative(time + 2 * 3_600_000, time)).toBe('in 2h');
+    expect(formatRelative(undefined, time)).toBe('–');
+  });
+
+  it('turns identifiers into sentences', () => {
+    expect(humanize('number_of_replicas')).toBe('Number of replicas');
+    expect(humanize('cluster.routing-allocation')).toBe('Cluster routing allocation');
+    expect(sentence(' cannot allocate ')).toBe('Cannot allocate');
+    expect(sentence('')).toBe('');
   });
 });

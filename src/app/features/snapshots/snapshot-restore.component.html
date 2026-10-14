@@ -150,11 +150,17 @@
                 type="checkbox"
                 name="includeAliases"
                 [ngModel]="includeAliases()"
-                (ngModelChange)="includeAliases.set($event)"
+                (ngModelChange)="setIncludeAliases($event)"
               />
               <span>
                 Restore aliases
-                <span class="check-description">Re-create the aliases of the restored indices.</span>
+                <span class="check-description">
+                  @if (aliasesSkippedForRename()) {
+                    Off while renaming, so the copies stay out of the aliases of the originals.
+                  } @else {
+                    Re-create the aliases of the restored indices.
+                  }
+                </span>
               </span>
             </label>
             <label class="switch restore-option">
@@ -189,6 +195,34 @@
               </span>
             </label>
           </div>
+          @if (aliasWarning()) {
+            <div
+              class="callout restore-callout"
+              role="status"
+              [class.callout-warning]="writeAliases().length === 0"
+              [class.callout-danger]="writeAliases().length > 0"
+            >
+              <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+              <div>
+                <strong>The renamed copies join the aliases of the original indices.</strong>
+                Searches through those aliases return both, and an alias with a write index makes the restore fail.
+                @if (joinedAliases().length > 0) {
+                  <span class="restore-aliases">
+                    <span class="text-secondary">Their aliases today:</span>
+                    @for (alias of joinedAliases(); track alias.alias) {
+                      <span class="tag" [title]="alias.write ? alias.alias + ' has a write index: the restore fails' : alias.alias">
+                        @if (alias.write) {
+                          <span class="tag-key">write</span>
+                        }
+                        <span class="mono">{{ alias.alias }}</span>
+                      </span>
+                    }
+                  </span>
+                }
+                <button type="button" class="link-button" (click)="setIncludeAliases(false)">Don't restore aliases</button>
+              </div>
+            </div>
+          }
           @if (hasGlobalState() && includeGlobalState()) {
             <div class="callout callout-warning restore-callout">
               <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>

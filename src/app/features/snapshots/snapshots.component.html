@@ -7,12 +7,12 @@
     @if (repositories().length > 0) {
       <div class="page-header__actions snapshots-actions">
         <div class="repo-picker">
-          <label class="repo-picker__label" for="snapshot-repository">
-            <i class="bi bi-database" aria-hidden="true"></i> Repository
-          </label>
+          <label class="visually-hidden" for="snapshot-repository">Repository</label>
+          <i class="bi bi-database repo-picker__icon" aria-hidden="true"></i>
           <select
             id="snapshot-repository"
-            class="select repo-picker__select"
+            class="select"
+            title="Repository"
             [ngModel]="repository()"
             (ngModelChange)="selectRepository($event)"
           >
@@ -450,7 +450,7 @@
             <div class="card-footer">
               <button
                 type="submit"
-                class="btn btn-primary btn-block"
+                class="btn btn-primary"
                 [class.is-loading]="creating()"
                 [disabled]="creating() || (createSubmitted() && !createValid())"
               >

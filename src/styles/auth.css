@@ -228,11 +228,6 @@
   transform: translateX(2px);
 }
 
-.cluster-option__remove {
-  position: relative;
-  z-index: 1;
-}
-
 .auth-divider {
   display: flex;
   align-items: center;
@@ -296,14 +291,6 @@
 .auth-form .btn-primary {
   height: 40px;
   margin-top: 4px;
-}
-
-.auth-status {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--text-2);
-  font-size: var(--text-sm);
 }
 
 .auth-footnote {

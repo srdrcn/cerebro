@@ -22,7 +22,6 @@
   --text-md: 15px;
   --text-lg: 18px;
   --text-xl: 22px;
-  --text-2xl: 28px;
 
   --radius-xs: 4px;
   --radius-sm: 6px;
@@ -31,7 +30,6 @@
   --radius-xl: 16px;
   --radius-full: 999px;
 
-  --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
@@ -60,28 +58,31 @@
   --surface-3: #f0f2f5;
   --surface-hover: #f2f4f7;
   --surface-active: #e9ecf1;
-  --surface-inverse: #111827;
   --sidebar-bg: #fbfbfc;
   --overlay: rgb(15 20 30 / 42%);
 
   --border: #e4e7ec;
   --border-subtle: #eef0f3;
   --border-strong: #cfd5dd;
+  /* Boundary of form controls (inputs, unchecked switches): at least 3:1. */
+  --control-border: #848ea0;
 
   --text: #0f1729;
   --text-2: #475467;
-  --text-3: #7a8598;
-  --text-inverse: #f8fafc;
-  --placeholder: #98a2b3;
+  /* Tertiary text still carries content: keep it at 4.5:1 on every surface. */
+  --text-3: #646e82;
+  --placeholder: #6b7588;
 
-  --accent: #0d9467;
-  --accent-hover: #0b7f58;
-  --accent-active: #096b4a;
+  /* Dark enough for white text on filled buttons and chips (5:1). */
+  --accent: #0b7f58;
+  --accent-hover: #096b4a;
+  --accent-active: #085c40;
   --accent-text: #087a54;
   --accent-soft: #e5f6ef;
   --accent-soft-strong: #c9eedd;
   --on-accent: #ffffff;
-  --focus-ring: 0 0 0 3px rgb(13 148 103 / 28%);
+  /* Opaque so the indicator reaches 3:1 against any surface. */
+  --focus-ring: 0 0 0 2px var(--accent);
 
   --green: #12a150;
   --green-soft: #e6f6ec;
@@ -93,6 +94,7 @@
   --red-soft: #fdecee;
   --red-text: #b4232f;
   --red-hover: #c52a39;
+  --on-danger: #ffffff;
   --blue: #2f6fec;
   --blue-soft: #e8effd;
   --blue-text: #1f55c4;
@@ -108,6 +110,9 @@
   --shadow-md: 0 4px 10px -2px rgb(16 24 40 / 8%), 0 2px 4px -2px rgb(16 24 40 / 5%);
   --shadow-lg: 0 16px 40px -12px rgb(16 24 40 / 22%), 0 6px 14px -6px rgb(16 24 40 / 10%);
   --shadow-xl: 0 28px 70px -18px rgb(16 24 40 / 34%);
+
+  --switch-knob: #ffffff;
+  --shadow-knob: 0 1px 2px rgb(0 0 0 / 25%);
 
   /* Code editor palette (consumed by the Ace theme). */
   --code-bg: #fbfcfd;
@@ -137,19 +142,18 @@
     --surface-3: #1c222b;
     --surface-hover: #1d232c;
     --surface-active: #252c37;
-    --surface-inverse: #e6e9ee;
     --sidebar-bg: #0a0d11;
     --overlay: rgb(2 4 8 / 66%);
 
     --border: #242b35;
     --border-subtle: #1c222a;
     --border-strong: #323b48;
+    --control-border: #5f6979;
 
     --text: #e7eaf0;
     --text-2: #a5adbb;
-    --text-3: #6f7889;
-    --text-inverse: #0f1729;
-    --placeholder: #5c6575;
+    --text-3: #848ea0;
+    --placeholder: #7a8495;
 
     --accent: #1ac98e;
     --accent-hover: #2fdba1;
@@ -158,7 +162,6 @@
     --accent-soft: rgb(26 201 142 / 12%);
     --accent-soft-strong: rgb(26 201 142 / 22%);
     --on-accent: #032417;
-    --focus-ring: 0 0 0 3px rgb(26 201 142 / 32%);
 
     --green: #2bc66b;
     --green-soft: rgb(43 198 107 / 13%);
@@ -170,6 +173,7 @@
     --red-soft: rgb(240 86 106 / 13%);
     --red-text: #ff7b8c;
     --red-hover: #f36d7f;
+    --on-danger: #2b0a10;
     --blue: #5592ff;
     --blue-soft: rgb(85 146 255 / 14%);
     --blue-text: #7aa9ff;
@@ -213,19 +217,18 @@
   --surface-3: #1c222b;
   --surface-hover: #1d232c;
   --surface-active: #252c37;
-  --surface-inverse: #e6e9ee;
   --sidebar-bg: #0a0d11;
   --overlay: rgb(2 4 8 / 66%);
 
   --border: #242b35;
   --border-subtle: #1c222a;
   --border-strong: #323b48;
+  --control-border: #5f6979;
 
   --text: #e7eaf0;
   --text-2: #a5adbb;
-  --text-3: #6f7889;
-  --text-inverse: #0f1729;
-  --placeholder: #5c6575;
+  --text-3: #848ea0;
+  --placeholder: #7a8495;
 
   --accent: #1ac98e;
   --accent-hover: #2fdba1;
@@ -234,7 +237,6 @@
   --accent-soft: rgb(26 201 142 / 12%);
   --accent-soft-strong: rgb(26 201 142 / 22%);
   --on-accent: #032417;
-  --focus-ring: 0 0 0 3px rgb(26 201 142 / 32%);
 
   --green: #2bc66b;
   --green-soft: rgb(43 198 107 / 13%);
@@ -246,6 +248,7 @@
   --red-soft: rgb(240 86 106 / 13%);
   --red-text: #ff7b8c;
   --red-hover: #f36d7f;
+  --on-danger: #2b0a10;
   --blue: #5592ff;
   --blue-soft: rgb(85 146 255 / 14%);
   --blue-text: #7aa9ff;

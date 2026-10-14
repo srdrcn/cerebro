@@ -1,12 +1,32 @@
-<button type="button" class="skip-link" (click)="focusMain()">Skip to content</button>
+<button
+  type="button"
+  class="skip-link"
+  [attr.inert]="drawerOpen() ? '' : null"
+  (click)="focusMain()"
+>
+  Skip to content
+</button>
 <div
   class="shell"
   [class.is-collapsed]="collapsed()"
   [class.is-drawer-open]="drawerOpen()"
 >
-  <aside class="sidebar" aria-label="Main navigation">
+  <!-- Below 900px the sidebar is a drawer: inert while closed, the rest of the page inert while open. -->
+  <aside
+    #sidebar
+    id="app-sidebar"
+    class="sidebar"
+    aria-label="Main navigation"
+    [attr.inert]="drawerLayout() && !drawerOpen() ? '' : null"
+  >
     <div class="sidebar__brand">
-      <a class="brand-link" routerLink="/overview" [queryParams]="connection.hostQuery()" aria-label="cerebro overview">
+      <a
+        class="brand-link"
+        routerLink="/overview"
+        [queryParams]="connection.hostQuery()"
+        aria-label="cerebro overview"
+        (click)="onNavigate()"
+      >
         <cerebro-logo />
         <span class="brand-name">cerebro</span>
       </a>
@@ -19,11 +39,20 @@
       >
         <i class="bi bi-layout-sidebar" aria-hidden="true"></i>
       </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon btn-sm sidebar__close"
+        aria-label="Close navigation"
+        title="Close navigation"
+        (click)="closeDrawer(true)"
+      >
+        <i class="bi bi-x-lg" aria-hidden="true"></i>
+      </button>
     </div>
 
     <cerebro-menu
       triggerClass="cluster-switcher"
-      [label]="'Cluster ' + status.displayName()"
+      [label]="'Cluster ' + status.displayName() + ', ' + healthLabel()"
       [tooltip]="collapsed()"
       [minWidth]="260"
     >
@@ -72,7 +101,7 @@
               routerLinkActive="is-active"
               ariaCurrentWhenActive="page"
               [attr.title]="collapsed() ? item.label : null"
-              (click)="closeDrawer()"
+              (click)="onNavigate()"
             >
               <i class="bi" [class]="'bi ' + item.icon" aria-hidden="true"></i>
               <span class="nav-link__label">{{ item.label }}</span>
@@ -127,22 +156,24 @@
     </div>
   </aside>
 
-  <div class="shell__backdrop" aria-hidden="true" (click)="closeDrawer()"></div>
+  <div class="shell__backdrop" aria-hidden="true" (click)="closeDrawer(true)"></div>
 
-  <div class="shell__main">
+  <div class="shell__main" [attr.inert]="drawerOpen() ? '' : null">
     <header class="topbar">
       <button
+        #menuButton
         type="button"
         class="btn btn-ghost btn-icon topbar__menu"
         aria-label="Open navigation"
+        aria-controls="app-sidebar"
         [attr.aria-expanded]="drawerOpen()"
-        (click)="drawerOpen.set(true)"
+        (click)="openDrawer()"
       >
         <i class="bi bi-list" aria-hidden="true"></i>
       </button>
 
       <nav class="breadcrumb" aria-label="Breadcrumb">
-        <a routerLink="/overview" [queryParams]="connection.hostQuery()" class="breadcrumb__cluster">
+        <a routerLink="/overview" [queryParams]="connection.hostQuery()">
           {{ status.displayName() }}
         </a>
         @if (currentPage(); as page) {

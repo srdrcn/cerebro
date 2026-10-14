@@ -33,10 +33,3 @@ export class DurationPipe implements PipeTransform {
     return formatDuration(value);
   }
 }
-
-export const FORMAT_PIPES = [
-  BytesPipe,
-  NumberPipe,
-  CompactNumberPipe,
-  DurationPipe,
-] as const;

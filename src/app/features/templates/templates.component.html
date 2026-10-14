@@ -1,9 +1,9 @@
 <section class="page" aria-labelledby="templates-title">
   <header class="page-header">
     <div class="page-header__text">
-      <h1 id="templates-title" class="page-title">Index templates</h1>
+      <h1 id="templates-title" class="page-title">Legacy templates</h1>
       <p class="page-subtitle">
-        Legacy templates apply settings, mappings and aliases to new indices whose name matches their patterns.
+        Legacy templates (<span class="mono">_template</span>) apply settings, mappings and aliases to new indices whose name matches their patterns.
       </p>
     </div>
   </header>
@@ -44,7 +44,7 @@
               ariaLabel="Filter templates by name or index pattern"
             />
           </div>
-          <ul class="list template-list" aria-label="Index templates" [attr.aria-busy]="loading() || saving() ? true : null">
+          <ul class="list template-list" aria-label="Legacy templates" [attr.aria-busy]="loading() || saving() ? true : null">
             @for (row of rows(); track row.name) {
               <li>
                 <button
@@ -127,7 +127,10 @@
 
       <p class="list-card__note">
         <i class="bi bi-info-circle" aria-hidden="true"></i>
-        <span>Composable templates (<span class="mono">_index_template</span>) are not listed here.</span>
+        <span>
+          Composable templates (<span class="mono">_index_template</span>) are managed on the
+          <a routerLink="/index_templates" [queryParams]="connection.hostQuery()">Index templates</a> page.
+        </span>
       </p>
     </div>
 

@@ -214,10 +214,10 @@ export class CommandPaletteComponent {
       group: 'Indices',
       label: index,
       icon: 'bi-box',
-      hint: 'Show in overview',
+      hint: 'Open index details',
       run: () =>
-        void this.router.navigate(['/overview'], {
-          queryParams: { ...hostQuery, filter: index },
+        void this.router.navigate(['/index_detail'], {
+          queryParams: { ...hostQuery, index },
         }),
     }));
     return [...pages, ...actions, ...indices];

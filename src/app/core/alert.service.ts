@@ -15,6 +15,23 @@ export interface CerebroAlert {
   readonly count: number;
 }
 
+const reportedErrors = new WeakSet<object>();
+
+/**
+ * Records that the user has already been told about `error` (for example
+ * ClusterApiService's "Error connecting to the server" toast), so a later
+ * `AlertService.error(message, error)` for the same failure is not shown twice.
+ */
+export function markErrorReported(error: unknown): void {
+  if (typeof error === 'object' && error !== null) {
+    reportedErrors.add(error);
+  }
+}
+
+export function isErrorReported(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && reportedErrors.has(error);
+}
+
 const DEFAULT_TIMEOUTS: Readonly<Record<AlertLevel, number>> = {
   error: 8_000,
   info: 3_500,
@@ -25,7 +42,9 @@ const DEFAULT_TIMEOUTS: Readonly<Record<AlertLevel, number>> = {
 /**
  * Toast notifications. Identical alerts raised while one is still visible
  * (typically a failing request repeated by auto-refresh) are folded together
- * instead of stacking up.
+ * instead of stacking up. `error()` ignores errors that were already reported
+ * (see `markErrorReported`), so pages can pass every caught error without
+ * doubling the network failure toast.
  */
 @Injectable({ providedIn: 'root' })
 export class AlertService {
@@ -40,7 +59,11 @@ export class AlertService {
     return this.add('success', message, response, timeoutMs);
   }
 
+  /** Returns the toast id, or `''` when `response` was already reported. */
   error(message: string, response?: unknown, timeoutMs?: number): string {
+    if (isErrorReported(response)) {
+      return '';
+    }
     return this.add('error', message, response, timeoutMs);
   }
 

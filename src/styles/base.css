@@ -144,7 +144,7 @@ legend {
 
 ::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--scrollbar);
   background-clip: content-box;
 }

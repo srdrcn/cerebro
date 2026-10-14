@@ -1,10 +1,12 @@
 import { Routes } from '@angular/router';
 import { requireConnection } from './core/connection.guard';
+import { confirmDiscardPendingChanges } from './core/pending-changes.guard';
 
 /**
  * Paths are kept identical to the original AngularJS application so existing
  * bookmarks (including legacy `#!/` URLs, see legacy-hashbang.ts) still work.
- * Every feature is lazy loaded to keep the initial bundle small.
+ * Every feature is lazy loaded to keep the initial bundle small. Editor pages
+ * implement `PendingChangesAware` and ask before unsaved edits are dropped.
  */
 export const routes: Routes = [
   {
@@ -34,6 +36,7 @@ export const routes: Routes = [
       },
       {
         path: 'aliases',
+        canDeactivate: [confirmDiscardPendingChanges],
         loadComponent: () =>
           import('./features/aliases/aliases.component').then((m) => m.AliasesComponent),
       },
@@ -51,11 +54,13 @@ export const routes: Routes = [
       },
       {
         path: 'templates',
+        canDeactivate: [confirmDiscardPendingChanges],
         loadComponent: () =>
           import('./features/templates/templates.component').then((m) => m.TemplatesComponent),
       },
       {
         path: 'cluster_settings',
+        canDeactivate: [confirmDiscardPendingChanges],
         loadComponent: () =>
           import('./features/cluster-settings/cluster-settings.component').then(
             (m) => m.ClusterSettingsComponent,
@@ -63,6 +68,7 @@ export const routes: Routes = [
       },
       {
         path: 'index_settings',
+        canDeactivate: [confirmDiscardPendingChanges],
         loadComponent: () =>
           import('./features/index-settings/index-settings.component').then(
             (m) => m.IndexSettingsComponent,
@@ -107,6 +113,7 @@ export const routes: Routes = [
       },
       {
         path: 'index_templates',
+        canDeactivate: [confirmDiscardPendingChanges],
         loadComponent: () =>
           import('./features/index-templates/index-templates.component').then(
             (m) => m.IndexTemplatesComponent,
@@ -121,10 +128,12 @@ export const routes: Routes = [
       },
       {
         path: 'ilm',
+        canDeactivate: [confirmDiscardPendingChanges],
         loadComponent: () => import('./features/ilm/ilm.component').then((m) => m.IlmComponent),
       },
       {
         path: 'pipelines',
+        canDeactivate: [confirmDiscardPendingChanges],
         loadComponent: () =>
           import('./features/pipelines/pipelines.component').then((m) => m.PipelinesComponent),
       },

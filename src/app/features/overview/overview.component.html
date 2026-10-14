@@ -53,7 +53,7 @@
           <div class="stat__label"><i class="bi bi-heart-pulse" aria-hidden="true"></i> Status</div>
           <div class="stat__value ov-status">
             <span class="dot" [class]="'dot dot-' + health()" aria-hidden="true"></span>
-            <span class="ov-status__text">{{ overview.status }}</span>
+            <span class="ov-status__text">{{ healthLabel() }}</span>
           </div>
           <div class="stat__meta">{{ activePercent() }}% of shards active</div>
         </div>
@@ -155,9 +155,22 @@
             {{ affectedCount() }} {{ affectedCount() === 1 ? 'index is' : 'indices are' }} affected.
           </span>
         </div>
-        <button type="button" class="btn btn-sm" [attr.aria-pressed]="affectedOnly()" (click)="toggleAffected()">
-          {{ affectedOnly() ? 'Show all indices' : 'Show only affected indices' }}
-        </button>
+        <div class="ov-callout__actions">
+          @if (counts().unassigned > 0) {
+            <a
+              class="btn btn-sm"
+              routerLink="/allocation"
+              [queryParams]="connection.hostQuery()"
+              title="Explain why the next unassigned shard cannot be allocated"
+              aria-label="Explain why the next unassigned shard cannot be allocated"
+            >
+              <i class="bi bi-signpost-split" aria-hidden="true"></i> Explain
+            </a>
+          }
+          <button type="button" class="btn btn-sm" [attr.aria-pressed]="affectedOnly()" (click)="toggleAffected()">
+            {{ affectedOnly() ? 'Show all indices' : 'Show only affected indices' }}
+          </button>
+        </div>
       </div>
     }
 
@@ -169,8 +182,8 @@
             class="ov-index-search"
             [value]="indexName()"
             (valueChange)="setIndexName($event)"
-            placeholder="Filter indices or aliases (regex)"
-            ariaLabel="Filter indices by name or alias, regular expressions supported"
+            placeholder="Filter by index or alias"
+            ariaLabel="Filter indices by name or alias"
           />
           <div class="row-wrap" role="group" aria-label="Index visibility">
             <button type="button" class="chip-toggle" [attr.aria-pressed]="includeClosed()" (click)="toggleClosed()">
@@ -242,9 +255,18 @@
               All {{ filteredIndices().length }} filtered {{ filteredIndices().length === 1 ? 'index' : 'indices' }}
             </div>
             @for (operation of bulkOperations; track operation) {
-              <button type="button" class="menu-item" (click)="operateOnFiltered(operation)">
+              @let hint = bulkHint(operation);
+              <button
+                type="button"
+                class="menu-item"
+                [disabled]="hint !== '' && openFilteredCount() === 0"
+                (click)="operateOnFiltered(operation)"
+              >
                 <i class="bi" [class]="'bi ' + operations[operation].icon" aria-hidden="true"></i>
                 {{ operations[operation].label }}
+                @if (hint) {
+                  <span class="menu-item__hint">{{ hint }}</span>
+                }
               </button>
             }
             <div class="menu-separator"></div>
@@ -299,7 +321,7 @@
               <thead>
                 <tr>
                   <th scope="col" class="map-corner">
-                    <span class="map-corner__label">Nodes</span>
+                    <span class="stat__label">Nodes</span>
                     <span class="map-corner__count">{{ nodes().length }} of {{ dataNodeCount() }} data</span>
                   </th>
                   @for (column of columns(); track column.index.name) {
@@ -320,7 +342,12 @@
                             <i class="bi bi-asterisk"></i>
                           </span>
                         }
-                        <span class="index-head__name truncate" [title]="column.index.name">{{ column.index.name }}</span>
+                        <a
+                          class="index-head__name truncate"
+                          routerLink="/index_detail"
+                          [queryParams]="indexDetailQuery(column.index)"
+                          [title]="'Open details of ' + column.index.name"
+                        >{{ column.index.name }}</a>
                         @if (column.index.closed) {
                           <span class="badge ov-closed-badge">closed</span>
                         }
@@ -334,15 +361,21 @@
                         >
                           <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
                           <div class="menu-label">{{ column.index.name }}</div>
+                          <a class="menu-item" routerLink="/index_detail" [queryParams]="indexDetailQuery(column.index)">
+                            <i class="bi bi-box" aria-hidden="true"></i> Index details
+                          </a>
+                          <div class="menu-separator"></div>
                           <button type="button" class="menu-item" (click)="showIndexJson('settings', column.index)">
                             <i class="bi bi-sliders" aria-hidden="true"></i> View settings
                           </button>
                           <button type="button" class="menu-item" (click)="showIndexJson('mappings', column.index)">
                             <i class="bi bi-diagram-3" aria-hidden="true"></i> View mappings
                           </button>
-                          <button type="button" class="menu-item" (click)="showIndexJson('stats', column.index)">
-                            <i class="bi bi-bar-chart-line" aria-hidden="true"></i> View stats
-                          </button>
+                          @if (!column.index.closed) {
+                            <button type="button" class="menu-item" (click)="showIndexJson('stats', column.index)">
+                              <i class="bi bi-bar-chart-line" aria-hidden="true"></i> View stats
+                            </button>
+                          }
                           <a
                             class="menu-item"
                             routerLink="/index_settings"
@@ -352,6 +385,7 @@
                           </a>
                           <div class="menu-separator"></div>
                           @if (column.index.closed) {
+                            <!-- Stats, merge, refresh, flush and cache fail on closed indices. -->
                             <button type="button" class="menu-item" (click)="operateOnIndex('open', column.index)">
                               <i class="bi bi-unlock" aria-hidden="true"></i> Open index
                             </button>
@@ -359,19 +393,19 @@
                             <button type="button" class="menu-item" (click)="operateOnIndex('close', column.index)">
                               <i class="bi bi-lock" aria-hidden="true"></i> Close index
                             </button>
+                            <button type="button" class="menu-item" (click)="operateOnIndex('merge', column.index)">
+                              <i class="bi bi-intersect" aria-hidden="true"></i> Force merge
+                            </button>
+                            <button type="button" class="menu-item" (click)="operateOnIndex('refresh', column.index)">
+                              <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Refresh
+                            </button>
+                            <button type="button" class="menu-item" (click)="operateOnIndex('flush', column.index)">
+                              <i class="bi bi-save" aria-hidden="true"></i> Flush
+                            </button>
+                            <button type="button" class="menu-item" (click)="operateOnIndex('cache', column.index)">
+                              <i class="bi bi-eraser" aria-hidden="true"></i> Clear cache
+                            </button>
                           }
-                          <button type="button" class="menu-item" (click)="operateOnIndex('merge', column.index)">
-                            <i class="bi bi-intersect" aria-hidden="true"></i> Force merge
-                          </button>
-                          <button type="button" class="menu-item" (click)="operateOnIndex('refresh', column.index)">
-                            <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Refresh
-                          </button>
-                          <button type="button" class="menu-item" (click)="operateOnIndex('flush', column.index)">
-                            <i class="bi bi-save" aria-hidden="true"></i> Flush
-                          </button>
-                          <button type="button" class="menu-item" (click)="operateOnIndex('cache', column.index)">
-                            <i class="bi bi-eraser" aria-hidden="true"></i> Clear cache
-                          </button>
                           <div class="menu-separator"></div>
                           <button type="button" class="menu-item menu-item--danger" (click)="operateOnIndex('delete', column.index)">
                             <i class="bi bi-trash3" aria-hidden="true"></i> Delete index
@@ -413,7 +447,13 @@
                       <td class="shard-cell" [class.is-closed]="cell.index.closed">
                         <div class="shards">
                           @for (view of cell.shards; track view.key) {
-                            <span [class]="view.chipClass" role="img" [attr.aria-label]="view.label" [title]="view.label">{{ view.shard.shard }}</span>
+                            <cerebro-menu [triggerClass]="view.chipClass" [label]="view.label" [minWidth]="220">
+                              <span trigger>{{ view.shard.shard }}</span>
+                              <div class="menu-label">{{ view.heading }}</div>
+                              <a class="menu-item" routerLink="/allocation" [queryParams]="view.explainQuery">
+                                <i class="bi bi-signpost-split" aria-hidden="true"></i> Explain allocation
+                              </a>
+                            </cerebro-menu>
                           }
                         </div>
                       </td>
@@ -505,12 +545,10 @@
                       <td class="shard-cell" [class.is-closed]="cell.index.closed" [class.is-target]="cell.target">
                         <div class="shards">
                           @for (view of cell.shards; track view.key) {
-                            @if (view.interactive) {
-                              <cerebro-menu [triggerClass]="view.chipClass" [label]="view.label" [minWidth]="220">
-                                <span trigger>{{ view.shard.shard }}</span>
-                                <div class="menu-label">
-                                  Shard {{ view.shard.shard }} · {{ view.shard.primary ? 'primary' : 'replica' }}
-                                </div>
+                            <cerebro-menu [triggerClass]="view.chipClass" [label]="view.label" [minWidth]="220">
+                              <span trigger>{{ view.shard.shard }}</span>
+                              <div class="menu-label">{{ view.heading }}</div>
+                              @if (view.interactive) {
                                 <button type="button" class="menu-item" (click)="showShardStats(view.shard)">
                                   <i class="bi bi-bar-chart-line" aria-hidden="true"></i> Shard stats
                                 </button>
@@ -528,10 +566,12 @@
                                     <i class="bi bi-arrows-move" aria-hidden="true"></i> Select for relocation
                                   </button>
                                 }
-                              </cerebro-menu>
-                            } @else {
-                              <span [class]="view.chipClass" role="img" [attr.aria-label]="view.label" [title]="view.label">{{ view.shard.shard }}</span>
-                            }
+                                <div class="menu-separator"></div>
+                              }
+                              <a class="menu-item" routerLink="/allocation" [queryParams]="view.explainQuery">
+                                <i class="bi bi-signpost-split" aria-hidden="true"></i> Explain allocation
+                              </a>
+                            </cerebro-menu>
                           }
                           @if (cell.target) {
                             <button
@@ -611,7 +651,7 @@
         </ul>
         <span class="text-muted text-sm ov-legend__hint">
           <i class="bi bi-info-circle" aria-hidden="true"></i>
-          Click a shard for its stats or to move it to another node.
+          Click a shard for its stats, to move it or to explain its allocation.
         </span>
       </div>
       }

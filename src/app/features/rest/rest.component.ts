@@ -27,6 +27,26 @@ import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { BytesPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
+import { RestImportDialogComponent } from './rest-import-dialog.component';
+import {
+  NameDialogMode,
+  NameDialogResult,
+  RestNameDialogComponent,
+} from './rest-name-dialog.component';
+import type { ImportPlan, ImportStrategy, SavedRequest } from './rest-saved.models';
+import { RestSavedComponent } from './rest-saved.component';
+import { RestSavedStore } from './rest-saved.store';
+import {
+  exportDocument,
+  exportFileName,
+  importSummary,
+  parseImportFile,
+  planImport,
+  sameName,
+  sameRequest,
+  suggestName,
+  uniqueName,
+} from './rest-saved.utils';
 import type {
   QuickStart,
   RestDraft,
@@ -77,7 +97,25 @@ const DRAFT_KEY = 'cerebro.rest.draft';
 const WRAP_KEY = 'cerebro.rest.wrap';
 const DEFAULT_DRAFT: RestDraft = { method: 'GET', path: '', body: '' };
 
-type PaneTab = 'body' | 'history';
+type PaneTab = 'body' | 'history' | 'saved';
+
+const PANE_TABS: readonly PaneTab[] = ['body', 'history', 'saved'];
+
+/** Imported files larger than this are refused (saved requests are small). */
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+
+interface NameDialogState {
+  readonly mode: NameDialogMode;
+  readonly initialName: string;
+  /** Rename: the current name. */
+  readonly renaming: string;
+  readonly request: RestDraft;
+}
+
+interface ImportState {
+  readonly plan: ImportPlan;
+  readonly fileName: string;
+}
 
 interface MethodOption {
   readonly method: RestMethod;
@@ -99,6 +137,26 @@ const TONE_CLASSES: Readonly<Record<StatusTone, string>> = {
   gray: '',
 };
 
+/** Offers `text` as a file download. */
+function downloadText(fileName: string, text: string): void {
+  const doc = globalThis.document;
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const link = doc.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    doc.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    // Give the browser a moment to start the download.
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
+}
+
 function isMacPlatform(): boolean {
   const platform = globalThis.navigator?.platform ?? '';
   return /mac|iphone|ipad/i.test(platform);
@@ -106,7 +164,17 @@ function isMacPlatform(): boolean {
 
 @Component({
   selector: 'cerebro-rest',
-  imports: [BytesPipe, CodeEditorComponent, EmptyStateComponent, MenuComponent, SearchInputComponent],
+  imports: [
+    BytesPipe,
+    CodeEditorComponent,
+    EmptyStateComponent,
+    MenuComponent,
+    RestImportDialogComponent,
+    RestNameDialogComponent,
+    RestSavedComponent,
+    SearchInputComponent,
+  ],
+  providers: [RestSavedStore],
   templateUrl: './rest.component.html',
   styleUrl: './rest.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -124,6 +192,8 @@ export class RestComponent {
   private readonly bodyEditor = viewChild<CodeEditorComponent>('bodyEditor');
   private readonly sendButton = viewChild<ElementRef<HTMLButtonElement>>('sendButton');
   private readonly responsePane = viewChild<ElementRef<HTMLElement>>('responsePane');
+  private readonly importInput = viewChild<ElementRef<HTMLInputElement>>('importInput');
+  readonly saved = inject(RestSavedStore);
 
   readonly modKey = isMacPlatform() ? '⌘' : 'Ctrl';
   readonly methodOptions: readonly MethodOption[] = REST_METHODS.map((method) => ({
@@ -139,6 +209,11 @@ export class RestComponent {
   readonly path = signal(this.initialDraft.path);
   readonly body = signal(this.initialDraft.body);
   readonly tab = signal<PaneTab>('body');
+  readonly draft = computed<RestDraft>(() => ({
+    method: this.method(),
+    path: this.path(),
+    body: this.body(),
+  }));
 
   readonly bodyState = computed(() => describeBody(this.path(), this.body()));
   readonly ndjson = computed(() => isNdjsonPath(this.path()));
@@ -193,6 +268,25 @@ export class RestComponent {
     const history = this.history() ?? [];
     return query ? history.filter((entry) => matchesHistoryEntry(entry, query)) : history;
   });
+
+  // ---- Saved requests ----
+  /** The saved request the editor was loaded from (or last saved as). */
+  readonly linked = this.saved.linked;
+  /** The editor no longer matches the linked saved request. */
+  readonly linkedDirty = computed(() => {
+    const linked = this.linked();
+    return linked !== null && !sameRequest(linked, this.draft());
+  });
+  readonly canSave = computed(() => requestPath(this.path()) !== '');
+  readonly saveTitle = computed(() => {
+    const linked = this.linked();
+    return linked === null
+      ? `Save this request (${this.modKey}+S)`
+      : `Save as a new request (${this.modKey}+S updates “${linked.name}”)`;
+  });
+  readonly nameDialog = signal<NameDialogState | null>(null);
+  readonly importState = signal<ImportState | null>(null);
+  readonly importing = signal(false);
 
   // ---- Response ----
   readonly sending = signal(false);
@@ -275,9 +369,31 @@ export class RestComponent {
     };
     element.addEventListener('keydown', formatShortcut, true);
 
+    // Ctrl/⌘+S saves the request instead of the browser saving the page.
+    const doc = globalThis.document;
+    const saveShortcut = (event: KeyboardEvent) => {
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        event.shiftKey ||
+        event.altKey ||
+        event.key.toLowerCase() !== 's'
+      ) {
+        return;
+      }
+      event.preventDefault();
+      // Not while a dialog (ours or a confirmation) is open.
+      if (event.repeat || doc?.querySelector('dialog[open]')) {
+        return;
+      }
+      event.stopPropagation();
+      this.onSaveShortcut();
+    };
+    doc?.addEventListener('keydown', saveShortcut, true);
+
     this.destroyRef.onDestroy(() => {
       element.removeEventListener('scroll', resetAceScroll, true);
       element.removeEventListener('keydown', formatShortcut, true);
+      doc?.removeEventListener('keydown', saveShortcut, true);
       clearTimeout(this.persistTimer);
       this.persist({ method: this.method(), path: this.path(), body: this.body() });
     });
@@ -506,6 +622,7 @@ export class RestComponent {
     this.method.set(isRestMethod(entry.method) ? entry.method : 'GET');
     this.path.set(entry.path);
     this.body.set(restoredBody(entry));
+    this.unlinkUnlessSame();
     this.tab.set('body');
     this.bodyEditor()?.focus();
   }
@@ -514,6 +631,7 @@ export class RestComponent {
     this.method.set(example.method);
     this.path.set(example.path);
     this.body.set(example.body);
+    this.unlinkUnlessSame();
     this.tab.set('body');
     this.sendButton()?.nativeElement.focus();
   }
@@ -628,14 +746,240 @@ export class RestComponent {
   }
 
   onTabKeydown(event: KeyboardEvent): void {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
-      return;
+    const current = PANE_TABS.indexOf(this.tab());
+    let index: number;
+    switch (event.key) {
+      case 'ArrowLeft':
+      case 'ArrowRight':
+        index = wrapIndex(current, event.key === 'ArrowRight' ? 1 : -1, PANE_TABS.length);
+        break;
+      case 'Home':
+        index = 0;
+        break;
+      case 'End':
+        index = PANE_TABS.length - 1;
+        break;
+      default:
+        return;
     }
     event.preventDefault();
-    const next: PaneTab = this.tab() === 'body' ? 'history' : 'body';
+    const next = PANE_TABS[index] ?? 'body';
     this.tab.set(next);
     const tablist = (event.currentTarget as HTMLElement | null)?.parentElement;
     tablist?.querySelector<HTMLElement>(`#rest-tab-${next}`)?.focus();
+  }
+
+  // ------------------------------------------------------------------
+  // Saved requests
+  // ------------------------------------------------------------------
+
+  /** Ctrl/⌘+S: update the linked saved request, or save under a new name. */
+  onSaveShortcut(): void {
+    const linked = this.linked();
+    if (linked !== null && this.linkedDirty()) {
+      this.updateLinked();
+    } else if (linked !== null && sameRequest(linked, this.draft())) {
+      this.alerts.info(`“${linked.name}” has no unsaved changes`);
+    } else {
+      this.openSaveDialog();
+    }
+  }
+
+  openSaveDialog(): void {
+    if (!this.canSave()) {
+      this.alerts.warn('Enter a request path before saving the request');
+      this.focusPath();
+      return;
+    }
+    const draft = this.draft();
+    this.suggestOpen.set(false);
+    this.nameDialog.set({
+      mode: 'save',
+      initialName: uniqueName(suggestName(draft), this.saved.requests()),
+      renaming: '',
+      request: draft,
+    });
+  }
+
+  openRenameDialog(request: SavedRequest): void {
+    this.nameDialog.set({
+      mode: 'rename',
+      initialName: request.name,
+      renaming: request.name,
+      request: { method: request.method, path: request.path, body: request.body },
+    });
+  }
+
+  onNameSubmitted(dialog: NameDialogState, result: NameDialogResult): void {
+    if (dialog.mode === 'rename') {
+      if (result.name === dialog.renaming) {
+        return;
+      }
+      const stored = this.saved.rename(dialog.renaming, result.name);
+      this.reportStored(stored, `Renamed to “${result.name}”`);
+      return;
+    }
+    const { saved, stored } = this.saved.save(result.name, dialog.request);
+    this.reportStored(stored, result.overwrite ? `Replaced “${saved.name}”` : `Saved “${saved.name}”`);
+  }
+
+  updateLinked(): void {
+    const linked = this.linked();
+    if (linked === null) {
+      return;
+    }
+    if (!this.canSave()) {
+      this.alerts.warn('Enter a request path before saving the request');
+      this.focusPath();
+      return;
+    }
+    const { stored } = this.saved.save(linked.name, this.draft());
+    this.reportStored(stored, `Updated “${linked.name}”`);
+  }
+
+  /** Puts the linked saved request back into the editor. */
+  revertLinked(): void {
+    const linked = this.linked();
+    if (linked !== null) {
+      this.applyRequest(linked);
+    }
+  }
+
+  unlink(): void {
+    this.saved.link(null);
+  }
+
+  async loadSaved(request: SavedRequest): Promise<void> {
+    const linked = this.linked();
+    if (linked !== null && this.linkedDirty() && !sameName(linked.name, request.name)) {
+      const discard = await this.dialogs.confirm({
+        title: `Discard the changes to “${linked.name}”?`,
+        message: `The editor holds changes that are not saved yet. Loading “${request.name}” replaces them.`,
+        confirmLabel: 'Discard and load',
+        cancelLabel: 'Keep editing',
+        tone: 'warning',
+      });
+      if (!discard) {
+        return;
+      }
+    }
+    // The list may have changed while the confirmation was open.
+    const current = this.saved.find(request.name);
+    if (!current) {
+      return;
+    }
+    this.applyRequest(current);
+    this.saved.link(current.name);
+    this.saved.markUsed(current.name);
+    this.tab.set('body');
+    this.sendButton()?.nativeElement.focus();
+  }
+
+  exportSaved(): void {
+    const requests = this.saved.requests();
+    if (requests.length === 0) {
+      this.alerts.info('There are no saved requests to export yet');
+      return;
+    }
+    const now = new Date();
+    const name = exportFileName(now);
+    const text = `${JSON.stringify(exportDocument(requests, now), null, 2)}\n`;
+    try {
+      downloadText(name, text);
+      this.alerts.success(
+        `Exported ${requests.length === 1 ? '1 saved request' : `${requests.length} saved requests`}`,
+        name,
+      );
+    } catch (error: unknown) {
+      this.alerts.error('The saved requests could not be exported', error);
+    }
+  }
+
+  chooseImportFile(): void {
+    this.importInput()?.nativeElement.click();
+  }
+
+  async onImportFile(input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0];
+    // Allow picking the same file again later.
+    input.value = '';
+    if (!file || this.importing()) {
+      return;
+    }
+    if (file.size > MAX_IMPORT_BYTES) {
+      this.alerts.error(
+        `“${file.name}” is too large to be a saved requests file`,
+        'Exported saved requests files are at most a few hundred kilobytes.',
+      );
+      return;
+    }
+    this.importing.set(true);
+    let text: string;
+    try {
+      text = await file.text();
+    } catch (error: unknown) {
+      this.alerts.error(`“${file.name}” could not be read`, error);
+      return;
+    } finally {
+      this.importing.set(false);
+    }
+    const parsed = parseImportFile(text, Date.now());
+    if (!parsed.ok) {
+      this.alerts.error(`“${file.name}” cannot be imported`, parsed.message);
+      return;
+    }
+    const plan = planImport(this.saved.requests(), parsed.requests, parsed.invalid);
+    if (plan.conflicts.length > 0) {
+      this.importState.set({ plan, fileName: file.name });
+      return;
+    }
+    this.applyImport(plan, 'skip');
+  }
+
+  onImportConfirmed(state: ImportState, strategy: ImportStrategy): void {
+    this.applyImport(state.plan, strategy);
+  }
+
+  private applyImport(plan: ImportPlan, strategy: ImportStrategy): void {
+    const { outcome, stored } = this.saved.import(plan.incoming, strategy);
+    const summary = importSummary(outcome, plan.invalid);
+    if (!stored) {
+      this.alerts.warn(
+        `${summary.message}, but the browser did not store them`,
+        'Local storage is full or disabled: the imported requests are lost when the page is reloaded.',
+      );
+    } else if (outcome.added + outcome.overwritten === 0) {
+      this.alerts.info(summary.message, summary.details || undefined);
+    } else {
+      this.alerts.success(summary.message, summary.details || undefined);
+    }
+    this.tab.set('saved');
+  }
+
+  private applyRequest(request: Pick<RestDraft, 'method' | 'path' | 'body'>): void {
+    this.method.set(request.method);
+    this.path.set(request.path);
+    this.body.set(request.body);
+    this.suggestOpen.set(false);
+  }
+
+  /** Loading something else into the editor ends the link to a saved request. */
+  private unlinkUnlessSame(): void {
+    const linked = this.linked();
+    if (linked !== null && !sameRequest(linked, this.draft())) {
+      this.saved.link(null);
+    }
+  }
+
+  private reportStored(stored: boolean, message: string): void {
+    if (stored) {
+      this.alerts.success(message);
+    } else {
+      this.alerts.warn(
+        `${message}, but the browser did not store it`,
+        'Local storage is full or disabled: the change is lost when the page is reloaded.',
+      );
+    }
   }
 
   // ------------------------------------------------------------------

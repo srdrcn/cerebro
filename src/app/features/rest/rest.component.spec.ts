@@ -197,6 +197,31 @@ describe('RestComponent', () => {
     );
   });
 
+  it('closes the path suggestions on Tab and lets focus move on', () => {
+    const target = component();
+    target.openSuggestions();
+    expect(target.showSuggestions()).toBe(true);
+
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    target.onPathKeydown(tab);
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(target.showSuggestions()).toBe(false);
+  });
+
+  it('accepts the highlighted path suggestion on Tab', () => {
+    const target = component();
+    target.openSuggestions();
+    target.onPathKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }));
+    const option = target.suggestions()[0];
+
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    target.onPathKeydown(tab);
+
+    expect(tab.defaultPrevented).toBe(true);
+    expect(target.path()).toBe(option);
+  });
+
   it('forgets the previous cluster when the host changes', async () => {
     const target = component();
     TestBed.tick();

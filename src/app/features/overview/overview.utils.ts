@@ -237,6 +237,37 @@ export function describeShard(
   return `Shard ${shard.shard} of ${shard.index} · ${role} · ${state}${target}`;
 }
 
+/** Heading of a shard menu: "Shard 0 · replica", plus the state unless started. */
+export function shardHeading(shard: OverviewShard, closed = false): string {
+  const role = shard.primary ? 'primary' : 'replica';
+  const actual = shardState(shard);
+  // An unassigned copy of a closed index is still unassigned: say so, and
+  // mention the closed index rather than hiding the allocation state.
+  if (closed && actual === 'unassigned') {
+    return `Shard ${shard.shard} · ${role} · unassigned (closed index)`;
+  }
+  const state = closed ? 'closed' : actual;
+  return state === 'started' ? `Shard ${shard.shard} · ${role}` : `Shard ${shard.shard} · ${role} · ${state}`;
+}
+
+/**
+ * Query parameters of `/allocation` explaining one shard copy. A primary is
+ * unique, so it needs no node; an assigned replica names its node so the
+ * explanation is about that copy; an unassigned copy leaves the node out so
+ * Elasticsearch explains (one of) the unassigned copies of the shard.
+ */
+export function allocationExplainParams(shard: OverviewShard): Record<string, string> {
+  const params: Record<string, string> = {
+    index: shard.index,
+    shard: String(shard.shard),
+    primary: String(shard.primary),
+  };
+  if (!shard.primary && shard.node && shardState(shard) !== 'unassigned') {
+    params['node'] = shard.node;
+  }
+  return params;
+}
+
 export interface ShardCounts {
   readonly unassigned: number;
   readonly relocating: number;
@@ -351,6 +382,12 @@ export function nodeRoleIcons(node: OverviewNode): NodeRole[] {
 }
 
 export type HealthTone = 'green' | 'yellow' | 'red' | 'gray';
+
+/** Cluster health in sentence case ("Yellow"), like every other displayed value. */
+export function healthLabel(status: string | null | undefined): string {
+  const value = (status ?? '').trim().toLowerCase();
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : 'Unknown';
+}
 
 export function healthTone(status: string | null | undefined): HealthTone {
   switch ((status ?? '').toLowerCase()) {
@@ -480,10 +517,44 @@ function noun(count: number): string {
   return count === 1 ? 'index' : 'indices';
 }
 
-/** Confirmation dialog for running `operation` on `names`. */
+/** Operations Elasticsearch rejects on closed indices (`index_closed_exception`). */
+const OPEN_INDEX_OPERATIONS: ReadonlySet<IndexOperation> = new Set<IndexOperation>([
+  'merge',
+  'refresh',
+  'flush',
+  'cache',
+]);
+
+export function requiresOpenIndex(operation: IndexOperation): boolean {
+  return OPEN_INDEX_OPERATIONS.has(operation);
+}
+
+export interface OperationTargets {
+  /** Indices the operation is sent to. */
+  readonly names: string[];
+  /** Closed indices left out because the operation would fail on them. */
+  readonly skipped: number;
+}
+
+/**
+ * Indices `operation` can act on. A single closed index makes a whole merge,
+ * refresh, flush or cache request fail, so closed indices are left out of
+ * those; open, close and delete keep every index.
+ */
+export function operationTargets(
+  operation: IndexOperation,
+  indices: readonly OverviewIndex[],
+): OperationTargets {
+  const openOnly = requiresOpenIndex(operation);
+  const names = indices.filter((index) => !(openOnly && index.closed)).map((index) => index.name);
+  return { names, skipped: indices.length - names.length };
+}
+
+/** Confirmation dialog for running `operation` on `names` (`skipped` closed indices left out). */
 export function operationConfirmation(
   operation: IndexOperation,
   names: readonly string[],
+  skipped = 0,
 ): OperationConfirmation {
   const definition = OPERATIONS[operation];
   const count = names.length;
@@ -498,18 +569,25 @@ export function operationConfirmation(
       : single
         ? `${definition.label} index`
         : `${definition.label} ${count} ${noun(count)}`;
+  const skippedNote =
+    skipped > 0 ? ` ${skipped} closed ${noun(skipped)} ${skipped === 1 ? 'is' : 'are'} skipped.` : '';
   return {
     title: `${verb} ${target}?`,
-    message: definition.message,
+    message: definition.message + skippedNote,
     ...(single ? {} : { items: names }),
     confirmLabel,
     tone: definition.tone,
   };
 }
 
-/** "Index products closed" / "3 indices refreshed". */
-export function operationSuccess(operation: IndexOperation, names: readonly string[]): string {
+/** "Index products closed" / "3 indices refreshed, 1 closed index skipped". */
+export function operationSuccess(
+  operation: IndexOperation,
+  names: readonly string[],
+  skipped = 0,
+): string {
   const definition = OPERATIONS[operation];
   const subject = names.length === 1 ? `Index ${names[0]}` : `${names.length} ${noun(names.length)}`;
-  return `${subject} ${definition.done}`;
+  const skippedNote = skipped > 0 ? `, ${skipped} closed ${noun(skipped)} skipped` : '';
+  return `${subject} ${definition.done}${skippedNote}`;
 }

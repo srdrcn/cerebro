@@ -331,6 +331,17 @@ First cerebro release.
 
 ### Unreleased
 
+#### New features
+
+- Shard allocation explain: why a shard is unassigned or stays on its node, with every node's deciders, reachable from the overview's shard menus and the unassigned-shards warning.
+- Index details page with overview, settings, mappings, statistics, aliases and shards tabs.
+- Composable index templates and component templates: list, edit, delete and preview the settings, mappings and aliases a template resolves to.
+- Data streams (backing indices, generation, lifecycle, rollover, delete) and index lifecycle (ILM) policies with a phase timeline, a JSON editor and per-index lifecycle status (current phase, step and errors).
+- Ingest pipelines: list, edit, delete and simulate against sample documents, with per-processor results.
+- Tasks: running tasks with sub-tasks nested under their parent, details, and cancellation of cancellable tasks.
+- Recoveries: live progress of shard recoveries (files, bytes, translog, stage and source).
+- REST console saved requests: name, rename, duplicate and update favourites, with JSON export and import.
+
 #### User interface
 
 - Rebuild every screen from scratch on a dedicated design system (see `docs/FRONTEND.md`): sidebar navigation, light and dark themes that follow the operating system, bundled Inter / JetBrains Mono fonts and responsive layouts down to phone width.
@@ -339,6 +350,8 @@ First cerebro release.
 - Repeated notifications are folded together, and error details stay open while they are being read.
 - Connect screen remembers recently used cluster addresses (never credentials).
 - JSON is edited and displayed with a themed, searchable code editor with folding.
+- Editors ask before in-app navigation discards unsaved changes.
+- Accessibility: visible focus ring, AA text contrast in both themes, Tab leaves the code editor (Ctrl + ] / [ indent), keyboard-friendly menus and mobile navigation.
 - Drop Bootstrap CSS; feature pages are lazy loaded to keep the initial bundle small.
 
 #### Bug fixes
