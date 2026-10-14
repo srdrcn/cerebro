@@ -7,7 +7,6 @@ import {
   buildFlatSettingsPayload,
   customSettingRows,
   defaultScope,
-  errorReason,
   filterSettingRows,
   friendlyReason,
   groupEditorRows,
@@ -223,21 +222,13 @@ describe('pending changes', () => {
 });
 
 describe('save errors', () => {
+  // What Elasticsearch 8 returns for a value it cannot parse.
   const enableError = new ClusterApiError(400, {
     error: {
-      root_cause: [{ reason: 'ignored root cause' }],
+      root_cause: [{ reason: "illegal value can't update [cluster.routing.allocation.enable] from [all] to [x]" }],
       reason: "illegal value can't update [cluster.routing.allocation.enable] from [all] to [x]",
       caused_by: { reason: 'For input string: "x"' },
     },
-  });
-
-  it('prefers the top level reason of an Elasticsearch error', () => {
-    expect(errorReason(enableError)).toBe(
-      "illegal value can't update [cluster.routing.allocation.enable] from [all] to [x]",
-    );
-    expect(errorReason(new ClusterApiError(500, 'Gateway timeout'))).toBe('Gateway timeout');
-    expect(errorReason(new Error('boom'))).toBeUndefined();
-    expect(errorReason(undefined)).toBeUndefined();
   });
 
   it('rewrites Java enum errors', () => {
@@ -273,6 +264,20 @@ describe('save errors', () => {
     expect(settingErrorsFor(anonymous, changes)).toEqual({});
     expect(settingErrorsFor(anonymous, changes.slice(1))).toEqual({
       other: { message: 'Failed to parse value [maybe]', value: '2' },
+    });
+    expect(settingErrorsFor(new Error('offline'), [])).toEqual({});
+    expect(settingErrorsFor(undefined, changes)).toEqual({});
+  });
+
+  it('shows Java enum errors in plain words', () => {
+    const enumError = new ClusterApiError(400, {
+      error: {
+        root_cause: [{ reason: 'No enum constant org.elasticsearch.EnableAllocationDecider.Allocation.SOMETIMES' }],
+      },
+    });
+    const change: PendingChange = { name: 'cluster.routing.allocation.enable', from: 'all', to: 'sometimes', scope: 'persistent' };
+    expect(settingErrorsFor(enumError, [change])).toEqual({
+      'cluster.routing.allocation.enable': { message: '[sometimes] is not one of the accepted values.', value: 'sometimes' },
     });
   });
 });

@@ -20,11 +20,14 @@ import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { elasticsearchReason, failureMessage } from '../../core/errors';
+import { formatRelative, pluralize, sentence } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { BytesPipe, NumberPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
+import { createSort } from '../../shared/sort-state';
 import {
   AliasDetail,
   DETAIL_TABS,
@@ -44,9 +47,7 @@ import {
   countLeafFields,
   dataStreamOf,
   describeFilter,
-  esErrorReason,
   explainQuery,
-  failureMessage,
   filterMappingFields,
   filterSettings,
   flattenSettings,
@@ -59,8 +60,6 @@ import {
   mappingInfo,
   nextTab,
   parseTab,
-  pluralize,
-  relativeAge,
   resolveIndexDetail,
   settingHint,
   shardRows,
@@ -122,8 +121,10 @@ export class IndexDetailComponent {
   readonly settingsQuery = signal('');
   readonly statsScope = signal<StatsScope>('primaries');
   readonly shardFilter = signal<ShardFilter>('all');
-  readonly shardSort = signal<ShardSortField>('shard');
-  readonly shardReverse = signal(false);
+  // Document counts and sizes are most useful largest first.
+  readonly shardSort = createSort<ShardSortField>('shard', {
+    descendingFirst: (field) => field === 'docs' || field === 'size',
+  });
 
   readonly options = computed(() => {
     const sorted = [...new Set(this.indices() ?? [])].sort((left, right) => left.localeCompare(right));
@@ -186,7 +187,7 @@ export class IndexDetailComponent {
           return row.state !== 'started';
       }
     });
-    return sortShards(rows, this.shardSort(), this.shardReverse());
+    return sortShards(rows, this.shardSort.field(), this.shardSort.reverse());
   });
 
   readonly problemShards = computed(() => this.shards().filter((row) => row.state !== 'started').length);
@@ -267,7 +268,7 @@ export class IndexDetailComponent {
     } catch (error: unknown) {
       if (sequence === this.indicesSequence && this.indices() === undefined) {
         this.indicesFailed.set(true);
-        this.alerts.error('Error while loading indices', error);
+        this.alerts.error('Could not load the index list', error);
       }
     }
   }
@@ -312,7 +313,7 @@ export class IndexDetailComponent {
       } else if (this.lifecycle() === undefined || this.lifecycle()?.kind === 'unavailable') {
         this.lastLifecycle = '';
         this.ilmRaw = undefined;
-        this.lifecycle.set({ kind: 'unavailable', reason: esErrorReason(ilm.error) ?? null });
+        this.lifecycle.set({ kind: 'unavailable', reason: readableReason(ilm.error) ?? null });
       }
     } catch (error: unknown) {
       if (!current()) {
@@ -323,10 +324,10 @@ export class IndexDetailComponent {
         this.state.set('missing');
       } else {
         if (this.state() !== 'ready') {
-          this.loadError.set(esErrorReason(error));
+          this.loadError.set(readableReason(error));
           this.state.set('error');
         }
-        this.alerts.error(failureMessage(`Error while loading index ${index}`, error), error);
+        this.alerts.error(failureMessage(`Could not load index ${index}`, error), error);
       }
     } finally {
       if (sequence === this.loadSequence) {
@@ -440,7 +441,7 @@ export class IndexDetailComponent {
         return;
       }
     } catch (error: unknown) {
-      this.alerts.error(failureMessage(`${definition.label} failed for ${name}`, error), error);
+      this.alerts.error(failureMessage(`Could not ${definition.verb} ${name}`, error), error);
     } finally {
       this.busy.set(null);
       this.refreshService.refresh();
@@ -516,29 +517,6 @@ export class IndexDetailComponent {
 
   // ---- Table helpers -----------------------------------------------------------
 
-  sortShardsBy(field: ShardSortField): void {
-    if (this.shardSort() === field) {
-      this.shardReverse.update((value) => !value);
-    } else {
-      this.shardSort.set(field);
-      this.shardReverse.set(field === 'docs' || field === 'size');
-    }
-  }
-
-  ariaSort(field: ShardSortField): 'ascending' | 'descending' | 'none' {
-    if (this.shardSort() !== field) {
-      return 'none';
-    }
-    return this.shardReverse() ? 'descending' : 'ascending';
-  }
-
-  sortIcon(field: ShardSortField): string {
-    if (this.shardSort() !== field) {
-      return 'bi-arrow-down-up';
-    }
-    return this.shardReverse() ? 'bi-arrow-down' : 'bi-arrow-up';
-  }
-
   explainParams(row: ShardRow): Record<string, string | number | boolean | null> {
     return { ...this.connection.hostQuery(), ...explainQuery(this.name(), row) };
   }
@@ -548,7 +526,7 @@ export class IndexDetailComponent {
   }
 
   age(date: Date | null): string {
-    return relativeAge(date, this.now());
+    return formatRelative(date?.getTime(), this.now());
   }
 
   fieldIndent(field: MappingField): number {
@@ -574,4 +552,10 @@ export class IndexDetailComponent {
     this.shardFilter.set('all');
     this.state.set(index ? 'loading' : 'idle');
   }
+}
+
+/** The Elasticsearch reason of a failure as a sentence of its own. */
+function readableReason(error: unknown): string | undefined {
+  const reason = elasticsearchReason(error);
+  return reason ? sentence(reason) : undefined;
 }

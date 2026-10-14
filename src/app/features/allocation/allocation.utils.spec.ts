@@ -13,11 +13,9 @@ import {
   describeExplainError,
   describeStore,
   diskUsage,
-  errorDetails,
+  explainErrorDetails,
   explainQueryParams,
-  formatRelative,
   friendlyNote,
-  humanize,
   isNoUnassignedShards,
   lastAllocationStatusLabel,
   normalizeExplanation,
@@ -170,21 +168,10 @@ const PRODUCTS_PRIMARY: RawAllocationExplain = {
 };
 
 describe('text helpers', () => {
-  it('humanizes identifiers and builds ordinals', () => {
-    expect(humanize('worse_balance')).toBe('Worse balance');
-    expect(humanize('')).toBe('');
+  it('builds ordinals', () => {
     expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 103].map(ordinal)).toEqual([
       '1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '103rd',
     ]);
-  });
-
-  it('formats relative times', () => {
-    const now = Date.UTC(2026, 9, 14, 12, 0, 0);
-    expect(formatRelative(now - 20_000, now)).toBe('just now');
-    expect(formatRelative(now - 5 * 60_000, now)).toBe('5m ago');
-    expect(formatRelative(now - 3 * 3_600_000, now)).toBe('3h ago');
-    expect(formatRelative(now + 2 * 86_400_000, now)).toBe('in 2d');
-    expect(formatRelative(null, now)).toBe('–');
   });
 
   it('hides built-in node attributes and sorts the rest', () => {
@@ -559,17 +546,17 @@ describe('errors', () => {
   });
 
   it('extracts Elasticsearch error details', () => {
-    expect(errorDetails(new ClusterApiError(404, { error: { root_cause: [{ type: 't', reason: 'r', index: 'i', shard: '9' }] } }))).toEqual({
+    expect(explainErrorDetails(new ClusterApiError(404, { error: { root_cause: [{ type: 't', reason: 'r', index: 'i', shard: '9' }] } }))).toEqual({
       status: 404,
       type: 't',
       reason: 'r',
       index: 'i',
       shard: '9',
     });
-    expect(errorDetails(new ClusterApiError(500, { error: 'plain text' }))).toEqual({ status: 500, reason: 'plain text' });
-    expect(errorDetails(new ClusterApiError(502, 'Bad gateway'))).toEqual({ status: 502, reason: 'Bad gateway' });
-    expect(errorDetails('oops')).toEqual({ reason: 'oops' });
-    expect(errorDetails(null)).toEqual({});
+    expect(explainErrorDetails(new ClusterApiError(500, { error: 'plain text' }))).toEqual({ status: 500, reason: 'plain text' });
+    expect(explainErrorDetails(new ClusterApiError(502, 'Bad gateway'))).toEqual({ status: 502, reason: 'Bad gateway' });
+    expect(explainErrorDetails('oops')).toEqual({ reason: 'oops' });
+    expect(explainErrorDetails(null)).toEqual({});
   });
 
   it('describes failures in plain language', () => {

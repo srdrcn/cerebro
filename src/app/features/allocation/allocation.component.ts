@@ -14,10 +14,12 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { formatRelative, formatTimestamp, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { BytesPipe } from '../../shared/format.pipes';
 import { MeterComponent } from '../../shared/meter.component';
+import { createSort } from '../../shared/sort-state';
 import {
   DeciderView,
   ExplainRequest,
@@ -35,14 +37,11 @@ import {
   copyLabel,
   describeExplainError,
   explainQueryParams,
-  formatRelative,
-  formatTimestamp,
   isNoUnassignedShards,
   normalizeExplanation,
   ordinal,
   parseExplainParams,
   parseShardCopies,
-  pluralize,
   requestFor,
   sameRequest,
   shardCount,
@@ -110,8 +109,7 @@ export class AllocationComponent {
   readonly announcement = signal('');
 
   // Node decisions table.
-  readonly sortField = signal<NodeSortField>('decision');
-  readonly reverse = signal(false);
+  readonly sort = createSort<NodeSortField>('decision');
   readonly expanded = signal<ReadonlySet<string>>(new Set());
 
   readonly indexOptions = computed(() => {
@@ -159,7 +157,7 @@ export class AllocationComponent {
   });
 
   readonly sortedNodes = computed(() =>
-    sortNodeDecisions(this.view()?.nodes ?? [], this.sortField(), this.reverse()),
+    sortNodeDecisions(this.view()?.nodes ?? [], this.sort.field(), this.sort.reverse()),
   );
 
   readonly decisionSummary = computed(() => {
@@ -338,6 +336,7 @@ export class AllocationComponent {
     this.submitted.set(true);
     const shard = this.formShard();
     if (this.formError() || shard === null) {
+      document.getElementById(this.formIndex() ? 'alloc-shard' : 'alloc-index')?.focus();
       return;
     }
     this.go({ index: this.formIndex(), shard, primary: this.formPrimary() });
@@ -398,29 +397,6 @@ export class AllocationComponent {
     } else if (state.kind === 'error') {
       this.dialogs.showJson('Elasticsearch response', state.body, state.failure.title);
     }
-  }
-
-  sortBy(field: NodeSortField): void {
-    if (this.sortField() === field) {
-      this.reverse.update((value) => !value);
-    } else {
-      this.sortField.set(field);
-      this.reverse.set(false);
-    }
-  }
-
-  ariaSort(field: NodeSortField): 'ascending' | 'descending' | 'none' {
-    if (this.sortField() !== field) {
-      return 'none';
-    }
-    return this.reverse() ? 'descending' : 'ascending';
-  }
-
-  sortIcon(field: NodeSortField): string {
-    if (this.sortField() !== field) {
-      return 'bi-arrow-down-up';
-    }
-    return this.reverse() ? 'bi-arrow-down' : 'bi-arrow-up';
   }
 
   toggleNode(node: NodeDecisionView): void {
@@ -489,7 +465,7 @@ export class AllocationComponent {
   readonly copyLabel = copyLabel;
   readonly ordinal = ordinal;
   readonly formatRelative = formatRelative;
-  readonly formatTimestamp = formatTimestamp;
+  readonly formatTimestamp = (milliseconds: number | null) => formatTimestamp(milliseconds, { seconds: true });
 
   private go(request: ExplainRequest | null): void {
     if (sameRequest(request, this.request())) {

@@ -47,11 +47,6 @@
   font-size: 14px;
 }
 
-.pipeline-item.is-selected .list-item__icon {
-  background: var(--accent-soft-strong);
-  color: var(--accent-text);
-}
-
 .pipeline-item:disabled {
   cursor: default;
 }
@@ -151,25 +146,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.editor-card__icon {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  flex: none;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: 14px;
-}
-
-.editor-card__icon.is-new {
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  background: var(--accent-soft);
-  color: var(--accent-text);
 }
 
 .editor-card__actions {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ClusterApiError } from '../../core/api-envelope';
 import { RawTask, Task, TaskFilter } from './tasks.models';
 import {
   LONG_RUNNING_MILLIS,
@@ -8,7 +7,6 @@ import {
   cancelFailure,
   cancelMessage,
   countDescendants,
-  esErrorReason,
   isSystemTask,
   filterTaskTree,
   flattenTaskTree,
@@ -287,17 +285,6 @@ describe('node name lookups', () => {
 });
 
 describe('errors and cancellation', () => {
-  it('reads Elasticsearch error reasons', () => {
-    expect(
-      esErrorReason(new ClusterApiError(404, { error: { type: 'resource_not_found_exception', reason: 'task [n1:9] is missing' } })),
-    ).toBe('Task [n1:9] is missing');
-    expect(esErrorReason(new ClusterApiError(500, 'Gateway timeout'))).toBe('Gateway timeout');
-    expect(esErrorReason(new ClusterApiError(400, { error: 'bad' }))).toBe('bad');
-    expect(esErrorReason(new ClusterApiError(400, { node_failures: [{ reason: 'node gone' }] }))).toBe('Node gone');
-    expect(esErrorReason(new Error('offline'))).toBeUndefined();
-    expect(esErrorReason(null)).toBeUndefined();
-  });
-
   it('detects failures reported inside a 200 cancel response', () => {
     expect(cancelFailure({ nodes: {} })).toBeNull();
     expect(cancelFailure({ node_failures: [], task_failures: [] })).toBeNull();

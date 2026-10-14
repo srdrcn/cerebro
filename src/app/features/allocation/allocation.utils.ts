@@ -1,4 +1,7 @@
-import { formatBytes, formatDuration } from '../../core/format';
+import { elasticsearchReason } from '../../core/errors';
+import { formatBytes, formatDuration, humanize, sentence } from '../../core/format';
+import { isRecord } from '../../core/json';
+import { isInternalAttribute } from '../../core/node-attributes';
 import {
   CatShardRow,
   CheckView,
@@ -25,26 +28,6 @@ import {
 /* Small helpers                                                       */
 /* ------------------------------------------------------------------ */
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** "worse_balance" → "Worse balance". */
-export function humanize(value: string): string {
-  const words = value.replace(/[_.-]+/g, ' ').trim().toLocaleLowerCase();
-  return words ? words.charAt(0).toLocaleUpperCase() + words.slice(1) : '';
-}
-
-/** Upper-cases the first letter of a sentence Elasticsearch wrote in lower case. */
-export function sentence(value: string): string {
-  const text = value.trim();
-  return text ? text.charAt(0).toLocaleUpperCase() + text.slice(1) : '';
-}
-
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 /** 1 → "1st", 2 → "2nd", 11 → "11th". */
 export function ordinal(value: number): string {
   const remainder100 = value % 100;
@@ -63,51 +46,12 @@ export function ordinal(value: number): string {
   }
 }
 
-const RELATIVE_UNITS: readonly (readonly [string, number])[] = [
-  ['d', 86_400_000],
-  ['h', 3_600_000],
-  ['m', 60_000],
-];
-
-/** "just now", "5m ago", "3h ago", "2d ago" (or "in 5m" for clock skew). */
-export function formatRelative(milliseconds: number | null | undefined, now: number): string {
-  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {
-    return '–';
-  }
-  const delta = now - milliseconds;
-  const distance = Math.abs(delta);
-  const unit = RELATIVE_UNITS.find(([, size]) => distance >= size);
-  if (!unit) {
-    return 'just now';
-  }
-  const amount = `${Math.floor(distance / unit[1])}${unit[0]}`;
-  return delta >= 0 ? `${amount} ago` : `in ${amount}`;
-}
-
-function pad(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
-/** Local "2026-10-14 15:54:10". */
-export function formatTimestamp(milliseconds: number | null | undefined): string {
-  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {
-    return '–';
-  }
-  const date = new Date(milliseconds);
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  );
-}
-
-/** Attributes Elasticsearch adds on its own; they never explain a decision. */
-const INTERNAL_ATTRIBUTE_PREFIXES = ['ml.', 'xpack.', 'transform.'] as const;
-
+/** Node attributes without the built-in ones, which never explain a decision. */
 export function visibleAttributes(
   attributes: Readonly<Record<string, string>> | undefined,
 ): readonly (readonly [string, string])[] {
   return Object.entries(attributes ?? {})
-    .filter(([name]) => !INTERNAL_ATTRIBUTE_PREFIXES.some((prefix) => name.startsWith(prefix)))
+    .filter(([name]) => !isInternalAttribute(name))
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([name, value]) => [name, String(value)] as const);
 }
@@ -961,7 +905,7 @@ export function requestFor(view: ExplanationView, previous: ExplainRequest | nul
   return { index: view.index, shard: view.shard, primary: view.primary, ...(node ? { node } : {}) };
 }
 
-export interface ErrorDetails {
+export interface ExplainErrorDetails {
   readonly status?: number;
   readonly type?: string;
   readonly reason?: string;
@@ -969,31 +913,25 @@ export interface ErrorDetails {
   readonly shard?: string;
 }
 
-/** Extracts `{status, error: {type, reason}}` from a ClusterApiError-like value. */
-export function errorDetails(error: unknown): ErrorDetails {
+/**
+ * Status, reason and the `type`, `index` and `shard` fields of a failed
+ * explain request, which tell a missing index or shard from other failures.
+ */
+export function explainErrorDetails(error: unknown): ExplainErrorDetails {
   if (!isRecord(error)) {
     return typeof error === 'string' ? { reason: error } : {};
   }
   const status = typeof error['status'] === 'number' ? error['status'] : undefined;
   const body = error['body'];
+  const reason = elasticsearchReason(body) ?? undefined;
   const payload = isRecord(body) ? body['error'] : undefined;
-  if (typeof payload === 'string') {
-    return { ...(status !== undefined ? { status } : {}), reason: payload };
-  }
-  if (!isRecord(payload)) {
-    if (typeof body === 'string' && body.trim()) {
-      return { ...(status !== undefined ? { status } : {}), reason: body.trim() };
-    }
-    return status !== undefined ? { status } : {};
-  }
-  const rootCauses = payload['root_cause'];
+  const rootCauses = isRecord(payload) ? payload['root_cause'] : undefined;
   const root = Array.isArray(rootCauses) && isRecord(rootCauses[0]) ? rootCauses[0] : undefined;
   const pick = (key: string): string | undefined => {
-    const value = payload[key] ?? root?.[key];
+    const value = (isRecord(payload) ? payload[key] : undefined) ?? root?.[key];
     return typeof value === 'string' || typeof value === 'number' ? String(value) : undefined;
   };
   const type = pick('type');
-  const reason = pick('reason');
   const index = pick('index');
   const shard = pick('shard');
   return {
@@ -1007,7 +945,7 @@ export function errorDetails(error: unknown): ErrorDetails {
 
 /** Elasticsearch answers 400 when asked for "the next unassigned shard" of a healthy cluster. */
 export function isNoUnassignedShards(error: unknown): boolean {
-  const details = errorDetails(error);
+  const details = explainErrorDetails(error);
   const reason = details.reason ?? '';
   return (
     details.status === 400 &&
@@ -1026,7 +964,7 @@ export interface ExplainFailure {
 const UNKNOWN_NODE = /failed to resolve \[(.+?)\],? no matching nodes/i;
 
 export function describeExplainError(error: unknown, request: ExplainRequest | null): ExplainFailure {
-  const details = errorDetails(error);
+  const details = explainErrorDetails(error);
   if (details.status === undefined) {
     return {
       title: 'Could not reach the cluster',

@@ -8,6 +8,7 @@ import {
   linkedSignal,
   signal,
   untracked,
+  viewChild,
   viewChildren,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -18,13 +19,14 @@ import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { formatDuration, sortByName } from '../../core/format';
+import { formatDuration, formatRelative, formatTimestamp, pluralize, sortByName } from '../../core/format';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { MenuComponent } from '../../shared/menu.component';
 import { PagerComponent, clampPage, pageSlice } from '../../shared/pager.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
+import { createSort } from '../../shared/sort-state';
 import { ChecklistOption, IndexChecklistComponent } from './index-checklist.component';
 import { SnapshotRestoreComponent } from './snapshot-restore.component';
 import {
@@ -39,11 +41,8 @@ import {
   badgeClass,
   failedShards,
   filterSnapshots,
-  formatRelative,
-  formatTimestamp,
   isInProgress,
   isRestorable,
-  pluralize,
   snapshotDuration,
   snapshotIndices,
   snapshotKey,
@@ -131,8 +130,11 @@ export class SnapshotsComponent {
   // List filters.
   readonly query = signal('');
   readonly hiddenStates = signal<ReadonlySet<string>>(new Set());
-  readonly sortField = signal<SnapshotSortField>('start');
-  readonly reverse = signal(true);
+  /** Newest first; dates and counts start largest first, names alphabetically. */
+  readonly sort = createSort<SnapshotSortField>('start', {
+    reverse: true,
+    descendingFirst: (field) => field !== 'name',
+  });
   readonly page = signal(1);
 
   readonly restoreTarget = signal<RestoreTarget | undefined>(undefined);
@@ -147,13 +149,13 @@ export class SnapshotsComponent {
   readonly createIncludeGlobalState = signal(true);
   readonly createSubmitted = signal(false);
   readonly creating = signal(false);
-  /** False while the server drops these two create options (see utils). */
 
   /**
    * A row menu closes as soon as anything scrolls, so background reloads
    * (in-progress polling, auto refresh) are held back while one is open.
    */
   private readonly menus = viewChildren(MenuComponent);
+  private readonly createChecklist = viewChild(IndexChecklistComponent);
   readonly menuOpen = computed(() => this.menus().some((menu) => menu.open()));
   private readonly pendingSnapshots = signal<PendingSnapshots | null>(null);
 
@@ -190,11 +192,11 @@ export class SnapshotsComponent {
     () => !!this.nameError() && (this.createSubmitted() || this.createName().trim() !== ''),
   );
   readonly repositoryError = computed(() =>
-    this.createRepository() ? null : 'Select the repository to write the snapshot to.',
+    this.createRepository() ? null : 'Select the repository to write the snapshot to',
   );
   readonly selectionError = computed(() =>
     this.createScope() === 'selected' && this.createSelection().length === 0
-      ? 'Select at least one index, or snapshot all indices.'
+      ? 'Select at least one index, or snapshot all indices'
       : null,
   );
   readonly createValid = computed(
@@ -215,8 +217,8 @@ export class SnapshotsComponent {
   readonly visible = computed(() =>
     sortSnapshots(
       filterSnapshots(this.snapshots() ?? [], this.query(), this.hiddenStates()),
-      this.sortField(),
-      this.reverse(),
+      this.sort.field(),
+      this.sort.reverse(),
     ),
   );
 
@@ -247,8 +249,8 @@ export class SnapshotsComponent {
   });
 
   readonly sortDescription = computed(() => {
-    const reverse = this.reverse();
-    switch (this.sortField()) {
+    const reverse = this.sort.reverse();
+    switch (this.sort.field()) {
       case 'name':
         return reverse ? 'Sorted by name, Z to A' : 'Sorted by name, A to Z';
       case 'indices':
@@ -472,30 +474,6 @@ export class SnapshotsComponent {
     }
   }
 
-  sortBy(field: SnapshotSortField): void {
-    if (this.sortField() === field) {
-      this.reverse.update((value) => !value);
-    } else {
-      this.sortField.set(field);
-      // Dates and counts are most useful largest first, names alphabetically.
-      this.reverse.set(field !== 'name');
-    }
-  }
-
-  ariaSort(field: SnapshotSortField): 'ascending' | 'descending' | 'none' {
-    if (this.sortField() !== field) {
-      return 'none';
-    }
-    return this.reverse() ? 'descending' : 'ascending';
-  }
-
-  sortIcon(field: SnapshotSortField): string {
-    if (this.sortField() !== field) {
-      return 'bi-arrow-down-up';
-    }
-    return this.reverse() ? 'bi-arrow-down' : 'bi-arrow-up';
-  }
-
   stateCount(state: SnapshotState): number {
     return this.summary().states[state] ?? 0;
   }
@@ -569,7 +547,11 @@ export class SnapshotsComponent {
 
   async create(): Promise<void> {
     this.createSubmitted.set(true);
-    if (!this.createValid() || this.creating()) {
+    if (this.creating()) {
+      return;
+    }
+    if (!this.createValid()) {
+      this.focusFirstInvalid();
       return;
     }
     const repository = this.createRepository();
@@ -603,6 +585,16 @@ export class SnapshotsComponent {
     const input = document.getElementById('create-snapshot-name');
     input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     input?.focus({ preventScroll: true });
+  }
+
+  private focusFirstInvalid(): void {
+    if (this.repositoryError()) {
+      document.getElementById('create-snapshot-repository')?.focus();
+    } else if (this.nameError()) {
+      document.getElementById('create-snapshot-name')?.focus();
+    } else if (this.selectionError()) {
+      this.createChecklist()?.focus();
+    }
   }
 
   private pickRepository(repositories: readonly string[]): string {

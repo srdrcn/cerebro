@@ -29,6 +29,11 @@
   gap: var(--space-3);
 }
 
+.saved-readonly {
+  flex: none;
+  margin: 10px var(--space-4) 0;
+}
+
 .saved-scroll {
   min-height: 0;
   flex: 1;
@@ -189,6 +194,12 @@
 }
 
 @container pane (max-width: 440px) {
+  .saved-readonly {
+    margin: 8px var(--space-3) 0;
+    padding: 8px 10px;
+    font-size: var(--text-xs);
+  }
+
   .saved-toolbar {
     padding-right: var(--space-3);
     padding-left: var(--space-3);

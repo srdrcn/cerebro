@@ -1,8 +1,6 @@
 import { isInternalAttribute } from '../../core/node-attributes';
 import { NodeSortField, NodesFilter, NodesNode } from './nodes.models';
 
-export { isInternalAttribute };
-
 export function matchesNode(node: NodesNode, filter: NodesFilter): boolean {
   const matchesName = node.name
     .toLocaleLowerCase()

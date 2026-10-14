@@ -14,20 +14,22 @@ import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { formatDuration } from '../../core/format';
+import { ClusterApiError } from '../../core/api-envelope';
+import { elasticsearchReason, failureMessage } from '../../core/errors';
+import { formatDuration, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { MeterComponent } from '../../shared/meter.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
+import { createSort } from '../../shared/sort-state';
 import { Task, TaskFilter, TaskNode, TaskRow, TaskSortField, TasksResponse } from './tasks.models';
 import {
   LONG_RUNNING_MILLIS,
   buildTaskTree,
   cancelFailure,
   cancelMessage,
-  esErrorReason,
   filterTaskTree,
   isSystemTask,
   flattenTaskTree,
@@ -58,6 +60,7 @@ export class TasksComponent {
 
   readonly longRunningMillis = LONG_RUNNING_MILLIS;
   readonly descriptionLimit = DESCRIPTION_LIMIT;
+  readonly pluralize = pluralize;
 
   readonly tasks = signal<readonly Task[] | undefined>(undefined);
   readonly loading = signal(false);
@@ -70,8 +73,11 @@ export class TasksComponent {
   readonly query = signal('');
   readonly hideInternal = signal(true);
   readonly onlyCancellable = signal(false);
-  readonly sortField = signal<TaskSortField>('running');
-  readonly reverse = signal(true);
+  // Running time is most useful longest first; the other columns start ascending.
+  readonly sort = createSort<TaskSortField>('running', {
+    reverse: true,
+    descendingFirst: (field) => field === 'running',
+  });
   readonly collapsed = signal<ReadonlySet<string>>(new Set());
   readonly expandedDescriptions = signal<ReadonlySet<string>>(new Set());
   readonly cancelling = signal<ReadonlySet<string>>(new Set());
@@ -91,7 +97,7 @@ export class TasksComponent {
   });
 
   readonly tree = computed(() =>
-    sortTaskTree(filterTaskTree(buildTaskTree(this.named()), this.filter()), this.sortField(), this.reverse()),
+    sortTaskTree(filterTaskTree(buildTaskTree(this.named()), this.filter()), this.sort.field(), this.sort.reverse()),
   );
   readonly rows = computed<readonly TaskRow[]>(() => flattenTaskTree(this.tree(), this.collapsed()));
   readonly visibleCount = computed(() => this.rows().length);
@@ -157,9 +163,9 @@ export class TasksComponent {
         // A failed background refresh keeps the last list on screen.
         if (this.tasks() === undefined) {
           this.failed.set(true);
-          this.loadError.set(esErrorReason(error));
+          this.loadError.set(elasticsearchReason(error) ?? undefined);
         }
-        this.alerts.error(this.withReason('Error while loading tasks', error), error);
+        this.alerts.error(failureMessage('Could not load tasks', error), error);
       }
     } finally {
       if (sequence === this.loadSequence) {
@@ -200,29 +206,6 @@ export class TasksComponent {
   }
 
   // ---- Table state -------------------------------------------------------------
-
-  sortBy(field: TaskSortField): void {
-    if (this.sortField() === field) {
-      this.reverse.update((value) => !value);
-    } else {
-      this.sortField.set(field);
-      this.reverse.set(field === 'running');
-    }
-  }
-
-  ariaSort(field: TaskSortField): 'ascending' | 'descending' | 'none' {
-    if (this.sortField() !== field) {
-      return 'none';
-    }
-    return this.reverse() ? 'descending' : 'ascending';
-  }
-
-  sortIcon(field: TaskSortField): string {
-    if (this.sortField() !== field) {
-      return 'bi-arrow-down-up';
-    }
-    return this.reverse() ? 'bi-arrow-down' : 'bi-arrow-up';
-  }
 
   toggleChildren(task: Task): void {
     this.collapsed.update((keys) => toggle(keys, task.key));
@@ -320,9 +303,10 @@ export class TasksComponent {
     }
   }
 
+  /** A failed `_cancel` may carry its reason in `node_failures` / `task_failures`. */
   private withReason(message: string, error: unknown): string {
-    const reason = esErrorReason(error);
-    return reason ? `${message}: ${reason}` : message;
+    const failure = error instanceof ClusterApiError ? cancelFailure(error.body) : null;
+    return failure ? `${message}: ${failure}` : failureMessage(message, error);
   }
 
   /** Forget UI state of tasks that finished. */

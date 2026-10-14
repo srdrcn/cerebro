@@ -2,30 +2,6 @@
   display: block;
 }
 
-/* Header ------------------------------------------------------------ */
-
-.repo-picker {
-  position: relative;
-  flex: 0 1 280px;
-  width: 280px;
-  min-width: 0;
-  max-width: 100%;
-  display: flex;
-  align-items: center;
-}
-
-.repo-picker__icon {
-  position: absolute;
-  left: 11px;
-  z-index: 1;
-  color: var(--text-3);
-  pointer-events: none;
-}
-
-.repo-picker .select {
-  padding-left: 33px;
-}
-
 /* Stats ------------------------------------------------------------- */
 
 .snapshots-stats {
@@ -290,11 +266,6 @@
 
 @media (max-width: 760px) {
   .snapshots-actions {
-    width: 100%;
-  }
-
-  .repo-picker {
-    flex: 1 1 100%;
     width: 100%;
   }
 }

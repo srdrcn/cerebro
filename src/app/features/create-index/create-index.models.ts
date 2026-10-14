@@ -1,16 +1,13 @@
+import { JsonRecord, isRecord } from '../../core/json';
+import { INVALID_INDEX_NAME_CHARACTERS, invalidCharacters } from '../../core/names';
+
 export interface IndexMetadata {
   settings?: unknown;
   mappings?: unknown;
 }
 
-type JsonObject = Record<string, unknown>;
-
-function isObject(value: unknown): value is JsonObject {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function asObject(value: unknown): JsonObject {
-  if (!isObject(value)) {
+function asObject(value: unknown): JsonRecord {
+  if (!isRecord(value)) {
     throw new Error('Index settings must be a JSON object');
   }
   return value;
@@ -44,7 +41,7 @@ export function buildIndexMetadata(
 export type BodyState =
   | { readonly kind: 'empty' }
   | { readonly kind: 'invalid'; readonly message: string }
-  | { readonly kind: 'object'; readonly value: JsonObject; readonly keys: number };
+  | { readonly kind: 'object'; readonly value: JsonRecord; readonly keys: number };
 
 /** Classifies the custom JSON editor content without throwing. */
 export function analyzeBody(source: string): BodyState {
@@ -57,7 +54,7 @@ export function analyzeBody(source: string): BodyState {
   } catch (error: unknown) {
     return { kind: 'invalid', message: error instanceof Error ? error.message : String(error) };
   }
-  if (!isObject(parsed)) {
+  if (!isRecord(parsed)) {
     return { kind: 'invalid', message: 'The body must be a JSON object' };
   }
   return { kind: 'object', value: parsed, keys: Object.keys(parsed).length };
@@ -69,12 +66,12 @@ export function bodyOverridesFields(state: BodyState): boolean {
 }
 
 function readSetting(settings: unknown, name: string): string | null {
-  if (!isObject(settings)) {
+  if (!isRecord(settings)) {
     return null;
   }
   const index = settings['index'];
   const candidates = [
-    isObject(index) ? index[name] : undefined,
+    isRecord(index) ? index[name] : undefined,
     settings[`index.${name}`],
     settings[name],
   ];
@@ -92,7 +89,7 @@ export interface ShardLayout {
 }
 
 /** Shard and replica counts declared by a request body (nested or flat settings). */
-export function shardLayout(metadata: JsonObject): ShardLayout {
+export function shardLayout(metadata: JsonRecord): ShardLayout {
   const settings = metadata['settings'];
   return {
     shards: readSetting(settings, 'number_of_shards'),
@@ -109,10 +106,9 @@ export interface NameCheck {
   readonly warning: string | null;
 }
 
-export const INVALID_INDEX_NAME_CHARACTERS = ['\\', '/', '*', '?', '"', '<', '>', '|', ',', '#', ':'];
-export const MAX_INDEX_NAME_BYTES = 255;
+const MAX_INDEX_NAME_BYTES = 255;
 
-export function utf8Length(value: string): number {
+function utf8Length(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
@@ -144,7 +140,7 @@ export function validateIndexName(
   if (first === '-' || first === '_' || first === '+') {
     return fail(`Index names cannot start with "${first}"`);
   }
-  const invalid = INVALID_INDEX_NAME_CHARACTERS.filter((character) => name.includes(character));
+  const invalid = invalidCharacters(name, INVALID_INDEX_NAME_CHARACTERS);
   if (invalid.length > 0) {
     const list = invalid.map((character) => `"${character}"`).join(', ');
     return fail(`Index names cannot contain ${list}`);
@@ -194,7 +190,7 @@ export function validateCount(value: string, minimum: number, maximum?: number):
  * Settings Elasticsearch generates for an index and refuses on creation
  * (paths relative to `index.`).
  */
-export const PRIVATE_INDEX_SETTINGS: readonly string[] = [
+const PRIVATE_INDEX_SETTINGS: readonly string[] = [
   'uuid',
   'creation_date',
   'creation_date_string',
@@ -219,7 +215,7 @@ function deepCopy<T>(value: T): T {
   return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T);
 }
 
-function removePath(target: JsonObject, path: readonly string[]): boolean {
+function removePath(target: JsonRecord, path: readonly string[]): boolean {
   const [head, ...rest] = path;
   if (head === undefined || !(head in target)) {
     return false;
@@ -229,7 +225,7 @@ function removePath(target: JsonObject, path: readonly string[]): boolean {
     return true;
   }
   const child = target[head];
-  if (!isObject(child)) {
+  if (!isRecord(child)) {
     return false;
   }
   const removed = removePath(child, rest);
@@ -240,17 +236,17 @@ function removePath(target: JsonObject, path: readonly string[]): boolean {
 }
 
 function stripPrivateSettings(settings: unknown): { settings: unknown; removed: string[] } {
-  if (!isObject(settings)) {
+  if (!isRecord(settings)) {
     return { settings: settings ?? {}, removed: [] };
   }
   const copy = deepCopy(settings);
   const removed: string[] = [];
   for (const setting of PRIVATE_INDEX_SETTINGS) {
     const index = copy['index'];
-    if (isObject(index) && removePath(index, setting.split('.'))) {
+    if (isRecord(index) && removePath(index, setting.split('.'))) {
       removed.push(`index.${setting}`);
     }
-    if (isObject(index) && Object.keys(index).length === 0) {
+    if (isRecord(index) && Object.keys(index).length === 0) {
       delete copy['index'];
     }
     const flat = `index.${setting}`;
@@ -268,13 +264,13 @@ function stripPrivateSettings(settings: unknown): { settings: unknown; removed: 
 
 /** Elasticsearch index version id, e.g. "8512000" or "7170099". */
 function createdVersion(settings: unknown): number | null {
-  if (!isObject(settings)) {
+  if (!isRecord(settings)) {
     return null;
   }
   const index = settings['index'];
-  const version = isObject(index) ? index['version'] : undefined;
+  const version = isRecord(index) ? index['version'] : undefined;
   const created =
-    (isObject(version) ? version['created'] : undefined) ?? settings['index.version.created'];
+    (isRecord(version) ? version['created'] : undefined) ?? settings['index.version.created'];
   const value = typeof created === 'string' || typeof created === 'number' ? Number(created) : NaN;
   return Number.isFinite(value) ? value : null;
 }
@@ -285,13 +281,13 @@ function createdVersion(settings: unknown): number | null {
  * their type (it is required there).
  */
 function unwrapMappings(mappings: unknown, version: number | null): { mappings: unknown; type: string | null } {
-  if (!isObject(mappings)) {
+  if (!isRecord(mappings)) {
     return { mappings: mappings ?? {}, type: null };
   }
   const keys = Object.keys(mappings);
   const inner = mappings['_doc'];
   const typed = version !== null && version < 7_000_000;
-  if (!typed && keys.length === 1 && keys[0] === '_doc' && isObject(inner)) {
+  if (!typed && keys.length === 1 && keys[0] === '_doc' && isRecord(inner)) {
     return { mappings: deepCopy(inner), type: '_doc' };
   }
   return { mappings: deepCopy(mappings), type: null };
@@ -307,14 +303,6 @@ export function cloneIndexMetadata(source: IndexMetadata): ClonedMetadata {
     removedSettings: removed,
     unwrappedType: type,
   };
-}
-
-/**
- * Cleaned settings and mappings only. The page uses cloneIndexMetadata, which
- * also reports what was dropped; kept for compatibility.
- */
-export function cloneableMetadata(metadata: IndexMetadata): Record<string, unknown> {
-  return cloneIndexMetadata(metadata).metadata;
 }
 
 /** A small, valid starting point for the custom JSON body. */
@@ -347,44 +335,13 @@ export function sortIndexNames(names: readonly string[]): { regular: string[]; s
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* Errors                                                              */
-/* ------------------------------------------------------------------ */
-
-function errorReason(error: unknown): string | null {
-  if (typeof error === 'string') {
-    return error.trim() || null;
-  }
-  if (!isObject(error)) {
-    return null;
-  }
-  const reason = error['reason'];
-  if (typeof reason === 'string' && reason.trim()) {
-    return reason.trim();
-  }
-  const rootCause = error['root_cause'];
-  return Array.isArray(rootCause) && rootCause.length > 0 ? errorReason(rootCause[0]) : null;
-}
-
-/**
- * The human readable reason of a failed Elasticsearch request, read from the
- * response body (`{ error: { reason, root_cause } }`) carried by the error.
- */
-export function elasticsearchReason(error: unknown): string | null {
-  if (!isObject(error)) {
-    return null;
-  }
-  const body = error['body'];
-  return isObject(body) ? errorReason(body['error']) : null;
-}
-
 /** Alias names reported by `_cat/aliases` (one row per alias and index). */
 export function aliasNames(rows: unknown): string[] {
   if (!Array.isArray(rows)) {
     return [];
   }
   const names = rows
-    .map((row: unknown) => (isObject(row) ? row['alias'] : undefined))
+    .map((row: unknown) => (isRecord(row) ? row['alias'] : undefined))
     .filter((alias): alias is string => typeof alias === 'string' && alias !== '');
   return [...new Set(names)];
 }

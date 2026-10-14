@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { NodesNode } from './nodes.models';
 import {
   attributeEntries,
-  isInternalAttribute,
   matchesNode,
   nodeRoles,
   prettyByteString,
@@ -83,7 +82,6 @@ describe('node presentation helpers', () => {
       ['zone', 'a'],
     ]);
     expect(attributeEntries(attributes, true)).toHaveLength(4);
-    expect(isInternalAttribute('transform.config_version')).toBe(true);
   });
 
   it('lists roles with the elected master marked', () => {

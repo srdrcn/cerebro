@@ -18,9 +18,10 @@ import { ClusterApiError } from '../../core/api-envelope';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { pluralize } from '../../core/format';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { PendingChangesAware } from '../cluster-settings/pending-changes.guard';
 import { SettingsEditorComponent } from '../cluster-settings/settings-editor.component';
 import {
   GroupingOptions,
@@ -181,7 +182,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
       // A failed background refresh keeps the list that is already shown.
       if (sequence === this.indicesSequence && this.indices() === undefined) {
         this.indicesFailed.set(true);
-        this.alerts.error('Error while loading indices', error);
+        this.alerts.error('Could not load indices', error);
       }
     }
   }
@@ -237,7 +238,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
         if (this.state() !== 'ready') {
           this.state.set('error');
         }
-        this.alerts.error(`Error while loading the settings of ${index}`, error);
+        this.alerts.error(`Could not load the settings of ${index}`, error);
       }
     }
   }
@@ -258,8 +259,8 @@ export class IndexSettingsComponent implements PendingChangesAware {
     const pending = this.pending().length;
     if (pending > 0) {
       const confirmed = await this.dialogs.confirm({
-        title: 'Discard pending changes?',
-        message: `${pending === 1 ? '1 change' : `${pending} changes`} to ${this.resolvedIndex() || this.index()} will be lost.`,
+        title: 'Discard unsaved changes?',
+        message: `${pluralize(pending, 'unsaved change')} to ${this.resolvedIndex() || this.index()} will be lost.`,
         confirmLabel: 'Discard and switch',
         cancelLabel: 'Keep editing',
         tone: 'danger',
@@ -287,8 +288,8 @@ export class IndexSettingsComponent implements PendingChangesAware {
       return true;
     }
     return this.dialogs.confirm({
-      title: changes.length === 1 ? 'Discard 1 pending change?' : `Discard ${changes.length} pending changes?`,
-      message: `Your edits to ${this.resolvedIndex() || this.index()} have not been saved and will be lost if you leave this page.`,
+      title: 'Discard unsaved changes?',
+      message: `${pluralize(changes.length, 'unsaved change')} to ${this.resolvedIndex() || this.index()} will be lost if you leave this page.`,
       items: changes.map((change) => change.name),
       confirmLabel: 'Discard changes',
       cancelLabel: 'Keep editing',
@@ -321,7 +322,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
         settings: buildFlatSettingsPayload(changes),
       });
       this.alerts.success(
-        changes.length === 1 ? `Saved ${changes[0]?.name} on ${index}` : `Saved ${changes.length} settings on ${index}`,
+        changes.length === 1 ? `Saved ${changes[0]?.name} on ${index}` : `Saved ${pluralize(changes.length, 'setting')} on ${index}`,
         response,
       );
       this.lastResponse = '';
@@ -340,9 +341,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
     this.loadedHost = next;
     const discarded = this.pending().length;
     if (previous !== undefined && next !== undefined && discarded > 0) {
-      this.alerts.warn(
-        `Discarded ${discarded === 1 ? '1 pending change' : `${discarded} pending changes`} made on ${previous}`,
-      );
+      this.alerts.warn(`Discarded ${pluralize(discarded, 'pending change')} made on ${previous}`);
     }
   }
 

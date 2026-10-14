@@ -11,8 +11,9 @@
   <div class="layout-sidebar-start create-layout">
     <div class="card basics-card">
       <div class="card-header">
-        <div class="min-w-0">
-          <h2 class="card-title"><i class="bi bi-input-cursor-text" aria-hidden="true"></i> Basics</h2>
+        <span class="card-icon" aria-hidden="true"><i class="bi bi-input-cursor-text"></i></span>
+        <div class="min-w-0 spacer">
+          <h2 class="card-title">Basics</h2>
           <p class="card-subtitle">Name and shard layout of the new index</p>
         </div>
       </div>
@@ -27,7 +28,6 @@
             [class.is-invalid]="nameError()"
             [ngModel]="name()"
             (ngModelChange)="name.set($event)"
-            (blur)="nameTouched.set(true)"
             (keydown.enter)="create()"
             placeholder="e.g. logs-2026.10.15"
             autocomplete="off"
@@ -114,7 +114,7 @@
       <div class="card-body copy-section">
         <div class="field">
           <label class="field-label" for="create-index-source">
-            Copy settings and mappings from <span class="optional">(optional)</span>
+            Copy settings and mappings from <span class="optional">optional</span>
           </label>
           <select
             #sourceSelect
@@ -160,8 +160,7 @@
                   @if (info.removedSettings.length > 0 || info.unwrappedType) {
                     <p class="copy-result__meta">
                       @if (info.removedSettings.length > 0) {
-                        Dropped {{ info.removedSettings.length }} internal
-                        {{ info.removedSettings.length === 1 ? 'setting' : 'settings' }}
+                        Dropped {{ pluralize(info.removedSettings.length, 'internal setting') }}
                         ({{ info.removedSettings.join(', ') }}).
                       }
                       @if (info.unwrappedType) {
@@ -188,17 +187,18 @@
       </div>
     </div>
 
-    <div class="card editor-card">
+    <div class="card">
       <div class="card-header editor-card__header">
-        <div class="min-w-0">
-          <h2 class="card-title"><i class="bi bi-braces" aria-hidden="true"></i> Settings and mappings</h2>
+        <span class="card-icon" aria-hidden="true"><i class="bi bi-braces"></i></span>
+        <div class="min-w-0 spacer">
+          <h2 class="card-title">Settings and mappings</h2>
           <p class="card-subtitle">Optional JSON body of the create index request</p>
         </div>
         <div class="row editor-actions">
           <button type="button" class="btn btn-sm btn-ghost" (click)="format()" [disabled]="!body().trim()" title="Format JSON (Ctrl+Shift+F)">
             <i class="bi bi-text-indent-left" aria-hidden="true"></i> Format
           </button>
-          <button type="button" class="btn btn-sm" (click)="preview()" [disabled]="bodyState().kind === 'invalid'">
+          <button type="button" class="btn btn-sm" (click)="preview()">
             <i class="bi bi-eye" aria-hidden="true"></i> Preview JSON
           </button>
           <cerebro-menu label="More editor actions" align="end">
@@ -283,8 +283,7 @@
         type="button"
         class="btn btn-primary"
         [class.is-loading]="creating()"
-        [disabled]="!canCreate()"
-        [attr.title]="blocker()"
+        [disabled]="creating()"
         [attr.aria-busy]="creating() ? true : null"
         (click)="create()"
       >

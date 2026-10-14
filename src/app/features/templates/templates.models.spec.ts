@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   NEW_TEMPLATE_BODY,
   analyzeTemplateBody,
-  filterLegacyTemplates,
   parseTemplateBody,
   saveMode,
   searchLegacyTemplates,
@@ -13,19 +12,9 @@ import {
   templateSource,
   templateVersion,
   upsertTemplate,
-  validateTemplateName,
 } from './templates.models';
 
 describe('legacy template helpers', () => {
-  it('filters by both name and legacy pattern then sorts by name', () => {
-    const templates = [
-      { name: 'z-logs', template: { template: 'logs-*' } },
-      { name: 'a-metrics', template: { template: 'metrics-*' } },
-      { name: 'a-logs', template: { template: 'logs-2026-*' } },
-    ];
-    expect(filterLegacyTemplates(templates, 'a-', 'logs').map((item) => item.name)).toEqual(['a-logs']);
-  });
-
   it('rejects a non-object template body', () => {
     expect(() => parseTemplateBody('[1, 2]')).toThrow('Template body must be a JSON object');
   });
@@ -95,21 +84,6 @@ describe('template body', () => {
 
   it('pretty prints stored templates', () => {
     expect(templateSource({ name: 'a', template: { order: 1 } })).toBe('{\n  "order": 1\n}');
-  });
-});
-
-describe('template names', () => {
-  it('accepts valid names', () => {
-    expect(validateTemplateName('logs-template')).toBeNull();
-    expect(validateTemplateName('.monitoring-es')).toBeNull();
-  });
-
-  it('enforces the Elasticsearch naming rules', () => {
-    expect(validateTemplateName('')).toBe('Enter a name for the template');
-    expect(validateTemplateName('my template')).toBe('Template names cannot contain spaces');
-    expect(validateTemplateName('Logs')).toBe('Template names must be lowercase');
-    expect(validateTemplateName('_logs')).toBe('Template names cannot start with "_"');
-    expect(validateTemplateName('a#b,c')).toBe('Template names cannot contain ",", "#"');
   });
 });
 

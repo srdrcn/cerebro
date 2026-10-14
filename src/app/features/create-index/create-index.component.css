@@ -280,4 +280,8 @@
   .editor-status__keys {
     display: none;
   }
+
+  .editor-actions {
+    width: 100%;
+  }
 }

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ClusterApiError } from '../../core/api-envelope';
 import {
   ComponentTemplateEntry,
   IndexTemplateEntry,
@@ -15,8 +14,6 @@ import {
   componentUsage,
   describeContent,
   displayValue,
-  errorReason,
-  failureMessage,
   filterRows,
   flattenSettings,
   ignoredComponents,
@@ -28,12 +25,10 @@ import {
   mappingOptions,
   metaTags,
   parseKind,
-  pluralize,
   removeByName,
   saveMode,
   templateSource,
   upsertByName,
-  validateTemplateName,
 } from './index-templates.utils';
 
 /** Short name of an origin, as rendered in the "Defined by" column. */
@@ -185,21 +180,6 @@ describe('filterRows', () => {
     expect(filterRows(rows, 'app-mappings', false).map((row) => row.name)).toEqual(['app-events']);
     expect(filterRows(rows, 'default logs', true).map((row) => row.name)).toEqual(['logs']);
     expect(filterRows(rows, '  ', false)).toHaveLength(2);
-  });
-});
-
-describe('validateTemplateName', () => {
-  it('accepts valid names', () => {
-    expect(validateTemplateName('logs-app')).toBeNull();
-    expect(validateTemplateName('logs@custom')).toBeNull();
-  });
-
-  it('rejects invalid names', () => {
-    expect(validateTemplateName('')).toMatch(/Enter a name/);
-    expect(validateTemplateName('my template')).toMatch(/spaces/);
-    expect(validateTemplateName('Logs')).toMatch(/lowercase/);
-    expect(validateTemplateName('_logs')).toMatch(/underscore|"_"/);
-    expect(validateTemplateName('a*b,c')).toBe('Template names cannot contain "*", ","');
   });
 });
 
@@ -463,36 +443,5 @@ describe('buildResolvedView', () => {
   it('copes with empty or malformed responses', () => {
     const view = buildResolvedView(undefined, undefined, []);
     expect(view).toEqual({ settings: [], fields: [], mappingOptions: [], aliases: [], overlapping: [], lifecycle: null });
-  });
-});
-
-describe('errors', () => {
-  const esError = {
-    error: {
-      root_cause: [{ type: 'illegal_argument_exception', reason: 'index template [x] has index patterns overlapping' }],
-      type: 'illegal_argument_exception',
-      reason: 'wrapper',
-    },
-    status: 400,
-  };
-
-  it('extracts the Elasticsearch root cause', () => {
-    expect(errorReason(new ClusterApiError(400, esError))).toBe('index template [x] has index patterns overlapping');
-    expect(errorReason({ error: { reason: 'plain' } })).toBe('plain');
-    expect(errorReason('text')).toBe('text');
-    expect(errorReason(new Error('boom'))).toBe('boom');
-    expect(errorReason(42)).toBeNull();
-    expect(errorReason(undefined)).toBeNull();
-  });
-
-  it('pluralizes', () => {
-    expect(pluralize(1, 'backing index', 'backing indices')).toBe('1 backing index');
-    expect(pluralize(3, 'stream')).toBe('3 streams');
-    expect(pluralize(0, 'line')).toBe('0 lines');
-  });
-
-  it('builds failure messages', () => {
-    expect(failureMessage('Could not save', { error: { reason: 'bad' } })).toBe('Could not save: bad');
-    expect(failureMessage('Could not save', {})).toBe('Could not save');
   });
 });

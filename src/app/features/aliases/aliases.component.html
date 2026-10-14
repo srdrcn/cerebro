@@ -32,7 +32,7 @@
         @if (aliases(); as all) {
           <span class="count-label">
             @if (filtering()) {
-              <strong>{{ visibleRows().length }}</strong> of {{ rows().length }} shown
+              <strong>{{ visibleRows().length }}</strong> of {{ pluralize(rows().length, 'assignment') }}
             } @else {
               <strong>{{ aliasCount() }}</strong> {{ aliasCount() === 1 ? 'alias' : 'aliases' }} ·
               <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'assignment' : 'assignments' }}
@@ -57,17 +57,17 @@
             <table class="data-table aliases-table">
               <thead>
                 <tr>
-                  <th scope="col" class="col-alias" [attr.aria-sort]="ariaSort('alias')">
-                    <button type="button" class="sort-button" [class.is-active]="sortField() === 'alias'" (click)="sortBy('alias')">
-                      Alias <i [class]="'bi ' + sortIcon('alias')" aria-hidden="true"></i>
+                  <th scope="col" class="col-alias" [attr.aria-sort]="sort.ariaSort('alias')">
+                    <button type="button" class="sort-button" [class.is-active]="sort.isActive('alias')" (click)="sort.sortBy('alias')">
+                      Alias <i [class]="'bi ' + sort.icon('alias')" aria-hidden="true"></i>
                     </button>
                   </th>
-                  <th scope="col" class="col-index" [attr.aria-sort]="ariaSort('index')">
-                    <button type="button" class="sort-button" [class.is-active]="sortField() === 'index'" (click)="sortBy('index')">
-                      Index <i [class]="'bi ' + sortIcon('index')" aria-hidden="true"></i>
+                  <th scope="col" class="col-index" [attr.aria-sort]="sort.ariaSort('index')">
+                    <button type="button" class="sort-button" [class.is-active]="sort.isActive('index')" (click)="sort.sortBy('index')">
+                      Index <i [class]="'bi ' + sort.icon('index')" aria-hidden="true"></i>
                     </button>
                   </th>
-                  <th scope="col" class="col-meta">Settings</th>
+                  <th scope="col">Settings</th>
                   <th scope="col" class="actions col-actions"><span class="visually-hidden">Actions</span></th>
                 </tr>
               </thead>
@@ -266,11 +266,13 @@
 
     <!-- Side column ------------------------------------------------------ -->
     <div class="aliases-side">
-      <form class="card add-card" novalidate aria-labelledby="add-alias-title" (ngSubmit)="stage()">
+      <form class="card" novalidate aria-labelledby="add-alias-title" (ngSubmit)="stage()">
         <div class="card-header">
-          <div class="min-w-0">
+          <span class="card-icon" aria-hidden="true">
+            <i class="bi" [class.bi-plus-lg]="!editing()" [class.bi-pencil]="editing()"></i>
+          </span>
+          <div class="min-w-0 spacer">
             <h2 id="add-alias-title" class="card-title">
-              <i class="bi" [class.bi-plus-circle]="!editing()" [class.bi-pencil-square]="editing()" aria-hidden="true"></i>
               @switch (draftStatus()) {
                 @case ('new') { Add alias }
                 @case ('restage') { Edit staged change }
@@ -324,6 +326,7 @@
           <div class="field">
             <label class="field-label" for="alias-index">Index</label>
             <select
+              #indexSelect
               id="alias-index"
               name="index"
               class="select"
@@ -454,6 +457,7 @@
                       Index routing <span class="optional">optional</span>
                     </label>
                     <input
+                      #indexRoutingInput
                       id="alias-index-routing"
                       name="indexRouting"
                       class="input input-mono"
@@ -526,7 +530,7 @@
         </div>
 
         <div class="card-footer">
-          <button type="submit" class="btn btn-soft" [disabled]="draftStatus() === 'same'">
+          <button type="submit" class="btn btn-soft">
             <i class="bi" [class.bi-plus-lg]="!editing()" [class.bi-pencil]="editing()" aria-hidden="true"></i>
             Stage change
           </button>
@@ -535,10 +539,9 @@
 
       <section #pendingCard class="card pending-card" aria-labelledby="pending-title">
         <div class="card-header">
-          <div class="min-w-0">
-            <h2 #pendingHeading id="pending-title" class="card-title" tabindex="-1">
-              <i class="bi bi-layers" aria-hidden="true"></i> Pending changes
-            </h2>
+          <span class="card-icon" aria-hidden="true"><i class="bi bi-layers"></i></span>
+          <div class="min-w-0 spacer">
+            <h2 #pendingHeading id="pending-title" class="card-title" tabindex="-1">Pending changes</h2>
             @if (pending().length > 0) {
               <p class="card-subtitle">
                 @if (pendingCounts().add) { {{ pendingCounts().add }} to add }
@@ -571,7 +574,7 @@
                 <div class="list-item__body">
                   <div class="pending-alias truncate" [title]="item.record.alias">{{ item.record.alias }}</div>
                   <div class="pending-target">
-                    <span [class]="'pending-kind is-' + item.kind">{{ kindLabel(item) }}</span>
+                    <span [class]="'section-label pending-kind is-' + item.kind">{{ kindLabel(item) }}</span>
                     <span class="pending-preposition">{{ item.kind === 'add' ? 'to' : item.kind === 'update' ? 'on' : 'from' }}</span>
                     <span class="pending-index mono truncate" [title]="item.record.index">{{ item.record.index }}</span>
                   </div>
@@ -673,7 +676,7 @@
     <div class="pending-bar" role="region" aria-label="Pending alias changes">
       <span class="pending-bar__icon" aria-hidden="true"><i class="bi bi-layers"></i></span>
       <span class="pending-bar__text">
-        <strong>{{ pluralizeChanges(pending().length) }}</strong> pending
+        <strong>{{ pluralize(pending().length, 'change') }}</strong> pending
         @if (problemCount() > 0) {
           <span class="pending-bar__problem">· {{ problemCount() }} {{ problemCount() === 1 ? 'needs' : 'need' }} attention</span>
         }

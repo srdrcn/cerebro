@@ -1,4 +1,6 @@
 import { matchesText } from '../../core/format';
+import { isRecord } from '../../core/json';
+import { validateResourceName } from '../../core/names';
 import { SnapshotRecord, SnapshotState } from './snapshots.models';
 
 export type SnapshotSortField = 'name' | 'start' | 'indices';
@@ -175,14 +177,14 @@ export function summarizeSnapshots(snapshots: readonly SnapshotRecord[]): Snapsh
   };
 }
 
-function pad(value: number): string {
+function twoDigits(value: number): string {
   return String(value).padStart(2, '0');
 }
 
 /** `snapshot-2026.10.14-1530` in local time. */
 export function suggestSnapshotName(date: Date, prefix = 'snapshot'): string {
-  const day = `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`;
-  return `${prefix}-${day}-${pad(date.getHours())}${pad(date.getMinutes())}`.toLowerCase();
+  const day = `${date.getFullYear()}.${twoDigits(date.getMonth() + 1)}.${twoDigits(date.getDate())}`;
+  return `${prefix}-${day}-${twoDigits(date.getHours())}${twoDigits(date.getMinutes())}`.toLowerCase();
 }
 
 /** Appends `-2`, `-3`, … until the name is not taken. */
@@ -197,45 +199,27 @@ export function uniqueName(base: string, taken: ReadonlySet<string>): string {
   return `${base}-${counter}`;
 }
 
-const INVALID_NAME_CHARACTERS = ['\\', '/', '*', '?', '"', '<', '>', '|', ',', '#'];
-
 /** Date math names such as `<nightly-{now/d}>` are resolved by Elasticsearch. */
 export function isDateMathName(name: string): boolean {
   return /^<.+>$/.test(name);
 }
 
 /**
- * Mirrors the snapshot name rules of Elasticsearch so mistakes are reported
- * before the request is sent. Returns an error message or `null`.
+ * The shared resource name rules, plus date math names and names already
+ * taken in the repository. Returns an error message or `null`.
  */
 export function validateSnapshotName(
   value: string,
   existing: ReadonlySet<string> = new Set(),
 ): string | null {
   const name = value.trim();
-  if (!name) {
-    return 'Enter a snapshot name.';
-  }
-  if (isDateMathName(name)) {
+  if (name && isDateMathName(name)) {
     return null;
   }
-  if (/\s/.test(name)) {
-    return 'Snapshot names cannot contain whitespace.';
-  }
-  if (name !== name.toLowerCase()) {
-    return 'Snapshot names must be lowercase.';
-  }
-  if (name.startsWith('_')) {
-    return 'Snapshot names cannot start with an underscore.';
-  }
-  const invalid = INVALID_NAME_CHARACTERS.find((character) => name.includes(character));
-  if (invalid) {
-    return `Snapshot names cannot contain “${invalid}”.`;
-  }
   if (existing.has(name)) {
-    return 'A snapshot with this name already exists in the repository.';
+    return 'A snapshot with this name already exists in the repository';
   }
-  return null;
+  return validateResourceName(name, 'snapshot');
 }
 
 /** Returns an error message when the rename pattern is not a valid expression. */
@@ -247,7 +231,7 @@ export function validateRenamePattern(pattern: string): string | null {
     new RegExp(pattern.trim());
     return null;
   } catch {
-    return 'This is not a valid regular expression.';
+    return 'This is not a valid regular expression';
   }
 }
 
@@ -267,9 +251,9 @@ export function validateRename(pattern: string, replacement: string): RenameErro
   const hasReplacement = !!replacement.trim();
   let replacementError: string | null = null;
   if (hasPattern && !hasReplacement) {
-    replacementError = 'Set a replacement: Elasticsearch ignores a pattern without one.';
+    replacementError = 'Set a replacement: Elasticsearch ignores a pattern without one';
   } else if (!hasPattern && hasReplacement) {
-    replacementError = 'Set a rename pattern to use a replacement.';
+    replacementError = 'Set a rename pattern to use a replacement';
   }
   return { pattern: validateRenamePattern(pattern), replacement: replacementError };
 }
@@ -321,8 +305,8 @@ export function indexStatuses(rows: unknown): Map<string, string> {
     return statuses;
   }
   for (const row of rows as unknown[]) {
-    if (row && typeof row === 'object') {
-      const { index, status } = row as Record<string, unknown>;
+    if (isRecord(row)) {
+      const { index, status } = row;
       if (typeof index === 'string') {
         statuses.set(index, typeof status === 'string' ? status : 'open');
       }
@@ -344,8 +328,8 @@ export function aliasesByIndex(rows: unknown): Map<string, IndexAlias[]> {
     return aliases;
   }
   for (const row of rows as unknown[]) {
-    if (row && typeof row === 'object') {
-      const { alias, index, is_write_index: write } = row as Record<string, unknown>;
+    if (isRecord(row)) {
+      const { alias, index, is_write_index: write } = row;
       if (typeof alias === 'string' && typeof index === 'string') {
         const entry = { alias, write: write === true || write === 'true' };
         aliases.set(index, [...(aliases.get(index) ?? []), entry]);
@@ -373,80 +357,3 @@ export function aliasesOf(
     .map(([alias, write]) => ({ alias, write }))
     .sort((left, right) => left.alias.localeCompare(right.alias));
 }
-
-/** `2026-10-14 15:30` in local time. */
-export function formatTimestamp(milliseconds: number | null | undefined): string {
-  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {
-    return '–';
-  }
-  const date = new Date(milliseconds);
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-    `${pad(date.getHours())}:${pad(date.getMinutes())}`
-  );
-}
-
-const RELATIVE_UNITS: readonly (readonly [string, number])[] = [
-  ['y', 31_536_000_000],
-  ['mo', 2_592_000_000],
-  ['d', 86_400_000],
-  ['h', 3_600_000],
-  ['m', 60_000],
-];
-
-/** "just now", "5m ago", "3h ago", "2d ago" (or "in 5m" for clock skew). */
-export function formatRelative(milliseconds: number | null | undefined, now: number): string {
-  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds)) {
-    return '–';
-  }
-  const delta = now - milliseconds;
-  const distance = Math.abs(delta);
-  const unit = RELATIVE_UNITS.find(([, size]) => distance >= size);
-  if (!unit) {
-    return 'just now';
-  }
-  const amount = `${Math.floor(distance / unit[1])}${unit[0]}`;
-  return delta >= 0 ? `${amount} ago` : `in ${amount}`;
-}
-
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
-/**
- * Best-effort human readable reason of a failed request. For Elasticsearch
- * errors the root cause is preferred over generic wrappers such as
- * "failed to create repository"; plain strings and `Error`s work too.
- */
-export function errorReason(value: unknown, depth = 0): string | null {
-  if (depth > 6 || value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === 'string') {
-    return value.trim() || null;
-  }
-  if (typeof value !== 'object') {
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  const rootCause = record['root_cause'];
-  const candidates: unknown[] = [
-    Array.isArray(rootCause) ? rootCause[0] : undefined,
-    record['caused_by'],
-  ];
-  for (const candidate of candidates) {
-    const reason = errorReason(candidate, depth + 1);
-    if (reason) {
-      return reason;
-    }
-  }
-  if (typeof record['reason'] === 'string' && record['reason'].trim()) {
-    return record['reason'];
-  }
-  const nested = errorReason(record['error'], depth + 1) ?? errorReason(record['body'], depth + 1);
-  if (nested) {
-    return nested;
-  }
-  return value instanceof Error && value.message ? value.message : null;
-}
-

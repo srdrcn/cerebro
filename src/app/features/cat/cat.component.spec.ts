@@ -94,7 +94,7 @@ describe('CatComponent', () => {
     await target.load('shards');
 
     expect(target.filter()).toBe('');
-    expect(target.sortColumn()).toBeNull();
+    expect(target.sort.field()).toBe('');
     expect(target.page()).toBe(1);
   });
 
@@ -104,12 +104,12 @@ describe('CatComponent', () => {
     await target.load('indices');
 
     target.sortBy('docs');
-    expect(target.ariaSort('docs')).toBe('descending');
+    expect(target.sort.ariaSort('docs')).toBe('descending');
     target.sortBy('docs');
-    expect(target.ariaSort('docs')).toBe('ascending');
+    expect(target.sort.ariaSort('docs')).toBe('ascending');
     target.sortBy('name');
-    expect(target.ariaSort('name')).toBe('ascending');
-    expect(target.ariaSort('docs')).toBe('none');
+    expect(target.sort.ariaSort('name')).toBe('ascending');
+    expect(target.sort.ariaSort('docs')).toBe('none');
   });
 
   it('shows a record only for single-row APIs and copies the whole record', async () => {

@@ -118,9 +118,10 @@ describe('repository validation', () => {
     expect(validateRepositoryName('backups')).toBeNull();
     expect(validateRepositoryName('Backups-2')).toBeNull();
     expect(validateRepositoryName('')).toMatch(/Enter/);
-    expect(validateRepositoryName('my repo')).toMatch(/whitespace/);
-    expect(validateRepositoryName('_hidden')).toMatch(/underscore/);
-    expect(validateRepositoryName('a#b')).toMatch(/“#”/);
+    expect(validateRepositoryName('my repo')).toMatch(/spaces/);
+    expect(validateRepositoryName('_hidden')).toMatch(/start with "_"/);
+    expect(validateRepositoryName('a#b')).toMatch(/"#"/);
+    expect(validateRepositoryName('a/b,c')).toBe('Repository names cannot contain "/", ","');
   });
 
   it('validates free-form settings', () => {
@@ -128,7 +129,7 @@ describe('repository validation', () => {
     expect(validateExtraSettings('fs', [{ key: 'max_number_of_snapshots', value: '5' }])).toBeNull();
     expect(validateExtraSettings('fs', [{ key: '', value: 'x' }])).toMatch(/needs a name/);
     expect(validateExtraSettings('fs', [{ key: 'location', value: 'x' }])).toMatch(/own field/);
-    expect(validateExtraSettings('fs', [{ key: 'a b', value: 'x' }])).toMatch(/whitespace/);
+    expect(validateExtraSettings('fs', [{ key: 'a b', value: 'x' }])).toMatch(/spaces/);
     expect(
       validateExtraSettings('fs', [
         { key: 'x', value: '1' },

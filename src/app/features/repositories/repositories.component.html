@@ -8,9 +8,6 @@
       <a class="btn btn-ghost" routerLink="/snapshot" [queryParams]="connection.hostQuery()">
         <i class="bi bi-camera" aria-hidden="true"></i> Snapshots
       </a>
-      <button type="button" class="btn" (click)="newRepository()">
-        <i class="bi bi-plus-lg" aria-hidden="true"></i> New repository
-      </button>
     </div>
   </header>
 
@@ -18,16 +15,26 @@
     <!-- Registered repositories -->
     <div class="card repo-list-card">
       <div class="card-header">
-        <h2 class="card-title"><i class="bi bi-database" aria-hidden="true"></i> Registered</h2>
-        @if (repositories(); as all) {
-          <span class="count-label">
-            @if (query() && all.length > filterThreshold) {
-              <strong>{{ views().length }}</strong> of {{ all.length }}
-            } @else {
-              <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'repository' : 'repositories' }}
-            }
-          </span>
-        }
+        <div class="min-w-0">
+          <h2 class="card-title"><i class="bi bi-database" aria-hidden="true"></i> Registered</h2>
+          @if (repositories(); as all) {
+            <span class="count-label">
+              @if (query() && all.length > filterThreshold) {
+                <strong>{{ views().length }}</strong> of {{ pluralize(all.length, 'repository', 'repositories') }}
+              } @else {
+                <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'repository' : 'repositories' }}
+              }
+            </span>
+          }
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm btn-soft"
+          [disabled]="saving() || blankForm()"
+          (click)="newRepository()"
+        >
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> New repository
+        </button>
       </div>
 
       @if (repositories(); as all) {
@@ -130,24 +137,28 @@
     </div>
 
     <!-- Create / update form -->
-    <div class="card repo-form-card">
+    <div class="card">
       <div class="card-header">
-        <div class="min-w-0">
-          <h2 class="card-title">
-            @if (updateMode()) {
-              <i class="bi bi-pencil-square" aria-hidden="true"></i>
-              <span class="truncate">Edit <span class="mono">{{ name().trim() }}</span></span>
-            } @else {
-              <i class="bi bi-plus-circle" aria-hidden="true"></i> Register repository
-            }
-          </h2>
-          <p class="card-subtitle">
-            @if (updateMode()) {
-              Saving re-registers the repository with the settings below.
-            } @else {
-              Elasticsearch verifies that every node can reach the location.
-            }
-          </p>
+        <div class="row min-w-0">
+          <span class="card-icon" aria-hidden="true">
+            <i class="bi" [class.bi-pencil-square]="updateMode()" [class.bi-database-add]="!updateMode()"></i>
+          </span>
+          <div class="min-w-0">
+            <h2 class="card-title">
+              @if (updateMode()) {
+                <span class="truncate">Edit <span class="mono">{{ name().trim() }}</span></span>
+              } @else {
+                Register repository
+              }
+            </h2>
+            <p class="card-subtitle">
+              @if (updateMode()) {
+                Saving re-registers the repository with the settings below.
+              } @else {
+                Elasticsearch verifies that every node can reach the location.
+              }
+            </p>
+          </div>
         </div>
         @if (updateMode()) {
           <span class="badge badge-blue">Existing</span>
@@ -163,8 +174,8 @@
             <input
               id="repository-name"
               name="name"
-              class="input"
-              placeholder="nightly-backups"
+              class="input input-mono"
+              placeholder="e.g. nightly-backups"
               autocomplete="off"
               spellcheck="false"
               [class.is-invalid]="(submitted() || name() !== '') && !!nameError()"
@@ -377,7 +388,7 @@
             type="submit"
             class="btn btn-primary"
             [class.is-loading]="saving()"
-            [disabled]="saving() || (submitted() && !valid())"
+            [disabled]="saving()"
           >
             @if (updateMode()) {
               <i class="bi bi-check2" aria-hidden="true"></i> Update repository

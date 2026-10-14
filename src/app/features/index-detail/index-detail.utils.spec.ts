@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ClusterApiError } from '../../core/api-envelope';
 import { CatShardRow, IndexDetail, IndexDetailResponse } from './index-detail.models';
 import {
   INDEX_OPERATIONS,
@@ -8,13 +7,10 @@ import {
   dataStreamOf,
   decodeVersion,
   describeFilter,
-  esErrorReason,
-  failureMessage,
   filterMappingFields,
   filterSettings,
   flattenSettings,
   formatStat,
-  humanize,
   indexHealth,
   indexOpenState,
   indexSummary,
@@ -25,7 +21,6 @@ import {
   nextTab,
   parseTab,
   readNumber,
-  relativeAge,
   resolveIndexDetail,
   settingHint,
   shardRows,
@@ -105,27 +100,6 @@ describe('generic helpers', () => {
     expect(readNumber({ a: { b: '42' } }, 'a.b')).toBe(42);
     expect(readNumber({ a: { b: 'x' } }, 'a.b')).toBeNull();
     expect(readNumber({ a: 1 }, 'a.b')).toBeNull();
-  });
-
-  it('humanizes enum-like values', () => {
-    expect(humanize('CLUSTER_RECOVERED')).toBe('Cluster recovered');
-    expect(humanize('check-rollover-ready')).toBe('Check rollover ready');
-    expect(humanize('')).toBe('');
-  });
-
-  it('extracts the Elasticsearch reason of a failed call', () => {
-    const notFound = new ClusterApiError(404, {
-      error: { root_cause: [{ reason: 'no such index [x]' }], type: 'index_not_found_exception', reason: 'no such index [x]' },
-      status: 404,
-    });
-    expect(esErrorReason(notFound)).toBe('No such index [x]');
-    expect(esErrorReason(new ClusterApiError(400, { error: { root_cause: [{ reason: 'closed' }] } }))).toBe('Closed');
-    expect(esErrorReason(new ClusterApiError(500, 'Boom'))).toBe('Boom');
-    expect(esErrorReason(new ClusterApiError(500, { error: 'plain' }))).toBe('plain');
-    expect(esErrorReason(new Error('network'))).toBeUndefined();
-    expect(esErrorReason(undefined)).toBeUndefined();
-    expect(failureMessage('Flush failed', notFound)).toBe('Flush failed: No such index [x]');
-    expect(failureMessage('Flush failed', new Error('x'))).toBe('Flush failed');
   });
 });
 
@@ -620,13 +594,6 @@ describe('operations and misc', () => {
     expect(INDEX_OPERATIONS.delete.confirm?.title('products')).toBe('Delete index products?');
     expect(INDEX_OPERATIONS.close.confirm?.tone).toBe('danger');
     expect(INDEX_OPERATIONS.merge.confirm?.tone).toBe('warning');
-  });
-
-  it('formats relative ages', () => {
-    const now = 1_000_000_000;
-    expect(relativeAge(null, now)).toBe('–');
-    expect(relativeAge(new Date(now - 5_000), now)).toBe('just now');
-    expect(relativeAge(new Date(now - 3_600_000 * 3 - 60_000 * 6), now)).toBe('3h 6m ago');
   });
 
   it('finds the data stream of a backing index', () => {

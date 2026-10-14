@@ -1,4 +1,5 @@
-import { formatBytes, formatDuration, formatNumber, matchesText } from '../../core/format';
+import { formatBytes, formatDuration, formatNumber, humanize, matchesText, pluralize } from '../../core/format';
+import { isRecord } from '../../core/json';
 import {
   AliasDetail,
   CatShardRow,
@@ -35,10 +36,6 @@ import {
 } from './index-detail.models';
 
 /* ---- Generic helpers ---------------------------------------------------- */
-
-export function isRecord(value: unknown): value is JsonObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /** Reads `a.b.c` from nested objects; `undefined` when any step is missing. */
 export function readPath(source: unknown, path: string): unknown {
@@ -88,56 +85,6 @@ export function displayValue(value: unknown): string {
     return JSON.stringify(value);
   }
   return String(value);
-}
-
-/** `SOME_REASON` / `some_reason` → "Some reason". */
-export function humanize(value: string): string {
-  const words = value
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : value;
-}
-
-/** The most specific human readable reason of a failed API call. */
-export function esErrorReason(error: unknown): string | undefined {
-  if (!isRecord(error) && !(error instanceof Error)) {
-    return undefined;
-  }
-  const body: unknown = (error as { body?: unknown }).body;
-  if (typeof body === 'string') {
-    return body.trim() || undefined;
-  }
-  if (!isRecord(body)) {
-    return undefined;
-  }
-  const details = body['error'];
-  if (typeof details === 'string') {
-    return details || undefined;
-  }
-  if (!isRecord(details)) {
-    return typeof body['message'] === 'string' ? body['message'] : undefined;
-  }
-  const rootCause = Array.isArray(details['root_cause']) ? (details['root_cause'][0] as unknown) : undefined;
-  const candidates = [
-    details['reason'],
-    isRecord(rootCause) ? rootCause['reason'] : undefined,
-    isRecord(details['caused_by']) ? details['caused_by']['reason'] : undefined,
-  ];
-  const reason = candidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate !== '');
-  return reason ? sentence(reason) : undefined;
-}
-
-function sentence(text: string): string {
-  const trimmed = text.trim();
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-}
-
-/** "Could not flush products: index is closed". */
-export function failureMessage(prefix: string, error: unknown): string {
-  const reason = esErrorReason(error);
-  return reason ? `${prefix}: ${reason}` : prefix;
 }
 
 /* ---- Tabs ----------------------------------------------------------------- */
@@ -974,7 +921,7 @@ export function describeFilter(filter: JsonObject | null): string | null {
     const clauses = isRecord(body)
       ? Object.entries(body).reduce((sum, [, value]) => sum + (Array.isArray(value) ? value.length : isRecord(value) ? 1 : 0), 0)
       : 0;
-    return `bool query with ${clauses} ${clauses === 1 ? 'clause' : 'clauses'}`;
+    return `bool query with ${pluralize(clauses, 'clause')}`;
   }
   return fields.length > 0 && type !== 'match_all' ? `${type} on ${fields.join(', ')}` : `${type} query`;
 }
@@ -1078,6 +1025,7 @@ export const INDEX_OPERATIONS: Readonly<Record<IndexOperation, IndexOperationDef
   refresh: {
     path: 'overview/refresh_indices',
     label: 'Refresh',
+    verb: 'refresh',
     icon: 'bi-arrow-repeat',
     done: 'refreshed',
     confirm: null,
@@ -1085,6 +1033,7 @@ export const INDEX_OPERATIONS: Readonly<Record<IndexOperation, IndexOperationDef
   flush: {
     path: 'overview/flush_indices',
     label: 'Flush',
+    verb: 'flush',
     icon: 'bi-save',
     done: 'flushed',
     confirm: null,
@@ -1092,6 +1041,7 @@ export const INDEX_OPERATIONS: Readonly<Record<IndexOperation, IndexOperationDef
   merge: {
     path: 'overview/force_merge',
     label: 'Force merge',
+    verb: 'force merge',
     icon: 'bi-intersect',
     done: 'force merged',
     confirm: {
@@ -1104,6 +1054,7 @@ export const INDEX_OPERATIONS: Readonly<Record<IndexOperation, IndexOperationDef
   cache: {
     path: 'overview/clear_indices_cache',
     label: 'Clear cache',
+    verb: 'clear the cache of',
     icon: 'bi-eraser',
     done: 'cache cleared',
     confirm: null,
@@ -1111,6 +1062,7 @@ export const INDEX_OPERATIONS: Readonly<Record<IndexOperation, IndexOperationDef
   open: {
     path: 'overview/open_indices',
     label: 'Open',
+    verb: 'open',
     icon: 'bi-unlock',
     done: 'opened',
     confirm: {
@@ -1123,6 +1075,7 @@ export const INDEX_OPERATIONS: Readonly<Record<IndexOperation, IndexOperationDef
   close: {
     path: 'overview/close_indices',
     label: 'Close',
+    verb: 'close',
     icon: 'bi-lock',
     done: 'closed',
     confirm: {
@@ -1135,6 +1088,7 @@ export const INDEX_OPERATIONS: Readonly<Record<IndexOperation, IndexOperationDef
   delete: {
     path: 'overview/delete_indices',
     label: 'Delete',
+    verb: 'delete',
     icon: 'bi-trash3',
     done: 'deleted',
     confirm: {
@@ -1159,21 +1113,5 @@ export function settingHint(key: string, value: string): string | null {
     return Number.isNaN(date.getTime()) ? null : date.toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
   }
   return null;
-}
-
-/** "3d 4h ago", "just now". */
-export function relativeAge(date: Date | null, now: number): string {
-  if (!date) {
-    return '–';
-  }
-  const elapsed = now - date.getTime();
-  if (elapsed < 60_000) {
-    return 'just now';
-  }
-  return `${formatDuration(elapsed)} ago`;
-}
-
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${formatNumber(count)} ${count === 1 ? singular : plural}`;
 }
 

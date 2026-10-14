@@ -1,3 +1,7 @@
+import { elasticsearchReason } from '../../core/errors';
+import { pluralize } from '../../core/format';
+import { JsonRecord, isRecord } from '../../core/json';
+import { invalidCharacters } from '../../core/names';
 import {
   FieldChange,
   PipelineBody,
@@ -13,12 +17,6 @@ import {
   SimulationResult,
   SimulationStep,
 } from './pipelines.models';
-
-type JsonRecord = Readonly<Record<string, unknown>>;
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
@@ -275,7 +273,7 @@ export function pipelineWarnings(pipeline: PipelineBody): string[] {
     (processor) => processor.invalid,
   ).length;
   if (invalid > 0) {
-    warnings.push(`${invalid} ${invalid === 1 ? 'processor is' : 'processors are'} not a single {"type": {…}} object`);
+    warnings.push(`${pluralize(invalid, 'processor is', 'processors are')} not a single {"type": {…}} object`);
   }
   return warnings;
 }
@@ -316,6 +314,9 @@ export function saveMode(id: string, selected: string | null, existing: readonly
   return selected === null ? 'create' : 'copy';
 }
 
+/** Characters that would break the `_ingest/pipeline/<id>` URL. */
+const PIPELINE_ID_RESERVED_CHARACTERS: readonly string[] = ['/', '\\', '?', '#'];
+
 /** Pipeline ids are part of the URL: keep them free of spaces and reserved prefixes. */
 export function validatePipelineId(id: string): string | null {
   if (!id) {
@@ -327,8 +328,9 @@ export function validatePipelineId(id: string): string | null {
   if (id.startsWith('_')) {
     return 'Pipeline ids cannot start with "_"';
   }
-  if (/[/\\?#]/.test(id)) {
-    return 'Pipeline ids cannot contain /, \\, ? or #';
+  const invalid = invalidCharacters(id, PIPELINE_ID_RESERVED_CHARACTERS);
+  if (invalid.length > 0) {
+    return `Pipeline ids cannot contain ${invalid.map((character) => `"${character}"`).join(', ')}`;
   }
   return null;
 }
@@ -519,10 +521,10 @@ function documentParts(doc: unknown): {
 
 function stepError(step: ProcessorResultBody): string | null {
   if (step.error !== undefined) {
-    return errorReason(step.error) ?? 'Unknown error';
+    return elasticsearchReason(step.error) ?? 'Unknown error';
   }
   if (step.ignored_error !== undefined) {
-    return errorReason(step.ignored_error);
+    return elasticsearchReason(step.ignored_error);
   }
   return null;
 }
@@ -614,15 +616,11 @@ export function normalizeSimulation(
       return normalizeVerbose(position, entry['processor_results'], input, entry);
     }
     if (entry['error'] !== undefined) {
-      return { ...empty, position, outcome: 'error', error: errorReason(entry['error']) ?? 'Unknown error', raw: entry };
+      return { ...empty, position, outcome: 'error', error: elasticsearchReason(entry['error']) ?? 'Unknown error', raw: entry };
     }
     const { source, metadata } = documentParts(entry['doc']);
     return { ...empty, position, outcome: 'ok', source, metadata, targetIndex: rerouted(metadata, input), raw: entry };
   });
-}
-
-function count(value: number, singular: string, plural: string): string {
-  return `${value} ${value === 1 ? singular : plural}`;
 }
 
 /** One sentence summary of a run, announced to screen readers. */
@@ -638,50 +636,10 @@ export function simulationAnnouncement(results: readonly SimulationResult[]): st
     failed > 0 ? `${failed} failed` : '',
     dropped > 0 ? `${dropped} dropped` : '',
   ].filter(Boolean);
-  return `Simulation finished for ${count(results.length, 'document', 'documents')}: ${parts.join(', ')}.`;
+  return `Simulation finished for ${pluralize(results.length, 'document')}: ${parts.join(', ')}.`;
 }
 
 /** Changes made to a document by the whole pipeline (non-verbose mode). */
 export function overallChanges(result: SimulationResult, input: SimulateDoc | undefined): FieldChange[] {
   return result.source && input ? diffSources(input._source, result.source) : [];
-}
-
-// ---------------------------------------------------------------------------
-// Errors
-// ---------------------------------------------------------------------------
-
-/**
- * Human readable reason of a failed request. For Elasticsearch errors the
- * root cause is preferred over generic wrappers, and parser positions like
- * "[1:40]" are removed.
- */
-export function errorReason(value: unknown, depth = 0): string | null {
-  if (depth > 6 || value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === 'string') {
-    const message = value.replace(/^\[\d+:\d+\]\s*/, '').trim();
-    return message || null;
-  }
-  if (!isRecord(value)) {
-    return null;
-  }
-  const rootCause = value['root_cause'];
-  for (const candidate of [Array.isArray(rootCause) ? rootCause[0] : undefined, value['caused_by']]) {
-    const reason = errorReason(candidate, depth + 1);
-    if (reason) {
-      return reason;
-    }
-  }
-  if (typeof value['reason'] === 'string') {
-    const reason = errorReason(value['reason'], depth + 1);
-    if (reason) {
-      return reason;
-    }
-  }
-  const nested = errorReason(value['error'], depth + 1) ?? errorReason(value['body'], depth + 1);
-  if (nested) {
-    return nested;
-  }
-  return value instanceof Error && value.message ? value.message : null;
 }

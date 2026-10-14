@@ -1,4 +1,6 @@
-import { matchesText } from '../../core/format';
+import { elasticsearchReason } from '../../core/errors';
+import { humanize, matchesText, sentence } from '../../core/format';
+import { isRecord } from '../../core/json';
 import {
   RawTask,
   Task,
@@ -89,11 +91,6 @@ function splitAction(action: string): { base: string; scope: string | null } {
   return { base, scope };
 }
 
-function sentenceCase(text: string): string {
-  const words = text.replace(/[_\-/]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : text;
-}
-
 /** Readable label of a transport action ("Reindex", "Health node", …). */
 export function actionLabel(action: string): { label: string; scope: string | null } {
   const { base, scope } = splitAction(action);
@@ -106,7 +103,7 @@ export function actionLabel(action: string): { label: string; scope: string | nu
   const segments = path.split('/').filter(Boolean);
   const meaningful = segments.length > 1 && ['admin', 'data', 'monitor', 'internal'].includes(segments[0] ?? '') ? segments.slice(1) : segments;
   const tail = meaningful.slice(-2).join(' ');
-  return { label: sentenceCase(tail || base), scope };
+  return { label: humanize(tail || base), scope };
 }
 
 /** Persistent tasks every cluster runs on its own. */
@@ -335,46 +332,6 @@ export function summarizeTasks(tasks: readonly Task[], hideInternal: boolean, el
   };
 }
 
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function reasonOf(value: unknown): string | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-  const candidates: unknown[] = [value['reason']];
-  const rootCause = value['root_cause'];
-  if (Array.isArray(rootCause)) {
-    candidates.push(isRecord(rootCause[0]) ? rootCause[0]['reason'] : undefined);
-  }
-  const causedBy = value['caused_by'];
-  if (isRecord(causedBy)) {
-    candidates.push(causedBy['reason']);
-  }
-  const reason = candidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate !== '');
-  return reason ? reason.charAt(0).toUpperCase() + reason.slice(1) : undefined;
-}
-
-/** The most specific human readable reason of a failed API call. */
-export function esErrorReason(error: unknown): string | undefined {
-  if (!isRecord(error) && !(error instanceof Error)) {
-    return undefined;
-  }
-  const body: unknown = (error as { body?: unknown }).body;
-  if (typeof body === 'string') {
-    return body.trim() || undefined;
-  }
-  if (!isRecord(body)) {
-    return undefined;
-  }
-  const details = body['error'];
-  if (typeof details === 'string') {
-    return details || undefined;
-  }
-  return reasonOf(details) ?? cancelFailure(body) ?? undefined;
-}
-
 /**
  * `_cancel` answers 200 even when nothing was cancelled; the reason then sits
  * in `node_failures` / `task_failures`.
@@ -386,10 +343,8 @@ export function cancelFailure(response: unknown): string | null {
   for (const key of ['task_failures', 'node_failures']) {
     const failures = response[key];
     if (Array.isArray(failures) && failures.length > 0) {
-      const first: unknown = failures[0];
-      const nested = isRecord(first) ? [first['caused_by'], first['reason']] : [];
-      const reason = [...nested, first].map(reasonOf).find((candidate) => candidate !== undefined);
-      return reason ?? 'Elasticsearch reported a failure while cancelling the task.';
+      const reason = elasticsearchReason(failures[0]);
+      return reason ? sentence(reason) : 'Elasticsearch reported a failure while cancelling the task.';
     }
   }
   return null;

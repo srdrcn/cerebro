@@ -1,3 +1,6 @@
+import { JsonRecord, isRecord } from '../../core/json';
+import { INVALID_INDEX_NAME_CHARACTERS, invalidCharacters } from '../../core/names';
+
 /** One alias → index assignment as returned by `aliases/get_aliases`. */
 export interface AliasRecord {
   alias: string;
@@ -24,7 +27,6 @@ export interface RawAliasRecord {
   readonly is_write_index?: boolean | string | null;
   readonly is_hidden?: boolean | string | null;
 }
-
 
 export interface AliasDraft {
   alias: string;
@@ -55,16 +57,15 @@ export const EMPTY_ALIAS_DRAFT: Readonly<AliasDraft> = {
   hidden: false,
 };
 
-export function parseAliasFilter(source: string): Record<string, unknown> | undefined {
+export function parseAliasFilter(source: string): JsonRecord | undefined {
   if (!source.trim()) {
     return undefined;
   }
-
   const parsed: unknown = JSON.parse(source);
-  if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object') {
+  if (!isRecord(parsed)) {
     throw new Error('Alias filter must be a JSON object');
   }
-  return parsed as Record<string, unknown>;
+  return parsed;
 }
 
 function cleanOptional(value: string): string | undefined {
@@ -164,7 +165,6 @@ export function normalizeAliasRecords(raw: readonly RawAliasRecord[]): AliasReco
   });
 }
 
-
 /** Pre-fills the form with an existing (or staged) assignment. */
 export function draftFromRecord(record: AliasRecord): AliasDraft {
   return {
@@ -201,8 +201,6 @@ export interface AliasDraftErrors {
   filter?: string;
 }
 
-const FORBIDDEN_NAME_CHARACTERS = ['\\', '/', '*', '?', '"', '<', '>', '|', ' ', ',', '#', ':'];
-
 /**
  * Mirrors Elasticsearch's alias name rules
  * (MetadataCreateIndexService#validateIndexOrAliasName). Date math names
@@ -222,10 +220,12 @@ export function aliasNameError(name: string): string | undefined {
   if (/^[_\-+]/.test(value)) {
     return 'An alias cannot start with _, - or +.';
   }
-  const forbidden = FORBIDDEN_NAME_CHARACTERS.filter((character) => value.includes(character));
-  if (forbidden.length > 0) {
-    const shown = forbidden.map((character) => (character === ' ' ? 'spaces' : character));
-    return `An alias cannot contain ${shown.join(' ')}.`;
+  if (value.includes(' ')) {
+    return 'An alias cannot contain spaces.';
+  }
+  const invalid = invalidCharacters(value, INVALID_INDEX_NAME_CHARACTERS);
+  if (invalid.length > 0) {
+    return `An alias cannot contain ${invalid.map((character) => `"${character}"`).join(', ')}.`;
   }
   if (new TextEncoder().encode(value).length > 255) {
     return 'An alias name cannot be longer than 255 bytes.';

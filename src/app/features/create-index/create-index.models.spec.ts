@@ -5,11 +5,8 @@ import {
   bodyOverridesFields,
   buildIndexMetadata,
   cloneIndexMetadata,
-  cloneableMetadata,
-  elasticsearchReason,
   shardLayout,
   sortIndexNames,
-  utf8Length,
   validateCount,
   validateIndexName,
 } from './create-index.models';
@@ -35,12 +32,6 @@ describe('create index payload', () => {
 
   it('rejects custom JSON that is not an object', () => {
     expect(() => buildIndexMetadata('[1]', '', '')).toThrow('Index settings must be a JSON object');
-  });
-
-  it('clones only settings and mappings from index metadata', () => {
-    expect(cloneableMetadata({ settings: { a: 1 }, mappings: { properties: {} } })).toEqual({
-      settings: { a: 1 }, mappings: { properties: {} },
-    });
   });
 });
 
@@ -95,7 +86,6 @@ describe('index name validation', () => {
   });
 
   it('limits names to 255 UTF-8 bytes', () => {
-    expect(utf8Length('é')).toBe(2);
     expect(validateIndexName('a'.repeat(255)).error).toBeNull();
     expect(validateIndexName('é'.repeat(128)).error).toBe(
       'Index names are limited to 255 bytes (this one has 256)',
@@ -223,37 +213,5 @@ describe('alias name conflicts', () => {
       ]),
     ).toEqual(['logs', 'catalog']);
     expect(aliasNames({ error: 'forbidden' })).toEqual([]);
-  });
-});
-
-describe('Elasticsearch error reasons', () => {
-  it('reads the reason of an error response body', () => {
-    const error = {
-      status: 400,
-      body: {
-        error: {
-          root_cause: [{ type: 'invalid_index_name_exception', reason: 'root reason' }],
-          type: 'invalid_index_name_exception',
-          reason: 'Invalid index name [logs], already exists as alias',
-        },
-        status: 400,
-      },
-    };
-    expect(elasticsearchReason(error)).toBe('Invalid index name [logs], already exists as alias');
-  });
-
-  it('falls back to the root cause or a plain string error', () => {
-    expect(elasticsearchReason({ body: { error: { root_cause: [{ reason: 'root reason' }] } } })).toBe(
-      'root reason',
-    );
-    expect(elasticsearchReason({ body: { error: 'IndexAlreadyExistsException[[x] already exists]' } })).toBe(
-      'IndexAlreadyExistsException[[x] already exists]',
-    );
-  });
-
-  it('returns null when there is no reason', () => {
-    expect(elasticsearchReason(new Error('network'))).toBeNull();
-    expect(elasticsearchReason({ body: { acknowledged: false } })).toBeNull();
-    expect(elasticsearchReason(undefined)).toBeNull();
   });
 });

@@ -9,11 +9,14 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
+import { pluralize } from '../../core/format';
+import { validateResourceName } from '../../core/names';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
@@ -32,9 +35,7 @@ import {
   templateSource,
   templateVersion,
   upsertTemplate,
-  validateTemplateName,
 } from './templates.models';
-import { registerTemplatesLeaveGuard } from './templates.guard';
 
 interface TemplateRow {
   readonly template: LegacyTemplate;
@@ -87,7 +88,8 @@ export class TemplatesComponent implements PendingChangesAware {
   readonly name = signal('');
   readonly body = signal(NEW_TEMPLATE_BODY);
   readonly baseline = signal<EditorBaseline>(NEW_BASELINE);
-  readonly nameTouched = signal(false);
+  /** Set by the first save attempt: from then on every field error shows. */
+  readonly submitted = signal(false);
   readonly saving = signal(false);
   readonly deleting = signal(false);
 
@@ -123,9 +125,10 @@ export class TemplatesComponent implements PendingChangesAware {
     return template ? templateVersion(template) : null;
   });
 
-  readonly nameValidation = computed(() => validateTemplateName(this.name()));
+  readonly nameValidation = computed(() => validateResourceName(this.name(), 'template'));
+  /** Shown after a save attempt, or live once a name has been typed. */
   readonly nameError = computed(() =>
-    this.name() !== '' || this.nameTouched() ? this.nameValidation() : null,
+    this.name() !== '' || this.submitted() ? this.nameValidation() : null,
   );
 
   readonly bodyState = computed(() => analyzeTemplateBody(this.body()));
@@ -137,11 +140,7 @@ export class TemplatesComponent implements PendingChangesAware {
     const state = this.bodyState();
     return state.ok ? templateBodyWarning(state.value) : null;
   });
-  readonly bodyLines = computed(() => this.body().split('\n').length);
-  readonly bodyLinesLabel = computed(() => {
-    const lines = this.bodyLines();
-    return lines === 1 ? '1 line' : `${lines} lines`;
-  });
+  readonly bodyLinesLabel = computed(() => pluralize(this.body().split('\n').length, 'line'));
 
   readonly dirty = computed(() => {
     const baseline = this.baseline();
@@ -151,27 +150,11 @@ export class TemplatesComponent implements PendingChangesAware {
   readonly mode = computed(() => saveMode(this.name(), this.selected(), this.names()));
   readonly saveLabel = computed(() => SAVE_LABELS[this.mode()]);
 
-  readonly blocker = computed<string | null>(() => {
-    if (this.nameValidation()) {
-      return this.nameValidation();
-    }
-    if (this.bodyError()) {
-      return 'Fix the template body';
-    }
-    if (this.mode() === 'update' && !this.dirty() && !this.selectedMissing()) {
-      return 'No changes to save';
-    }
-    return null;
-  });
-
-  readonly canSave = computed(() => this.blocker() === null && !this.saving() && !this.deleting());
+  readonly pluralize = pluralize;
 
   private loadSequence = 0;
 
   constructor() {
-    // Asks before in-app navigation drops unsaved editor changes.
-    registerTemplatesLeaveGuard(inject(ActivatedRoute).routeConfig);
-
     effect(() => {
       this.refreshService.tick();
       if (this.connection.connected()) {
@@ -192,7 +175,7 @@ export class TemplatesComponent implements PendingChangesAware {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Could not load legacy templates', error);
+        this.alerts.error(failureMessage('Could not load legacy templates', error), error);
       }
     } finally {
       if (sequence === this.loadSequence) {
@@ -225,7 +208,7 @@ export class TemplatesComponent implements PendingChangesAware {
     this.name.set(template.name);
     this.body.set(source);
     this.baseline.set({ name: template.name, body: source });
-    this.nameTouched.set(false);
+    this.submitted.set(false);
     this.revealEditor();
   }
 
@@ -249,7 +232,7 @@ export class TemplatesComponent implements PendingChangesAware {
     const baseline = this.baseline();
     this.name.set(baseline.name);
     this.body.set(baseline.body);
-    this.nameTouched.set(false);
+    this.submitted.set(false);
   }
 
   format(): void {
@@ -271,20 +254,23 @@ export class TemplatesComponent implements PendingChangesAware {
     }
   }
 
+  /** Validates on submit: the first invalid field gets the focus. */
   async save(): Promise<void> {
-    if (this.saving()) {
+    if (this.saving() || this.deleting()) {
       return;
     }
-    if (!this.canSave()) {
-      this.nameTouched.set(true);
-      if (this.nameValidation()) {
-        this.nameInput()?.nativeElement.focus();
-      }
+    this.submitted.set(true);
+    if (this.nameValidation()) {
+      this.nameInput()?.nativeElement.focus();
       return;
     }
-
     const state = this.bodyState();
     if (!state.ok) {
+      this.editor()?.focus();
+      return;
+    }
+    if (this.mode() === 'update' && !this.dirty() && !this.selectedMissing()) {
+      this.alerts.info(`Template ${this.name()} has no unsaved changes`);
       return;
     }
     const name = this.name();
@@ -319,10 +305,10 @@ export class TemplatesComponent implements PendingChangesAware {
       if (tracked) {
         this.selected.set(name);
         this.baseline.set({ name, body });
-        this.nameTouched.set(false);
+        this.submitted.set(false);
       }
     } catch (error: unknown) {
-      this.alerts.error(`Could not save template ${name}`, error);
+      this.alerts.error(failureMessage(`Could not save template ${name}`, error), error);
       return;
     } finally {
       this.saving.set(false);
@@ -366,7 +352,7 @@ export class TemplatesComponent implements PendingChangesAware {
       }
       await this.load();
     } catch (error: unknown) {
-      this.alerts.error(`Could not delete template ${name}`, error);
+      this.alerts.error(failureMessage(`Could not delete template ${name}`, error), error);
     } finally {
       this.deleting.set(false);
     }
@@ -374,8 +360,7 @@ export class TemplatesComponent implements PendingChangesAware {
 
   /**
    * Resolves `true` when the editor holds nothing unsaved or the user agreed
-   * to drop it. Used when switching templates and, through the route's
-   * unsaved-changes guard, when leaving the page.
+   * to drop it. Used when switching templates and by the route guard.
    */
   async confirmDiscard(): Promise<boolean> {
     if (!this.dirty()) {
@@ -396,7 +381,7 @@ export class TemplatesComponent implements PendingChangesAware {
     this.name.set(NEW_BASELINE.name);
     this.body.set(NEW_BASELINE.body);
     this.baseline.set(NEW_BASELINE);
-    this.nameTouched.set(false);
+    this.submitted.set(false);
   }
 
   /** On the single-column layout the editor sits below the list. */

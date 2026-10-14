@@ -15,6 +15,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { BytesPipe, DurationPipe, NumberPipe } from '../../shared/format.pipes';
@@ -33,7 +34,6 @@ import {
   groupRecoveries,
   metricView,
   parseRecoveries,
-  pluralize,
   recoveryPercent,
   recoveryRates,
   sortGroups,

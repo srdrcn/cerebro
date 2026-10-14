@@ -64,7 +64,13 @@
             Only cancellable
           </label>
         </div>
-        <span class="count-label"><strong>{{ visibleCount() }}</strong> of {{ all.length }} tasks</span>
+        <span class="count-label">
+          @if (filtersActive() || (hideInternal() && hiddenInternal() > 0)) {
+            <strong>{{ visibleCount() | num }}</strong> of {{ pluralize(all.length, 'task') }}
+          } @else {
+            <strong>{{ all.length | num }}</strong> {{ all.length === 1 ? 'task' : 'tasks' }}
+          }
+        </span>
       </div>
 
       <div class="table-wrap">
@@ -72,25 +78,25 @@
           <caption class="visually-hidden">Running tasks. Sub-tasks are nested under their parent task.</caption>
           <thead>
             <tr>
-              <th scope="col" class="task-col" [attr.aria-sort]="ariaSort('action')">
-                <button type="button" class="sort-button" [class.is-active]="sortField() === 'action'" (click)="sortBy('action')">
-                  Task <i [class]="'bi ' + sortIcon('action')" aria-hidden="true"></i>
+              <th scope="col" class="task-col" [attr.aria-sort]="sort.ariaSort('action')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('action')" (click)="sort.sortBy('action')">
+                  Task <i class="bi" [class]="'bi ' + sort.icon('action')" aria-hidden="true"></i>
                 </button>
               </th>
               <th scope="col" class="description-col">Description</th>
-              <th scope="col" [attr.aria-sort]="ariaSort('node')">
-                <button type="button" class="sort-button" [class.is-active]="sortField() === 'node'" (click)="sortBy('node')">
-                  Node <i [class]="'bi ' + sortIcon('node')" aria-hidden="true"></i>
+              <th scope="col" [attr.aria-sort]="sort.ariaSort('node')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('node')" (click)="sort.sortBy('node')">
+                  Node <i class="bi" [class]="'bi ' + sort.icon('node')" aria-hidden="true"></i>
                 </button>
               </th>
-              <th scope="col" class="start-col" [attr.aria-sort]="ariaSort('start')">
-                <button type="button" class="sort-button" [class.is-active]="sortField() === 'start'" (click)="sortBy('start')">
-                  Started <i [class]="'bi ' + sortIcon('start')" aria-hidden="true"></i>
+              <th scope="col" class="start-col" [attr.aria-sort]="sort.ariaSort('start')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('start')" (click)="sort.sortBy('start')">
+                  Started <i class="bi" [class]="'bi ' + sort.icon('start')" aria-hidden="true"></i>
                 </button>
               </th>
-              <th scope="col" class="running-col" [attr.aria-sort]="ariaSort('running')">
-                <button type="button" class="sort-button" [class.is-active]="sortField() === 'running'" (click)="sortBy('running')">
-                  Running <i [class]="'bi ' + sortIcon('running')" aria-hidden="true"></i>
+              <th scope="col"  [attr.aria-sort]="sort.ariaSort('running')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('running')" (click)="sort.sortBy('running')">
+                  Running <i class="bi" [class]="'bi ' + sort.icon('running')" aria-hidden="true"></i>
                 </button>
               </th>
               <th scope="col" class="progress-col">Progress</th>
@@ -113,8 +119,8 @@
                         type="button"
                         class="btn btn-ghost btn-icon btn-sm tree-toggle"
                         [attr.aria-expanded]="row.expanded"
-                        [attr.aria-label]="(row.expanded ? 'Hide ' : 'Show ') + row.childCount + (row.childCount === 1 ? ' sub-task of ' : ' sub-tasks of ') + task.label"
-                        [title]="(row.expanded ? 'Hide ' : 'Show ') + row.childCount + (row.childCount === 1 ? ' sub-task' : ' sub-tasks')"
+                        [attr.aria-label]="(row.expanded ? 'Hide ' : 'Show ') + pluralize(row.childCount, 'sub-task') + ' of ' + task.label"
+                        [title]="(row.expanded ? 'Hide ' : 'Show ') + pluralize(row.childCount, 'sub-task')"
                         (click)="toggleChildren(task)"
                       >
                         <i class="bi" [class.bi-chevron-down]="row.expanded" [class.bi-chevron-right]="!row.expanded" aria-hidden="true"></i>
@@ -197,8 +203,8 @@
                         [small]="true"
                         [label]="'Progress of ' + task.label"
                       />
-                      <div class="task-progress__meta text-xs text-muted tabular">
-                        {{ progress.batches | num }} {{ progress.batches === 1 ? 'batch' : 'batches' }}
+                      <div class="text-xs text-muted tabular">
+                        {{ pluralize(progress.batches, 'batch', 'batches') }}
                         @if (progress.requestsPerSecond !== null) {
                           · <span class="text-warning" title="requests_per_second throttle">{{ progress.requestsPerSecond }} req/s</span>
                         }
@@ -264,7 +270,7 @@
                     >
                       @if (hiddenInternal() > 0) {
                         <button type="button" class="btn btn-sm" (click)="hideInternal.set(false)">
-                          Show {{ hiddenInternal() }} internal {{ hiddenInternal() === 1 ? 'task' : 'tasks' }}
+                          Show {{ pluralize(hiddenInternal(), 'internal task') }}
                         </button>
                       }
                     </cerebro-empty>

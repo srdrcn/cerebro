@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ClusterApiError } from '../../core/api-envelope';
 import { ExplainRow, IlmPoliciesResponse } from './ilm.models';
 import {
   NEW_POLICY_BODY,
   analyzePolicyBody,
   describeAction,
-  errorReason,
   filterExplain,
   filterPolicies,
   formatSizeValue,
@@ -409,38 +407,5 @@ describe('lifecycle status', () => {
         { name: 'warm', tone: 'warm', count: 1 },
       ],
     });
-  });
-});
-
-describe('errorReason', () => {
-  it('prefers the root cause and strips parser positions', () => {
-    const error = new ClusterApiError(400, {
-      error: {
-        root_cause: [{ type: 'named_object_not_found_exception', reason: '[1:40] unknown field [rolover]' }],
-        type: 'x_content_parse_exception',
-        reason: '[1:40] [put_lifecycle_request] failed to parse field [policy]',
-      },
-      status: 400,
-    });
-    expect(errorReason(error)).toBe('unknown field [rolover]');
-  });
-
-  it('explains why an in-use policy cannot be deleted', () => {
-    expect(
-      errorReason({
-        error: {
-          type: 'illegal_argument_exception',
-          reason: 'Cannot delete policy [p]. It is in use by one or more indices: [i]',
-        },
-      }),
-    ).toBe('Cannot delete policy [p]. It is in use by one or more indices: [i]');
-  });
-
-  it('handles strings, errors and empty values', () => {
-    expect(errorReason('  plain  ')).toBe('plain');
-    expect(errorReason(new Error('boom'))).toBe('boom');
-    expect(errorReason(null)).toBeNull();
-    expect(errorReason({})).toBeNull();
-    expect(errorReason(42)).toBeNull();
   });
 });

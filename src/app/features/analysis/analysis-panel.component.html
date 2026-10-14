@@ -1,7 +1,7 @@
-<section class="card analysis-panel" [attr.aria-labelledby]="id + '-title'">
+<section class="card" [attr.aria-labelledby]="id + '-title'">
   <div class="card-header analysis-panel__header">
-    <div class="analysis-panel__heading">
-      <span class="analysis-panel__icon" aria-hidden="true">
+    <div class="row min-w-0">
+      <span class="card-icon" aria-hidden="true">
         <i class="bi" [class]="'bi ' + config().icon"></i>
       </span>
       <div class="min-w-0">
@@ -144,8 +144,7 @@
               <span aria-hidden="true"> › </span>
               <span class="mono">{{ result.target }}</span>
               @if (summary().count > 0) {
-                · {{ summary().unique }} unique · {{ summary().positions }}
-                {{ summary().positions === 1 ? 'position' : 'positions' }}
+                · {{ summary().unique }} unique · {{ pluralize(summary().positions, 'position') }}
               }
             </p>
           </div>
@@ -169,7 +168,7 @@
           />
         } @else {
           <div class="analysis-block">
-            <div class="analysis-label">Source text</div>
+            <div class="section-label analysis-label">Source text</div>
             <p class="token-source">
               @for (segment of segments(); track segment.start) {
                 @if (segment.tokens.length > 0) {
@@ -182,7 +181,7 @@
           </div>
 
           <div class="analysis-block">
-            <div class="analysis-label" [id]="id + '-tokens-label'">
+            <div class="section-label analysis-label" [id]="id + '-tokens-label'">
               Token stream <span class="analysis-label__hint">select a token to highlight it</span>
             </div>
             <ol class="token-flow" [attr.aria-labelledby]="id + '-tokens-label'">

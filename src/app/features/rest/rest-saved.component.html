@@ -40,6 +40,16 @@
   </div>
 }
 
+@if (readOnly()) {
+  <div class="callout callout-warning saved-readonly" role="status">
+    <i class="bi bi-lock" aria-hidden="true"></i>
+    <div>
+      <strong>Stored by a newer version of Cerebro.</strong>
+      These saved requests can be loaded, but changes made here are not stored so that nothing is lost.
+    </div>
+  </div>
+}
+
 <div class="saved-scroll">
   @if (requests().length === 0) {
     <cerebro-empty

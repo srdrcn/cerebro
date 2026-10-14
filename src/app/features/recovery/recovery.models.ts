@@ -24,9 +24,6 @@ export interface RawRecoveryRow {
   readonly translog_ops_percent?: string;
 }
 
-export type RecoveryType = 'peer' | 'existing_store' | 'snapshot' | 'empty_store' | 'local_shards';
-export type RecoveryStage = 'init' | 'index' | 'verify_index' | 'translog' | 'finalize' | 'done';
-
 export interface Progress {
   /** Amount that has to be recovered (files/bytes/ops actually copied or replayed). */
   readonly total: number;

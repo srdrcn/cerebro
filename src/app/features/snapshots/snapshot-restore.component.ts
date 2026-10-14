@@ -13,17 +13,16 @@ import {
 import { FormsModule } from '@angular/forms';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
+import { elasticsearchReason } from '../../core/errors';
+import { formatTimestamp, pluralize } from '../../core/format';
 import { ChecklistOption, IndexChecklistComponent } from './index-checklist.component';
 import { SnapshotRecord, buildRestoreSnapshotPayload, defaultRestoreForm } from './snapshots.models';
 import {
   IndexAlias,
   aliasesByIndex,
   aliasesOf,
-  errorReason,
-  formatTimestamp,
   indexStatuses,
   isRenaming,
-  pluralize,
   renameIndex,
   restoreTargetState,
   snapshotIndices,
@@ -58,6 +57,7 @@ export class SnapshotRestoreComponent {
   readonly restored = output<string>();
 
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly checklist = viewChild.required(IndexChecklistComponent);
 
   private readonly defaults = defaultRestoreForm();
   readonly renamePattern = signal(this.defaults.renamePattern);
@@ -167,7 +167,7 @@ export class SnapshotRestoreComponent {
   readonly writeAliases = computed(() => this.joinedAliases().filter((alias) => alias.write));
 
   readonly selectionError = computed(() =>
-    this.selectedNames().length === 0 ? 'Select at least one index to restore.' : null,
+    this.selectedNames().length === 0 ? 'Select at least one index to restore' : null,
   );
 
   readonly valid = computed(
@@ -287,7 +287,11 @@ export class SnapshotRestoreComponent {
 
   async restore(): Promise<void> {
     this.submitted.set(true);
-    if (!this.valid() || this.restoring()) {
+    if (this.restoring()) {
+      return;
+    }
+    if (!this.valid()) {
+      this.focusFirstInvalid();
       return;
     }
     const selected = this.selectedNames();
@@ -314,10 +318,20 @@ export class SnapshotRestoreComponent {
       this.restored.emit(name);
       this.close();
     } catch (error: unknown) {
-      this.failure.set(errorReason(error) ?? 'Elasticsearch rejected the restore request.');
+      this.failure.set(elasticsearchReason(error) ?? 'Elasticsearch rejected the restore request.');
       this.alerts.error(`Could not restore snapshot ${name}`, error);
     } finally {
       this.restoring.set(false);
+    }
+  }
+
+  private focusFirstInvalid(): void {
+    if (this.selectionError()) {
+      this.checklist().focus();
+    } else if (this.patternError()) {
+      document.getElementById('restore-rename-pattern')?.focus();
+    } else if (this.replacementError()) {
+      document.getElementById('restore-rename-replacement')?.focus();
     }
   }
 }

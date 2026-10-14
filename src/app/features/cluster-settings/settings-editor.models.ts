@@ -1,4 +1,5 @@
-import { matchesText } from '../../core/format';
+import { elasticsearchReason } from '../../core/errors';
+import { humanize, matchesText } from '../../core/format';
 
 /**
  * Pure logic behind <cerebro-settings-editor>, shared by the cluster settings
@@ -136,14 +137,15 @@ const ACRONYMS: Readonly<Record<string, string>> = {
   xpack: 'X-Pack',
 };
 
-/** `xpack.security` → `X-Pack security`, `thread_pool` → `Thread pool`. */
+/**
+ * `humanize` that keeps acronyms readable: `xpack.security` → `X-Pack security`,
+ * `http` → `HTTP`, `thread_pool` → `Thread pool`.
+ */
 export function humanizeSettingKey(key: string): string {
-  const words = key
-    .split(/[._]/)
-    .filter((word) => word.length > 0)
-    .map((word) => ACRONYMS[word.toLowerCase()] ?? word.toLowerCase());
-  const sentence = words.join(' ');
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+  return humanize(key)
+    .split(' ')
+    .map((word) => ACRONYMS[word.toLowerCase()] ?? word)
+    .join(' ');
 }
 
 /** Key of the group holding `GroupingOptions.featured` settings. */
@@ -431,35 +433,6 @@ export function buildFlatSettingsPayload(
   return payload;
 }
 
-/** Extracts the most specific human readable reason from an API error. */
-export function errorReason(error: unknown): string | undefined {
-  if (!error || typeof error !== 'object' || !('body' in error)) {
-    return undefined;
-  }
-  const body = (error as { body: unknown }).body;
-  if (typeof body === 'string') {
-    return body || undefined;
-  }
-  if (!body || typeof body !== 'object') {
-    return undefined;
-  }
-  const details = (body as { error?: unknown }).error;
-  if (typeof details === 'string') {
-    return details;
-  }
-  if (!details || typeof details !== 'object') {
-    return undefined;
-  }
-  const record = details as {
-    reason?: unknown;
-    caused_by?: { reason?: unknown };
-    root_cause?: readonly { reason?: unknown }[];
-  };
-  const candidates = [record.reason, record.root_cause?.[0]?.reason, record.caused_by?.reason];
-  const reason = candidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate !== '');
-  return reason ? friendlyReason(reason) : undefined;
-}
-
 /** Rewrites the few Java flavoured messages Elasticsearch returns for settings. */
 export function friendlyReason(reason: string): string {
   const enumValue = /^No enum constant (?:[\w$]+\.)+([\w$]+)$/.exec(reason.trim());
@@ -493,10 +466,11 @@ export function settingNamedInError(
  * next to the field. Falls back to the only change when there is just one.
  */
 export function settingErrorsFor(error: unknown, changes: readonly PendingChange[]): SettingErrors {
-  const message = errorReason(error);
-  if (!message) {
+  const reason = elasticsearchReason(error);
+  if (!reason) {
     return {};
   }
+  const message = friendlyReason(reason);
   const name = settingNamedInError(message, changes.map((change) => change.name));
   const change = changes.find((candidate) => candidate.name === name) ?? (changes.length === 1 ? changes[0] : undefined);
   return change ? { [change.name]: { message, value: change.to } } : {};

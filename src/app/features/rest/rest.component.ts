@@ -16,6 +16,7 @@ import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { pluralize } from '../../core/format';
 import {
   readJsonPreference,
   readPreference,
@@ -37,6 +38,8 @@ import type { ImportPlan, ImportStrategy, SavedRequest } from './rest-saved.mode
 import { RestSavedComponent } from './rest-saved.component';
 import { RestSavedStore } from './rest-saved.store';
 import {
+  bodyTooLarge,
+  bodyTooLargeText,
   exportDocument,
   exportFileName,
   importSummary,
@@ -376,7 +379,8 @@ export class RestComponent {
         !(event.ctrlKey || event.metaKey) ||
         event.shiftKey ||
         event.altKey ||
-        event.key.toLowerCase() !== 's'
+        // `code` too: with Cyrillic, Greek … layouts the key is not "s".
+        (event.key.toLowerCase() !== 's' && event.code !== 'KeyS')
       ) {
         return;
       }
@@ -739,6 +743,11 @@ export class RestComponent {
   // ------------------------------------------------------------------
 
   onPageKeydown(event: KeyboardEvent): void {
+    // The save and import dialogs live inside the page: Ctrl+Enter there must not send.
+    const target = event.target;
+    if (target instanceof Element && target.closest('dialog') !== null) {
+      return;
+    }
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.defaultPrevented) {
       event.preventDefault();
       void this.send();
@@ -786,9 +795,7 @@ export class RestComponent {
   }
 
   openSaveDialog(): void {
-    if (!this.canSave()) {
-      this.alerts.warn('Enter a request path before saving the request');
-      this.focusPath();
+    if (!this.canSaveDraft()) {
       return;
     }
     const draft = this.draft();
@@ -828,13 +835,30 @@ export class RestComponent {
     if (linked === null) {
       return;
     }
-    if (!this.canSave()) {
-      this.alerts.warn('Enter a request path before saving the request');
-      this.focusPath();
+    if (!this.canSaveDraft()) {
       return;
     }
     const { stored } = this.saved.save(linked.name, this.draft());
     this.reportStored(stored, `Updated “${linked.name}”`);
+  }
+
+  /**
+   * Whether the editor's request can be saved; explains why not otherwise.
+   * Bodies longer than what storage keeps are refused here rather than
+   * reported as saved and dropped on the next reload.
+   */
+  private canSaveDraft(): boolean {
+    if (!this.canSave()) {
+      this.alerts.warn('Enter a request path before saving the request');
+      this.focusPath();
+      return false;
+    }
+    const body = this.body();
+    if (bodyTooLarge(body)) {
+      this.alerts.warn('The body is too large to save', bodyTooLargeText(body));
+      return false;
+    }
+    return true;
   }
 
   /** Puts the linked saved request back into the editor. */
@@ -851,11 +875,14 @@ export class RestComponent {
 
   async loadSaved(request: SavedRequest): Promise<void> {
     const linked = this.linked();
-    if (linked !== null && this.linkedDirty() && !sameName(linked.name, request.name)) {
+    if (linked !== null && this.linkedDirty()) {
+      const same = sameName(linked.name, request.name);
       const discard = await this.dialogs.confirm({
         title: `Discard the changes to “${linked.name}”?`,
-        message: `The editor holds changes that are not saved yet. Loading “${request.name}” replaces them.`,
-        confirmLabel: 'Discard and load',
+        message: same
+          ? `The editor holds changes that are not saved yet. Loading “${linked.name}” again puts the saved version back.`
+          : `The editor holds changes that are not saved yet. Loading “${request.name}” replaces them.`,
+        confirmLabel: same ? 'Discard changes' : 'Discard and load',
         cancelLabel: 'Keep editing',
         tone: 'warning',
       });
@@ -886,10 +913,7 @@ export class RestComponent {
     const text = `${JSON.stringify(exportDocument(requests, now), null, 2)}\n`;
     try {
       downloadText(name, text);
-      this.alerts.success(
-        `Exported ${requests.length === 1 ? '1 saved request' : `${requests.length} saved requests`}`,
-        name,
-      );
+      this.alerts.success(`Exported ${pluralize(requests.length, 'saved request')}`, name);
     } catch (error: unknown) {
       this.alerts.error('The saved requests could not be exported', error);
     }
@@ -944,10 +968,7 @@ export class RestComponent {
     const { outcome, stored } = this.saved.import(plan.incoming, strategy);
     const summary = importSummary(outcome, plan.invalid);
     if (!stored) {
-      this.alerts.warn(
-        `${summary.message}, but the browser did not store them`,
-        'Local storage is full or disabled: the imported requests are lost when the page is reloaded.',
-      );
+      this.alerts.warn(`${summary.message}, but the browser did not store them`, this.saved.notStoredDetail());
     } else if (outcome.added + outcome.overwritten === 0) {
       this.alerts.info(summary.message, summary.details || undefined);
     } else {
@@ -975,10 +996,7 @@ export class RestComponent {
     if (stored) {
       this.alerts.success(message);
     } else {
-      this.alerts.warn(
-        `${message}, but the browser did not store it`,
-        'Local storage is full or disabled: the change is lost when the page is reloaded.',
-      );
+      this.alerts.warn(`${message}, but the browser did not store it`, this.saved.notStoredDetail());
     }
   }
 

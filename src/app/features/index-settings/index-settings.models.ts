@@ -1,3 +1,4 @@
+import { sortByName } from '../../core/format';
 import { SettingRow, settingValueToString } from '../cluster-settings/settings-editor.models';
 import {
   DYNAMIC_INDEX_SETTINGS,
@@ -151,7 +152,7 @@ export interface IndexOptionGroups {
 
 /** Splits the index picker options into regular and dot-prefixed indices. */
 export function groupIndexOptions(names: readonly string[]): IndexOptionGroups {
-  const sorted = [...new Set(names)].sort((left, right) => left.localeCompare(right));
+  const sorted = sortByName(names);
   return {
     regular: sorted.filter((name) => !name.startsWith('.')),
     system: sorted.filter((name) => name.startsWith('.')),

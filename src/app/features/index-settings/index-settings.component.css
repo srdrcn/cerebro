@@ -27,25 +27,6 @@
   max-width: min(100%, 360px);
 }
 
-.index-picker {
-  position: relative;
-  width: min(320px, 100%);
-  display: flex;
-  align-items: center;
-}
-
-.index-picker__icon {
-  position: absolute;
-  left: 11px;
-  z-index: 1;
-  color: var(--text-3);
-  pointer-events: none;
-}
-
-.index-picker .select {
-  padding-left: 33px;
-}
-
 .quick-picks {
   display: flex;
   flex-wrap: wrap;
@@ -59,8 +40,7 @@
 }
 
 @media (max-width: 760px) {
-  .page-header__actions,
-  .index-picker {
+  .page-header__actions {
     width: 100%;
   }
 

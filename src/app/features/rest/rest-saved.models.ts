@@ -42,6 +42,15 @@ export interface ParsedSavedRequests {
   readonly invalid: number;
 }
 
+/** What was read from localStorage. */
+export interface StoredSavedRequests extends ParsedSavedRequests {
+  /**
+   * The format version, when a newer Cerebro wrote the document. Such a
+   * document is not rewritten: this version would drop what it does not know.
+   */
+  readonly newerVersion: number | null;
+}
+
 export type ImportFileResult =
   | ({ readonly ok: true } & ParsedSavedRequests)
   | { readonly ok: false; readonly message: string };

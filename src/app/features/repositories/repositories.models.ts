@@ -1,3 +1,5 @@
+import { invalidCharacters } from '../../core/names';
+
 export type RepositoryType = 'fs' | 'url' | 's3' | 'gcs' | 'hdfs' | 'azure';
 export type RepositorySettingValue = string | boolean;
 export type RepositorySettings = Partial<Record<string, RepositorySettingValue>>;
@@ -207,22 +209,25 @@ export function normalizeRepositorySettings(
   return { settings: known, extras: extras.sort((left, right) => left.key.localeCompare(right.key)) };
 }
 
-const INVALID_REPOSITORY_CHARACTERS = ['\\', '/', '*', '?', '"', '<', '>', '|', ',', '#'];
-
-/** Mirrors the repository name rules of Elasticsearch. */
+/**
+ * Mirrors the repository name rules of Elasticsearch: the shared invalid
+ * characters, but unlike index or snapshot names upper case is allowed.
+ */
 export function validateRepositoryName(value: string): string | null {
   const name = value.trim();
   if (!name) {
-    return 'Enter a repository name.';
+    return 'Enter a name for the repository';
   }
   if (/\s/.test(name)) {
-    return 'Repository names cannot contain whitespace.';
+    return 'Repository names cannot contain spaces';
   }
   if (name.startsWith('_')) {
-    return 'Repository names cannot start with an underscore.';
+    return 'Repository names cannot start with "_"';
   }
-  const invalid = INVALID_REPOSITORY_CHARACTERS.find((character) => name.includes(character));
-  return invalid ? `Repository names cannot contain “${invalid}”.` : null;
+  const invalid = invalidCharacters(name);
+  return invalid.length > 0
+    ? `Repository names cannot contain ${invalid.map((character) => `"${character}"`).join(', ')}`
+    : null;
 }
 
 /** Returns an error for the first problematic free-form setting, if any. */
@@ -236,18 +241,18 @@ export function validateExtraSettings(
     const key = extra.key.trim();
     if (!key) {
       if (extra.value.trim()) {
-        return 'Every additional setting needs a name.';
+        return 'Every additional setting needs a name';
       }
       continue;
     }
     if (/\s/.test(key)) {
-      return `Setting names cannot contain whitespace (“${key}”).`;
+      return `Setting names cannot contain spaces ("${key}")`;
     }
     if (reserved.has(key)) {
-      return `“${key}” has its own field above.`;
+      return `"${key}" has its own field above`;
     }
     if (seen.has(key)) {
-      return `“${key}” is defined twice.`;
+      return `"${key}" is defined twice`;
     }
     seen.add(key);
   }

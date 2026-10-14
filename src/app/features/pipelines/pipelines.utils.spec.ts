@@ -5,7 +5,6 @@ import {
   analyzePipelineBody,
   buildSimulatePayload,
   diffSources,
-  errorReason,
   filterPipelines,
   inlineValue,
   inputFields,
@@ -162,7 +161,8 @@ describe('editor', () => {
     expect(validatePipelineId('')).toBe('Enter an id for the pipeline');
     expect(validatePipelineId('a b')).toBe('Pipeline ids cannot contain spaces');
     expect(validatePipelineId('_simulate')).toBe('Pipeline ids cannot start with "_"');
-    expect(validatePipelineId('a/b')).toBe('Pipeline ids cannot contain /, \\, ? or #');
+    expect(validatePipelineId('a/b')).toBe('Pipeline ids cannot contain "/"');
+    expect(validatePipelineId('a#b?c')).toBe('Pipeline ids cannot contain "?", "#"');
     expect(validatePipelineId('logs@custom')).toBeNull();
   });
 });
@@ -352,31 +352,12 @@ describe('simulation results', () => {
   });
 });
 
-describe('saving and errors', () => {
+describe('saving', () => {
   it('works out what saving does', () => {
     expect(saveMode('new', null, ['a'])).toBe('create');
     expect(saveMode('a', null, ['a'])).toBe('overwrite');
     expect(saveMode('a', 'a', ['a'])).toBe('update');
     expect(saveMode('b', 'a', ['a'])).toBe('copy');
     expect(saveMode('c', 'a', ['a', 'c'])).toBe('overwrite');
-  });
-
-  it('extracts the most useful Elasticsearch reason', () => {
-    expect(
-      errorReason({
-        status: 400,
-        body: {
-          error: {
-            root_cause: [{ type: 'parse_exception', reason: '[1:12] [field] required property is missing' }],
-            type: 'parse_exception',
-            reason: 'failed to parse',
-          },
-        },
-      }),
-    ).toBe('[field] required property is missing');
-    expect(errorReason({ reason: 'plain' })).toBe('plain');
-    expect(errorReason(new Error('network down'))).toBe('network down');
-    expect(errorReason(null)).toBeNull();
-    expect(errorReason({})).toBeNull();
   });
 });

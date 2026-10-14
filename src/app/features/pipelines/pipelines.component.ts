@@ -16,6 +16,9 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { elasticsearchReason, failureMessage } from '../../core/errors';
+import { pluralize } from '../../core/format';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
@@ -33,9 +36,9 @@ import {
 } from './pipelines.models';
 import {
   NEW_PIPELINE_BODY,
+  SaveMode,
   analyzePipelineBody,
   buildSimulatePayload,
-  errorReason,
   filterPipelines,
   normalizePipelines,
   normalizeSimulation,
@@ -50,8 +53,6 @@ import {
   validatePipelineId,
   withDescription,
 } from './pipelines.utils';
-
-type SaveMode = ReturnType<typeof saveMode>;
 
 interface EditorBaseline {
   readonly id: string;
@@ -102,7 +103,7 @@ function json(value: unknown): string {
   styleUrl: './pipelines.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class PipelinesComponent {
+export class PipelinesComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
@@ -128,7 +129,8 @@ export class PipelinesComponent {
   readonly id = signal('');
   readonly body = signal(NEW_PIPELINE_BODY);
   readonly baseline = signal<EditorBaseline>(NEW_BASELINE);
-  readonly idTouched = signal(false);
+  /** Set by the first save attempt: field errors show from then on. */
+  readonly submitted = signal(false);
   readonly saving = signal(false);
   readonly deleting = signal(false);
 
@@ -151,7 +153,7 @@ export class PipelinesComponent {
   );
 
   readonly idValidation = computed(() => validatePipelineId(this.id()));
-  readonly idError = computed(() => (this.id() !== '' || this.idTouched() ? this.idValidation() : null));
+  readonly idError = computed(() => (this.id() !== '' || this.submitted() ? this.idValidation() : null));
 
   readonly bodyState = computed(() => analyzePipelineBody(this.body()));
   readonly bodyError = computed(() => {
@@ -181,19 +183,6 @@ export class PipelinesComponent {
   });
   readonly mode = computed(() => saveMode(this.id(), this.selected(), this.ids()));
   readonly saveLabel = computed(() => SAVE_LABELS[this.mode()]);
-  readonly blocker = computed<string | null>(() => {
-    if (this.idValidation()) {
-      return this.idValidation();
-    }
-    if (this.bodyError()) {
-      return 'Fix the pipeline JSON';
-    }
-    if (this.mode() === 'update' && !this.dirty() && !this.selectedMissing()) {
-      return 'No changes to save';
-    }
-    return null;
-  });
-  readonly canSave = computed(() => this.blocker() === null && !this.saving() && !this.deleting());
 
   // ---- Test pipeline ----
   readonly sampleDocs = signal(sampleDocsFor(undefined));
@@ -359,7 +348,7 @@ export class PipelinesComponent {
     this.id.set(pipeline.id);
     this.body.set(source);
     this.baseline.set({ id: pipeline.id, body: source });
-    this.idTouched.set(false);
+    this.submitted.set(false);
     this.resetTest(pipeline.pipeline);
     this.updateUrl();
   }
@@ -384,7 +373,7 @@ export class PipelinesComponent {
     const baseline = this.baseline();
     this.id.set(baseline.id);
     this.body.set(baseline.body);
-    this.idTouched.set(false);
+    this.submitted.set(false);
   }
 
   setDescription(value: string): void {
@@ -413,19 +402,23 @@ export class PipelinesComponent {
     }
   }
 
+  /** Validates on submit: the first invalid field gets the focus. */
   async save(): Promise<void> {
-    if (this.saving()) {
+    if (this.saving() || this.deleting()) {
       return;
     }
-    if (!this.canSave()) {
-      this.idTouched.set(true);
-      if (this.idValidation()) {
-        this.idInput()?.nativeElement.focus();
-      }
+    this.submitted.set(true);
+    if (this.idValidation()) {
+      this.idInput()?.nativeElement.focus();
       return;
     }
     const state = this.bodyState();
     if (!state.ok) {
+      this.editor()?.focus();
+      return;
+    }
+    if (this.mode() === 'update' && !this.dirty() && !this.selectedMissing()) {
+      this.alerts.info(`Pipeline ${this.id()} has no unsaved changes`);
       return;
     }
     const id = this.id();
@@ -455,11 +448,11 @@ export class PipelinesComponent {
       if (tracked) {
         this.selected.set(id);
         this.baseline.set({ id, body });
-        this.idTouched.set(false);
+        this.submitted.set(false);
         this.updateUrl();
       }
     } catch (error: unknown) {
-      this.alerts.error(`Could not save pipeline ${id}: ${errorReason(error) ?? 'unknown error'}`, error);
+      this.alerts.error(failureMessage(`Could not save pipeline ${id}`, error), error);
       return;
     } finally {
       this.saving.set(false);
@@ -498,7 +491,7 @@ export class PipelinesComponent {
       }
       await this.load();
     } catch (error: unknown) {
-      this.alerts.error(`Could not delete pipeline ${pipeline.id}: ${errorReason(error) ?? 'unknown error'}`, error);
+      this.alerts.error(failureMessage(`Could not delete pipeline ${pipeline.id}`, error), error);
     } finally {
       this.deleting.set(false);
     }
@@ -509,13 +502,17 @@ export class PipelinesComponent {
     this.id.set(NEW_BASELINE.id);
     this.body.set(NEW_BASELINE.body);
     this.baseline.set(NEW_BASELINE);
-    this.idTouched.set(false);
+    this.submitted.set(false);
     const state = analyzePipelineBody(NEW_BASELINE.body);
     this.resetTest(state.ok ? state.value : undefined);
     this.updateUrl();
   }
 
-  private async confirmDiscard(): Promise<boolean> {
+  /**
+   * Resolves `true` when the editor holds nothing unsaved or the user agreed
+   * to drop it. Used when switching pipelines and by the route guard.
+   */
+  async confirmDiscard(): Promise<boolean> {
     if (!this.dirty()) {
       return true;
     }
@@ -581,10 +578,15 @@ export class PipelinesComponent {
     }
   }
 
+  /** Validates on submit: an invalid pipeline or sample document gets the focus. */
   async simulate(): Promise<void> {
+    if (this.simulating()) {
+      return;
+    }
     const pipelineState = this.bodyState();
     if (!pipelineState.ok) {
       this.alerts.warn('Fix the pipeline JSON before testing it', pipelineState.message);
+      this.editor()?.focus();
       return;
     }
     const docsState = this.docsState();
@@ -615,7 +617,7 @@ export class PipelinesComponent {
       queueMicrotask(() => this.resultsHeading()?.nativeElement.focus({ preventScroll: true }));
     } catch (error: unknown) {
       if (sequence === this.simulateSequence) {
-        const reason = errorReason(error) ?? 'The cluster did not answer the simulate request.';
+        const reason = elasticsearchReason(error) ?? 'The cluster did not answer the simulate request.';
         this.results.set(undefined);
         this.simError.set(reason);
         this.announcement.set(`Elasticsearch rejected the simulation: ${reason}`);
@@ -646,6 +648,8 @@ export class PipelinesComponent {
   showResultJson(view: ResultView): void {
     this.dialogs.showJson(`Document ${view.result.position} simulation`, view.result.raw, 'Raw _simulate response');
   }
+
+  readonly pluralize = pluralize;
 
   statusLabel(status: string): string {
     return STATUS_LABELS[status] ?? status;

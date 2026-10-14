@@ -5,9 +5,15 @@ import {
   removePreference,
   writePreference,
 } from '../../core/preferences';
-import type { ImportOutcome, ImportStrategy, SavedRequest } from './rest-saved.models';
+import type {
+  ImportOutcome,
+  ImportStrategy,
+  SavedRequest,
+  StoredSavedRequests,
+} from './rest-saved.models';
 import {
   applyImport,
+  parseSavedList,
   duplicateSaved,
   findSaved,
   markSavedUsed,
@@ -36,8 +42,23 @@ export const SAVED_LINK_KEY = 'cerebro.rest.saved-link';
 export class RestSavedStore {
   private readonly destroyRef = inject(DestroyRef);
 
-  private readonly state = signal<readonly SavedRequest[]>(this.read());
+  private readonly initial = this.read();
+  private readonly state = signal<readonly SavedRequest[]>(this.initial.requests);
+  private readonly newerVersion = signal<number | null>(this.initial.newerVersion);
   private readonly linkState = signal<string | null>(readPreference(SAVED_LINK_KEY));
+
+  /**
+   * A newer Cerebro stored the saved requests: they can be used, but changes
+   * are kept on this page only so that nothing this version does not know
+   * about is lost.
+   */
+  readonly readOnly = computed(() => this.newerVersion() !== null);
+  /** Why a change was not stored (shown under the warning). */
+  readonly notStoredDetail = computed(() =>
+    this.readOnly()
+      ? `The saved requests were stored by a newer version of Cerebro (format version ${this.newerVersion()}). This version does not change them so that nothing is lost: the change is gone when the page is reloaded.`
+      : 'Local storage is full or disabled: the change is lost when the page is reloaded.',
+  );
 
   /** Every saved request, in storage order. */
   readonly requests = this.state.asReadonly();
@@ -50,7 +71,9 @@ export class RestSavedStore {
     const view = globalThis.window;
     const onStorage = (event: StorageEvent) => {
       if (event.key === SAVED_REQUESTS_KEY || event.key === null) {
-        this.state.set(this.read());
+        const stored = this.read();
+        this.state.set(stored.requests);
+        this.newerVersion.set(stored.newerVersion);
       }
     };
     view?.addEventListener?.('storage', onStorage);
@@ -119,14 +142,26 @@ export class RestSavedStore {
     return linked !== null && sameName(linked.name, name);
   }
 
-  private read(): readonly SavedRequest[] {
-    return parseStoredSavedRequests(readJsonPreference<unknown>(SAVED_REQUESTS_KEY, null), Date.now())
-      .requests;
+  private read(): StoredSavedRequests {
+    return parseStoredSavedRequests(readJsonPreference<unknown>(SAVED_REQUESTS_KEY, null), Date.now());
   }
 
+  /**
+   * Updates the list and stores it. Returns false when the browser did not
+   * keep it: storage full or disabled, a document written by a newer version
+   * (left untouched), or an entry that would be dropped when read back
+   * (which is refused rather than written and silently lost later).
+   */
   private commit(next: readonly SavedRequest[]): boolean {
     this.state.set(next);
-    const text = JSON.stringify(storedDocument(next));
+    if (this.readOnly()) {
+      return false;
+    }
+    const document = storedDocument(next);
+    if (parseSavedList(document.requests, Date.now()).requests.length !== next.length) {
+      return false;
+    }
+    const text = JSON.stringify(document);
     writePreference(SAVED_REQUESTS_KEY, text);
     // The preference helpers swallow quota errors: check the write landed.
     return readPreference(SAVED_REQUESTS_KEY) === text;

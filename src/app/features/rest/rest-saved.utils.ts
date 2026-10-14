@@ -1,4 +1,4 @@
-import { matchesText, pluralize } from '../../core/format';
+import { formatNumber, matchesText, pluralize } from '../../core/format';
 import type { RestDraft } from './rest.models';
 import {
   SAVED_REQUESTS_FORMAT,
@@ -12,6 +12,7 @@ import {
   type SavedRequest,
   type SavedRequestsDocument,
   type SavedSort,
+  type StoredSavedRequests,
 } from './rest-saved.models';
 import { MAX_STORED_BODY_LENGTH, describeBody, isRestMethod, requestPath } from './rest.utils';
 
@@ -230,19 +231,23 @@ export function parseSavedList(values: readonly unknown[], now: number): ParsedS
 /**
  * Reads the stored document defensively. Anything that is not a saved
  * requests document gives an empty list; newer versions are read as far as
- * their entries still look like requests.
+ * their entries still look like requests, and are flagged (`newerVersion`)
+ * so that this version does not rewrite them and lose what it does not know.
  */
-export function parseStoredSavedRequests(value: unknown, now: number): ParsedSavedRequests {
+export function parseStoredSavedRequests(value: unknown, now: number): StoredSavedRequests {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return { requests: [], invalid: 0 };
+    return { requests: [], invalid: 0, newerVersion: null };
   }
   const record = value as Record<string, unknown>;
   const version = record['version'];
   const requests = record['requests'];
   if (typeof version !== 'number' || version < 1 || !Array.isArray(requests)) {
-    return { requests: [], invalid: 0 };
+    return { requests: [], invalid: 0, newerVersion: null };
   }
-  return parseSavedList(requests, now);
+  return {
+    ...parseSavedList(requests, now),
+    newerVersion: version > SAVED_REQUESTS_VERSION ? version : null,
+  };
 }
 
 function cleanEntry(request: SavedRequest): SavedRequest {
@@ -345,6 +350,20 @@ export function sameRequest(
     requestPath(left.path) === requestPath(right.path) &&
     normalizedBody(left.body) === normalizedBody(right.body)
   );
+}
+
+/**
+ * True when the body is longer than what is kept in storage: such a request
+ * would be dropped when the saved requests are read back, so it is refused
+ * up front.
+ */
+export function bodyTooLarge(body: string): boolean {
+  return body.length > MAX_STORED_BODY_LENGTH;
+}
+
+/** Plain-language explanation for a body that is too large to save. */
+export function bodyTooLargeText(body: string): string {
+  return `Saved requests hold bodies of at most ${formatNumber(MAX_STORED_BODY_LENGTH)} characters (this one has ${formatNumber(body.length)}).`;
 }
 
 /** What is stored for the request in the editor. */
@@ -538,9 +557,18 @@ export function bodySummary(path: string, body: string): string {
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-/** When the request was last touched: used for the "recent" order. */
-export function lastActivity(request: SavedRequest): number {
-  return Math.max(request.lastUsedAt ?? 0, request.updatedAt);
+/**
+ * Most recently used first. Requests never loaded come after every used
+ * one (a rename, duplicate or import is not a use); ties fall back to the
+ * most recent change, then to the name.
+ */
+function byRecentUse(left: SavedRequest, right: SavedRequest): number {
+  const leftUsed = left.lastUsedAt ?? Number.NEGATIVE_INFINITY;
+  const rightUsed = right.lastUsedAt ?? Number.NEGATIVE_INFINITY;
+  if (leftUsed !== rightUsed) {
+    return rightUsed > leftUsed ? 1 : -1;
+  }
+  return right.updatedAt - left.updatedAt;
 }
 
 export function sortSavedRequests(
@@ -552,7 +580,7 @@ export function sortSavedRequests(
   return [...requests].sort(
     sort === 'name'
       ? byName
-      : (left, right) => lastActivity(right) - lastActivity(left) || byName(left, right),
+      : (left, right) => byRecentUse(left, right) || byName(left, right),
   );
 }
 

@@ -14,6 +14,8 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
+import { pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { MenuComponent } from '../../shared/menu.component';
@@ -26,7 +28,6 @@ import {
   bodyOverridesFields,
   buildIndexMetadata,
   cloneIndexMetadata,
-  elasticsearchReason,
   shardLayout,
   sortIndexNames,
   validateCount,
@@ -39,8 +40,10 @@ interface CopyInfo {
   readonly unwrappedType: string | null;
 }
 
-function plural(count: string, singular: string, pluralForm: string): string {
-  return `${count} ${count === '1' ? singular : pluralForm}`;
+/** "2 shards"; a value the JSON body sets to something else is shown as written. */
+function layoutCount(value: string, noun: string): string {
+  const count = Number(value);
+  return Number.isFinite(count) ? pluralize(count, noun) : `${value} ${noun}s`;
 }
 
 @Component({
@@ -60,9 +63,12 @@ export class CreateIndexComponent {
 
   private readonly editor = viewChild(CodeEditorComponent);
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
+  private readonly shardsInput = viewChild<ElementRef<HTMLInputElement>>('shardsInput');
+  private readonly replicasInput = viewChild<ElementRef<HTMLInputElement>>('replicasInput');
 
   readonly name = signal('');
-  readonly nameTouched = signal(false);
+  /** Set by the first create attempt: field errors show from then on. */
+  readonly submitted = signal(false);
   readonly shards = signal('');
   readonly replicas = signal('');
   readonly body = signal('');
@@ -83,7 +89,7 @@ export class CreateIndexComponent {
   );
   readonly nameError = computed(() => {
     const error = this.nameCheck().error;
-    return error && (this.name() !== '' || this.nameTouched()) ? error : null;
+    return error && (this.name() !== '' || this.submitted()) ? error : null;
   });
 
   readonly bodyState = computed(() => analyzeBody(this.body()));
@@ -99,7 +105,7 @@ export class CreateIndexComponent {
     return state.kind === 'invalid' ? state.message : null;
   });
   readonly bodyLines = computed(() => (this.body().trim() ? this.body().split('\n').length : 0));
-  readonly bodyLinesLabel = computed(() => plural(String(this.bodyLines()), 'line', 'lines'));
+  readonly bodyLinesLabel = computed(() => pluralize(this.bodyLines(), 'line'));
 
   readonly shardsError = computed(() =>
     this.fieldsLocked() ? null : validateCount(this.shards(), 1, MAX_SHARDS),
@@ -120,30 +126,6 @@ export class CreateIndexComponent {
     return { shards: 'Default', replicas: 'Default' };
   });
 
-  /** Why the index cannot be created yet, or null when it can. */
-  readonly blocker = computed<string | null>(() => {
-    const nameError = this.nameCheck().error;
-    if (nameError) {
-      return nameError;
-    }
-    if (this.shardsError()) {
-      return 'Fix the number of shards';
-    }
-    if (this.replicasError()) {
-      return 'Fix the number of replicas';
-    }
-    const body = this.bodyState();
-    if (body.kind === 'invalid') {
-      return 'Fix the JSON body';
-    }
-    if (this.copying()) {
-      return 'Loading settings and mappings…';
-    }
-    return null;
-  });
-
-  readonly canCreate = computed(() => this.blocker() === null && !this.creating());
-
   readonly summary = computed(() => {
     if (this.bodyState().kind === 'invalid') {
       return 'JSON body has errors';
@@ -154,8 +136,8 @@ export class CreateIndexComponent {
     const layout = this.usesBody()
       ? this.bodyLayout()
       : { shards: this.shards().trim() || null, replicas: this.replicas().trim() || null };
-    const shards = layout.shards ? plural(layout.shards, 'shard', 'shards') : 'default shards';
-    const replicas = layout.replicas ? plural(layout.replicas, 'replica', 'replicas') : 'default replicas';
+    const shards = layout.shards ? layoutCount(layout.shards, 'shard') : 'default shards';
+    const replicas = layout.replicas ? layoutCount(layout.replicas, 'replica') : 'default replicas';
     return `${shards} · ${replicas}`;
   });
 
@@ -327,6 +309,8 @@ export class CreateIndexComponent {
     }
   }
 
+  readonly pluralize = pluralize;
+
   insertExample(): void {
     this.body.set(EXAMPLE_INDEX_BODY);
     this.editor()?.focus();
@@ -344,19 +328,35 @@ export class CreateIndexComponent {
       const name = this.name().trim() || '<index>';
       this.dialogs.showJson('Request body', metadata, `PUT /${name}`);
     } catch (error: unknown) {
-      this.alerts.error('The JSON body is not valid', error instanceof Error ? error.message : error);
+      this.alerts.warn('Fix the JSON body before previewing it', error instanceof Error ? error.message : undefined);
+      this.editor()?.focus();
     }
   }
 
+  /** Validates on submit: the first invalid field gets the focus. */
   async create(): Promise<void> {
     if (this.creating()) {
       return;
     }
-    if (!this.canCreate()) {
-      this.nameTouched.set(true);
-      if (this.nameCheck().error) {
-        this.nameInput()?.nativeElement.focus();
-      }
+    this.submitted.set(true);
+    if (this.nameCheck().error) {
+      this.nameInput()?.nativeElement.focus();
+      return;
+    }
+    if (this.shardsError()) {
+      this.shardsInput()?.nativeElement.focus();
+      return;
+    }
+    if (this.replicasError()) {
+      this.replicasInput()?.nativeElement.focus();
+      return;
+    }
+    if (this.bodyError()) {
+      this.editor()?.focus();
+      return;
+    }
+    if (this.copying()) {
+      this.alerts.info(`Still loading the settings and mappings of ${this.sourceIndex()}`);
       return;
     }
 
@@ -377,8 +377,7 @@ export class CreateIndexComponent {
         queryParams: { ...this.connection.hostQuery(), filter: index },
       });
     } catch (error: unknown) {
-      const reason = elasticsearchReason(error);
-      this.alerts.error(`Could not create index ${index}${reason ? `: ${reason}` : ''}`, error);
+      this.alerts.error(failureMessage(`Could not create index ${index}`, error), error);
     } finally {
       this.creating.set(false);
     }

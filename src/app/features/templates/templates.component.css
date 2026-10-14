@@ -14,10 +14,6 @@
   min-height: 0;
 }
 
-.list-card .card-title .badge {
-  margin-left: 2px;
-}
-
 .list-toolbar {
   padding: 10px var(--space-4);
   border-bottom: 1px solid var(--border);
@@ -36,17 +32,6 @@
 .template-item {
   gap: 11px;
   padding: 10px var(--space-4);
-}
-
-.template-item .list-item__icon {
-  width: 30px;
-  height: 30px;
-  font-size: 14px;
-}
-
-.template-item.is-selected .list-item__icon {
-  background: var(--accent-soft-strong);
-  color: var(--accent-text);
 }
 
 .template-item__name,
@@ -108,8 +93,8 @@
 }
 
 .list-skeleton__icon {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   flex: none;
   border-radius: var(--radius);
 }
@@ -149,36 +134,6 @@
   position: sticky;
   bottom: 0;
   z-index: 3;
-}
-
-.editor-card__heading {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 11px;
-}
-
-.editor-card__icon {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  flex: none;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: 14px;
-}
-
-.editor-card__icon.is-new {
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
-.editor-card__heading .card-title {
-  font-family: var(--font-sans);
 }
 
 .editor-card__actions {
@@ -227,35 +182,6 @@
 .editor-status__message {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.status-pill {
-  height: 22px;
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 5px;
-  padding: 0 8px;
-  border-radius: var(--radius-full);
-  background: var(--surface-3);
-  color: var(--text-2);
-  font-size: var(--text-xs);
-  font-weight: 620;
-}
-
-.status-pill--ok {
-  background: var(--green-soft);
-  color: var(--green-text);
-}
-
-.status-pill--warning {
-  background: var(--yellow-soft);
-  color: var(--yellow-text);
-}
-
-.status-pill--danger {
-  background: var(--red-soft);
-  color: var(--red-text);
 }
 
 .footer-keys {

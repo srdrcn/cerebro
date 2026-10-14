@@ -56,14 +56,6 @@
   gap: var(--space-2);
 }
 
-.restore-section__title {
-  color: var(--text-3);
-  font-size: var(--text-xs);
-  font-weight: 620;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .restore-options {
   display: grid;
   gap: var(--space-3);

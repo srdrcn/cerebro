@@ -37,9 +37,9 @@
           </div>
         </div>
       }
-      <section class="restore-section restore-indices" aria-labelledby="restore-indices-title">
+      <section class="restore-section" aria-labelledby="restore-indices-title">
         <div class="restore-section__head">
-          <h3 id="restore-indices-title" class="restore-section__title">Indices</h3>
+          <h3 id="restore-indices-title" class="section-label">Indices</h3>
           <span class="text-muted text-sm">{{ pluralize(indexNames().length, 'index', 'indices') }} in this snapshot</span>
         </div>
         <cerebro-index-checklist
@@ -80,7 +80,7 @@
       <div class="restore-side">
         <section class="restore-section" aria-labelledby="restore-rename-title">
           <div class="restore-section__head">
-            <h3 id="restore-rename-title" class="restore-section__title">Rename</h3>
+            <h3 id="restore-rename-title" class="section-label">Rename</h3>
             @if (renamePattern() || renameReplacement()) {
               <button type="button" class="link-button text-sm" (click)="clearRename()">Clear</button>
             } @else {
@@ -97,7 +97,7 @@
               id="restore-rename-pattern"
               name="renamePattern"
               class="input input-mono"
-              placeholder="index_(.+)"
+              placeholder="e.g. index_(.+)"
               autocomplete="off"
               spellcheck="false"
               [class.is-invalid]="!!patternError()"
@@ -123,7 +123,7 @@
               id="restore-rename-replacement"
               name="renameReplacement"
               class="input input-mono"
-              placeholder="restored_index_$1"
+              placeholder="e.g. restored_index_$1"
               autocomplete="off"
               spellcheck="false"
               [class.is-invalid]="showReplacementError()"
@@ -143,7 +143,7 @@
         </section>
 
         <section class="restore-section" aria-labelledby="restore-options-title">
-          <h3 id="restore-options-title" class="restore-section__title">Options</h3>
+          <h3 id="restore-options-title" class="section-label">Options</h3>
           <div class="restore-options">
             <label class="switch restore-option">
               <input
@@ -246,7 +246,7 @@
         type="submit"
         class="btn btn-primary"
         [class.is-loading]="restoring()"
-        [disabled]="restoring() || (submitted() && !valid())"
+        [disabled]="restoring()"
       >
         <i class="bi bi-clock-history" aria-hidden="true"></i>
         {{ submitLabel() }}

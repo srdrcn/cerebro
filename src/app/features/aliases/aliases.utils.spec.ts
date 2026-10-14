@@ -12,7 +12,6 @@ import {
   filterAliasRows,
   filterLabel,
   otherWriteIndices,
-  pluralize,
   prettyJson,
   revertChange,
   routingTags,
@@ -169,12 +168,6 @@ describe('pending change summary', () => {
       undefined,
     );
     expect(items[0]?.problem).toBeUndefined();
-  });
-
-  it('pluralizes counts', () => {
-    expect(pluralize(1, 'change')).toBe('1 change');
-    expect(pluralize(3, 'change')).toBe('3 changes');
-    expect(pluralize(2, 'index', 'indices')).toBe('2 indices');
   });
 });
 

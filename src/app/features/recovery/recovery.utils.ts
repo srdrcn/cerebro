@@ -1,4 +1,6 @@
-import { formatBytes, formatNumber, matchesText } from '../../core/format';
+import { elasticsearchReason } from '../../core/errors';
+import { formatBytes, formatNumber, humanize, matchesText, sentence } from '../../core/format';
+import { isRecord } from '../../core/json';
 import {
   Progress,
   RawRecoveryRow,
@@ -8,10 +10,6 @@ import {
   RecoverySortField,
   RecoverySummary,
 } from './recovery.models';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /** `_cat` uses "n/a" (and sometimes "-" or "") for missing values. */
 export function catValue(value: string | undefined): string | undefined {
@@ -131,7 +129,7 @@ const TYPES: Readonly<Record<string, TypeMeta>> = {
 export function typeMeta(type: string): TypeMeta {
   return (
     TYPES[type] ?? {
-      label: humanize(type),
+      label: humanize(type) || 'Unknown',
       icon: 'bi-question-circle',
       badge: 'badge-outline',
       description: '',
@@ -154,18 +152,13 @@ const STAGE_LABELS: Readonly<Record<string, string>> = {
 };
 
 export function stageLabel(stage: string): string {
-  return STAGE_LABELS[stage] ?? humanize(stage);
+  return STAGE_LABELS[stage] ?? (humanize(stage) || 'Unknown');
 }
 
 /** 0-based position in STAGES; unknown stages count as the first. */
 export function stageIndex(stage: string): number {
   const position = (STAGES as readonly string[]).indexOf(stage);
   return position < 0 ? 0 : position;
-}
-
-export function humanize(value: string): string {
-  const words = value.replace(/[_.-]+/g, ' ').trim().toLocaleLowerCase();
-  return words ? words.charAt(0).toLocaleUpperCase() + words.slice(1) : 'Unknown';
 }
 
 /** Overall progress of one recovery, for the headline meter. */
@@ -450,25 +443,13 @@ export function estimateRemaining(remaining: number, bytesPerSecond: number | un
 /** A failed request in plain words, with Elasticsearch's own reason when it sent one. */
 export function describeLoadError(error: unknown): string {
   if (!isRecord(error)) {
-    return typeof error === 'string' && error.trim() ? error.trim() : 'The request failed.';
+    const reason = elasticsearchReason(error);
+    return reason ? sentence(reason) : 'The request failed.';
   }
   const status = typeof error['status'] === 'number' ? error['status'] : undefined;
-  const body = error['body'];
-  const payload = isRecord(body) ? body['error'] : undefined;
-  let reason: string | undefined;
-  if (typeof payload === 'string') {
-    reason = payload;
-  } else if (isRecord(payload)) {
-    const rootCauses = payload['root_cause'];
-    const root = Array.isArray(rootCauses) && isRecord(rootCauses[0]) ? rootCauses[0] : undefined;
-    const value = payload['reason'] ?? root?.['reason'];
-    reason = typeof value === 'string' ? value : undefined;
-  } else if (typeof body === 'string' && body.trim()) {
-    reason = body.trim();
-  }
-  if (reason?.trim()) {
-    const text = reason.trim();
-    return text.charAt(0).toLocaleUpperCase() + text.slice(1);
+  const reason = elasticsearchReason(error['body']);
+  if (reason) {
+    return sentence(reason);
   }
   if (status === 401 || status === 403) {
     return 'The connected user may not read recoveries. It needs the "monitor" cluster privilege.';
@@ -477,8 +458,4 @@ export function describeLoadError(error: unknown): string {
     return `The request failed with status ${status}.`;
   }
   return 'The cluster did not answer. Check the connection and try again.';
-}
-
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count.toLocaleString('en-US')} ${count === 1 ? singular : plural}`;
 }

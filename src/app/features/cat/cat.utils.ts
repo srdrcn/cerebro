@@ -1,5 +1,3 @@
-import { ClusterApiError } from '../../core/api-envelope';
-
 export const CAT_APIS = [
   'aliases',
   'allocation',
@@ -20,7 +18,6 @@ export const CAT_APIS = [
 ] as const;
 
 export type CatApi = (typeof CAT_APIS)[number];
-export type SortDirection = 'asc' | 'desc';
 export type CatRow = Readonly<Record<string, unknown>>;
 export type CatTone = 'green' | 'yellow' | 'red' | 'gray';
 
@@ -257,7 +254,7 @@ function compareValues(left: unknown, right: unknown): number {
 export function sortCatRows(
   rows: readonly CatRow[],
   column: string | null,
-  direction: SortDirection,
+  reverse: boolean,
 ): readonly CatRow[] {
   if (!column) {
     return [...rows];
@@ -279,7 +276,7 @@ export function sortCatRows(
       }
 
       const comparison = compareValues(leftValue, rightValue);
-      const directed = direction === 'asc' ? comparison : -comparison;
+      const directed = reverse ? -comparison : comparison;
       return directed || left.index - right.index;
     })
     .map(({ row }) => row);
@@ -404,29 +401,4 @@ export function catCellTone(column: string, value: unknown): CatTone | null {
     return SHARD_STATE_TONES[value.toUpperCase()] ?? null;
   }
   return null;
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** Best human readable reason of a failed request (Elasticsearch error body). */
-export function catErrorReason(error: unknown): string | null {
-  if (error instanceof ClusterApiError) {
-    const body: unknown = error.body;
-    if (typeof body === 'string') {
-      return body || null;
-    }
-    if (isRecord(body)) {
-      const inner = body['error'];
-      if (typeof inner === 'string') {
-        return inner;
-      }
-      if (isRecord(inner) && typeof inner['reason'] === 'string') {
-        return inner['reason'];
-      }
-    }
-    return `The cluster answered with status ${error.status}.`;
-  }
-  return error instanceof Error ? error.message : null;
 }

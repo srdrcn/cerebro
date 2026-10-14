@@ -279,6 +279,8 @@ export type IndexOperation = 'refresh' | 'flush' | 'merge' | 'cache' | 'open' | 
 export interface IndexOperationDefinition {
   readonly path: string;
   readonly label: string;
+  /** Verb phrase of the failure toast: "Could not <verb> products". */
+  readonly verb: string;
   readonly icon: string;
   /** Past participle used in the success toast. */
   readonly done: string;

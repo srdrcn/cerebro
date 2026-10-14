@@ -163,13 +163,20 @@
       </span>
       <span class="saved-context__actions">
         @if (linkedDirty()) {
-          <button type="button" class="btn btn-ghost btn-sm" title="Put the saved version back into the editor" (click)="revertLinked()">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            aria-label="Revert to the saved version"
+            title="Put the saved version back into the editor"
+            (click)="revertLinked()"
+          >
             <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
             <span class="saved-context__action-label">Revert</span>
           </button>
           <button
             type="button"
             class="btn btn-soft btn-sm"
+            aria-label="Update saved request"
             [title]="'Save the changes to “' + current.name + '” (' + modKey + '+S)'"
             (click)="updateLinked()"
           >
@@ -263,6 +270,7 @@
             >
               <i class="bi bi-terminal" aria-hidden="true"></i>
               <span class="pane-actions__label pane-actions__label--long">Copy as cURL</span>
+              <span class="pane-actions__label pane-actions__label--short" aria-hidden="true">cURL</span>
             </button>
             <cerebro-menu label="More body actions" align="end">
               <i trigger class="bi bi-three-dots" aria-hidden="true"></i>

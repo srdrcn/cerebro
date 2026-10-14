@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ClusterApiError } from '../../core/api-envelope';
 import { AnalysisToken } from './analysis.models';
 import {
   analysisAnnouncement,
-  analysisErrorReason,
   analyzerGroups,
   asNames,
   asTokens,
   defaultTarget,
   parseSelection,
-  sortedNames,
   splitIndices,
   textSegments,
   tokenSummary,
@@ -32,10 +29,6 @@ function token(
 }
 
 describe('analysis option normalization', () => {
-  it('sorts and de-duplicates index, analyzer, and field names', () => {
-    expect(sortedNames(['zeta', 'alpha', 'zeta', 'beta'])).toEqual(['alpha', 'beta', 'zeta']);
-  });
-
   it('keeps only non-empty string names from a response', () => {
     expect(asNames(['b', 3, '', null, 'a', 'b'])).toEqual(['a', 'b']);
     expect(asNames({ error: 'x' })).toEqual([]);
@@ -147,23 +140,6 @@ describe('remembered selection', () => {
     expect(parseSelection({ index: '' })).toBeNull();
     expect(parseSelection('products')).toBeNull();
     expect(parseSelection(null)).toBeNull();
-  });
-});
-
-describe('analysis errors', () => {
-  it('extracts the Elasticsearch reason', () => {
-    expect(
-      analysisErrorReason(
-        new ClusterApiError(400, {
-          error: { root_cause: [], type: 'illegal_argument_exception', reason: 'failed to find analyzer [nope]' },
-          status: 400,
-        }),
-      ),
-    ).toBe('failed to find analyzer [nope]');
-    expect(analysisErrorReason(new ClusterApiError(404, 'missing'))).toBe('missing');
-    expect(analysisErrorReason(new ClusterApiError(500, null))).toBe('The cluster answered with status 500.');
-    expect(analysisErrorReason(new Error('offline'))).toBe('offline');
-    expect(analysisErrorReason(undefined)).toBeNull();
   });
 });
 

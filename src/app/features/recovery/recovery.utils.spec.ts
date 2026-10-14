@@ -14,7 +14,6 @@ import {
   normalizeRecovery,
   parsePercent,
   parseRecoveries,
-  pluralize,
   recoveryPercent,
   recoveryRates,
   sortGroups,
@@ -158,11 +157,6 @@ describe('presentation helpers', () => {
     expect(metricView(recovery({ stage: 'done', files: '0', files_percent: '0.0%' }), 'files').detail).toBe('No files to copy');
     expect(metricView(recovery({ stage: 'done', bytes_percent: '99%' }), 'bytes').value).toBe(100);
   });
-
-  it('pluralizes with thousands separators', () => {
-    expect(pluralize(1, 'index', 'indices')).toBe('1 index');
-    expect(pluralize(1200, 'file')).toBe('1,200 files');
-  });
 });
 
 describe('filtering, grouping and sorting', () => {
@@ -298,7 +292,7 @@ describe('describeLoadError', () => {
   it('prefers the Elasticsearch reason', () => {
     expect(
       describeLoadError({ status: 500, body: { error: { root_cause: [{ reason: 'root' }], type: 't', reason: 'search phase failed' } } }),
-    ).toBe('Search phase failed');
+    ).toBe('Root');
     expect(describeLoadError({ status: 500, body: { error: { root_cause: [{ reason: 'only root' }] } } })).toBe('Only root');
     expect(describeLoadError({ status: 502, body: { error: 'Bad gateway' } })).toBe('Bad gateway');
     expect(describeLoadError({ status: 502, body: 'upstream down' })).toBe('Upstream down');
@@ -308,7 +302,7 @@ describe('describeLoadError', () => {
     expect(describeLoadError({ status: 403, body: {} })).toMatch(/monitor/);
     expect(describeLoadError({ status: 500, body: {} })).toBe('The request failed with status 500.');
     expect(describeLoadError(new Error('network'))).toBe('The cluster did not answer. Check the connection and try again.');
-    expect(describeLoadError('timeout')).toBe('timeout');
+    expect(describeLoadError('timeout')).toBe('Timeout');
     expect(describeLoadError(undefined)).toBe('The request failed.');
   });
 });

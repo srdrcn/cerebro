@@ -11,18 +11,16 @@
   <div class="layout-sidebar-start templates-layout">
     <div class="card list-card">
       <div class="card-header">
-        <h2 class="card-title">
-          <i class="bi bi-files" aria-hidden="true"></i> Templates
-          @if (templates(); as all) {
+        <h2 class="card-title spacer"><i class="bi bi-files" aria-hidden="true"></i> Templates</h2>
+        @if (templates(); as all) {
+          <span class="count-label">
             @if (query().trim() && all.length > 0) {
-              <span class="badge tabular" [attr.aria-label]="rows().length + ' of ' + all.length + ' templates match the filter'">
-                {{ rows().length }} of {{ all.length }}
-              </span>
+              <strong>{{ rows().length }}</strong> of {{ pluralize(all.length, 'template') }}
             } @else {
-              <span class="badge tabular" [attr.aria-label]="all.length + (all.length === 1 ? ' template' : ' templates')">{{ all.length }}</span>
+              <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'template' : 'templates' }}
             }
-          }
-        </h2>
+          </span>
+        }
         <button
           type="button"
           class="btn btn-sm btn-soft"
@@ -136,31 +134,29 @@
 
     <div #editorCard class="card editor-card" role="region" aria-labelledby="template-editor-title">
       <div class="card-header editor-card__header">
-        <div class="editor-card__heading min-w-0">
-          <span class="editor-card__icon" [class.is-new]="selected() === null" aria-hidden="true">
-            <i class="bi" [class.bi-plus-lg]="selected() === null" [class.bi-pencil]="selected() !== null"></i>
-          </span>
-          <div class="min-w-0">
-            <h2 id="template-editor-title" class="card-title">
-              @if (selected(); as current) {
-                <span class="truncate">{{ current }}</span>
-              } @else {
-                New template
+        <span class="card-icon" aria-hidden="true">
+          <i class="bi" [class.bi-plus-lg]="selected() === null" [class.bi-pencil]="selected() !== null"></i>
+        </span>
+        <div class="min-w-0 spacer">
+          <h2 id="template-editor-title" class="card-title">
+            @if (selected(); as current) {
+              <span class="truncate">{{ current }}</span>
+            } @else {
+              New template
+            }
+          </h2>
+          <p class="card-subtitle truncate">
+            @if (selected() === null) {
+              Not saved yet
+            } @else if (selectedPatterns()) {
+              Matches <span class="mono">{{ selectedPatterns() }}</span>
+              @if (selectedVersion() !== null) {
+                · version {{ selectedVersion() }}
               }
-            </h2>
-            <p class="card-subtitle truncate">
-              @if (selected() === null) {
-                Not saved yet
-              } @else if (selectedPatterns()) {
-                Matches <span class="mono">{{ selectedPatterns() }}</span>
-                @if (selectedVersion() !== null) {
-                  · version {{ selectedVersion() }}
-                }
-              } @else {
-                No index patterns
-              }
-            </p>
-          </div>
+            } @else {
+              No index patterns
+            }
+          </p>
         </div>
         <div class="row editor-card__actions">
           @if (dirty()) {
@@ -204,7 +200,6 @@
             [class.is-invalid]="nameError()"
             [ngModel]="name()"
             (ngModelChange)="name.set($event)"
-            (blur)="nameTouched.set(true)"
             (keydown.enter)="save()"
             placeholder="e.g. logs-template"
             autocomplete="off"
@@ -262,17 +257,17 @@
           />
           <div class="editor-status" aria-live="polite">
             @if (bodyError(); as error) {
-              <span class="status-pill status-pill--danger">
+              <span class="badge badge-red">
                 <i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid JSON
               </span>
               <span class="editor-status__message text-danger">{{ error }}</span>
             } @else if (bodyWarning(); as warning) {
-              <span class="status-pill status-pill--warning">
+              <span class="badge badge-yellow">
                 <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check
               </span>
               <span class="editor-status__message">{{ warning }}</span>
             } @else {
-              <span class="status-pill status-pill--ok">
+              <span class="badge badge-green">
                 <i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON
               </span>
               <span class="editor-status__message text-muted">{{ bodyLinesLabel() }}</span>
@@ -295,8 +290,7 @@
             type="button"
             class="btn btn-primary"
             [class.is-loading]="saving()"
-            [disabled]="!canSave()"
-            [attr.title]="blocker()"
+            [disabled]="saving()"
             [attr.aria-busy]="saving() ? true : null"
             (click)="save()"
           >

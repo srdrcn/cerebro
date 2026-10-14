@@ -1,5 +1,5 @@
-import { ClusterApiError } from '../../core/api-envelope';
-import { sortByName } from '../../core/format';
+import { pluralize, sortByName } from '../../core/format';
+import { isRecord } from '../../core/json';
 import {
   AnalysisMode,
   AnalysisRun,
@@ -13,22 +13,17 @@ import {
   TokenSummary,
 } from './analysis.models';
 
-/** Sorted, de-duplicated index, field or analyzer names. */
-export function sortedNames(values: readonly string[]): readonly string[] {
-  return sortByName(values);
-}
-
 /** Keeps the string entries of an API response that should be a name list. */
 export function asNames(value: unknown): readonly string[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  return sortedNames(value.filter((name): name is string => typeof name === 'string' && name !== ''));
+  return sortByName(value.filter((name): name is string => typeof name === 'string' && name !== ''));
 }
 
 /** Regular indices first; hidden/system ones (".kibana") in their own group. */
 export function splitIndices(names: readonly string[]): IndexGroups {
-  const sorted = sortedNames(names);
+  const sorted = sortByName(names);
   return {
     regular: sorted.filter((name) => !name.startsWith('.')),
     hidden: sorted.filter((name) => name.startsWith('.')),
@@ -43,7 +38,7 @@ export function analyzerGroups(custom: readonly string[]): readonly OptionGroup[
   const defined = new Set(custom);
   const groups: OptionGroup[] = [];
   if (custom.length > 0) {
-    groups.push({ label: 'Defined in this index', options: sortedNames(custom) });
+    groups.push({ label: 'Defined in this index', options: sortByName(custom) });
   }
   groups.push(
     { label: 'Built-in', options: BUILT_IN_ANALYZERS.filter((name) => !defined.has(name)) },
@@ -73,10 +68,6 @@ export function defaultTarget(
   }
   // `standard` is always available: built in, or redefined by the index.
   return options.includes('default') ? 'default' : 'standard';
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function offset(value: unknown): number {
@@ -186,27 +177,6 @@ export function analysisAnnouncement(
     return '';
   }
   const count = run.tokens.length;
-  const tokens = count === 0 ? 'No tokens' : `${count} ${count === 1 ? 'token' : 'tokens'}`;
+  const tokens = count === 0 ? 'No tokens' : pluralize(count, 'token');
   return `${tokens} for ${run.index} › ${run.target}`;
-}
-
-/** Best human readable reason of a failed request (Elasticsearch error body). */
-export function analysisErrorReason(error: unknown): string | null {
-  if (error instanceof ClusterApiError) {
-    const body: unknown = error.body;
-    if (typeof body === 'string') {
-      return body || null;
-    }
-    if (isRecord(body)) {
-      const inner = body['error'];
-      if (typeof inner === 'string') {
-        return inner;
-      }
-      if (isRecord(inner) && typeof inner['reason'] === 'string') {
-        return inner['reason'];
-      }
-    }
-    return `The cluster answered with status ${error.status}.`;
-  }
-  return error instanceof Error ? error.message : null;
 }

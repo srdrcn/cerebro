@@ -1,4 +1,5 @@
 import { matchesText } from '../../core/format';
+import { isRecord } from '../../core/json';
 import { AliasChange, AliasRecord } from './aliases.models';
 
 /** `added`: new assignment, `updated`: existing one re-added with new settings. */
@@ -246,10 +247,6 @@ export function countByKind(items: readonly PendingItem[]): Readonly<Record<Pend
   };
 }
 
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 /** Collapses identical index/search routing into a single tag. */
 export function routingTags(record: AliasRecord): RoutingTag[] {
   const indexRouting = record.index_routing;
@@ -269,7 +266,7 @@ export function routingTags(record: AliasRecord): RoutingTag[] {
 
 /** Short label for a filter: its top level query type ("range", "bool"). */
 export function filterLabel(filter: unknown): string {
-  if (filter === null || typeof filter !== 'object' || Array.isArray(filter)) {
+  if (!isRecord(filter)) {
     return 'filter';
   }
   const keys = Object.keys(filter);
@@ -299,9 +296,9 @@ function canonical(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(canonical);
   }
-  if (value !== null && typeof value === 'object') {
+  if (isRecord(value)) {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
+      Object.entries(value)
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([key, nested]) => [key, canonical(nested)]),
     );

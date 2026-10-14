@@ -5,14 +5,14 @@
  * older and newer versions and with hand written bodies.
  */
 
-export type JsonObject = Record<string, unknown>;
+import { JsonRecord } from '../../core/json';
 
 /** settings / mappings / aliases block of a template. */
 export interface TemplateContent {
-  readonly settings?: JsonObject;
-  readonly mappings?: JsonObject;
-  readonly aliases?: JsonObject;
-  readonly lifecycle?: JsonObject;
+  readonly settings?: JsonRecord;
+  readonly mappings?: JsonRecord;
+  readonly aliases?: JsonRecord;
+  readonly lifecycle?: JsonRecord;
   readonly [key: string]: unknown;
 }
 
@@ -22,8 +22,8 @@ export interface IndexTemplateBody {
   readonly composed_of?: readonly string[];
   readonly priority?: number;
   readonly version?: number;
-  readonly _meta?: JsonObject;
-  readonly data_stream?: JsonObject;
+  readonly _meta?: JsonRecord;
+  readonly data_stream?: JsonRecord;
   readonly allow_auto_create?: boolean;
   readonly ignore_missing_component_templates?: readonly string[];
   readonly deprecated?: boolean;
@@ -33,7 +33,7 @@ export interface IndexTemplateBody {
 export interface ComponentTemplateBody {
   readonly template?: TemplateContent;
   readonly version?: number;
-  readonly _meta?: JsonObject;
+  readonly _meta?: JsonRecord;
   readonly deprecated?: boolean;
   readonly [key: string]: unknown;
 }
@@ -96,7 +96,7 @@ export interface BodyProblem {
 
 export type BodyCheck =
   | { readonly ok: false; readonly message: string }
-  | { readonly ok: true; readonly value: JsonObject; readonly problems: readonly BodyProblem[] };
+  | { readonly ok: true; readonly value: JsonRecord; readonly problems: readonly BodyProblem[] };
 
 export interface SettingEntry {
   readonly key: string;

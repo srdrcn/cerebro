@@ -57,16 +57,16 @@
     <!-- ---------------------------------------------------------- List -->
     <div class="card it-list-card">
       <div class="card-header">
-        <h2 class="card-title">
-          {{ tab() === 'index' ? 'Index templates' : 'Component templates' }}
-          @if (loaded()) {
+        <h2 class="card-title spacer">{{ tab() === 'index' ? 'Index templates' : 'Component templates' }}</h2>
+        @if (loaded()) {
+          <span class="count-label">
             @if (query().trim()) {
-              <span class="badge tabular" [attr.aria-label]="rows().length + ' of ' + totalCount() + ' match the filter'">
-                {{ rows().length }} of {{ totalCount() }}
-              </span>
+              <strong>{{ rows().length }}</strong> of {{ pluralize(totalCount(), 'template') }}
+            } @else {
+              <strong>{{ totalCount() }}</strong> {{ totalCount() === 1 ? 'template' : 'templates' }}
             }
-          }
-        </h2>
+          </span>
+        }
         <button
           type="button"
           class="btn btn-sm btn-soft"
@@ -133,7 +133,7 @@
                           <span class="badge badge-blue" title="Creates data streams for matching names"><i class="bi bi-water" aria-hidden="true"></i> data stream</span>
                         }
                         @for (component of row.composedOf.slice(0, 3); track $index) {
-                          <span class="tag it-chip-static" [title]="'Composed of ' + component"><i class="bi bi-puzzle" aria-hidden="true"></i><span>{{ component }}</span></span>
+                          <span class="tag" [title]="'Composed of ' + component"><i class="bi bi-puzzle" aria-hidden="true"></i><span>{{ component }}</span></span>
                         }
                         @if (row.composedOf.length > 3) {
                           <span class="tag" [title]="row.composedOf.slice(3).join(', ')">+{{ row.composedOf.length - 3 }}</span>
@@ -242,32 +242,30 @@
     <div class="stack it-main">
       <div #editorCard class="card it-editor" role="region" aria-labelledby="it-editor-title">
         <div class="card-header it-editor__header">
-          <div class="it-editor__heading min-w-0">
-            <span class="it-editor__icon" [class.is-new]="selected() === null" aria-hidden="true">
-              <i class="bi" [class]="'bi ' + (selected() === null ? 'bi-plus-lg' : kind() === 'index' ? 'bi-layers' : 'bi-puzzle')"></i>
-            </span>
-            <div class="min-w-0">
-              <h2 id="it-editor-title" class="card-title">
-                @if (selected(); as current) {
-                  <span class="truncate">{{ current }}</span>
-                } @else {
-                  New {{ noun() }}
+          <span class="card-icon" aria-hidden="true">
+            <i class="bi" [class]="'bi ' + (selected() === null ? 'bi-plus-lg' : kind() === 'index' ? 'bi-layers' : 'bi-puzzle')"></i>
+          </span>
+          <div class="min-w-0 spacer">
+            <h2 id="it-editor-title" class="card-title">
+              @if (selected(); as current) {
+                <span class="truncate">{{ current }}</span>
+              } @else {
+                New {{ noun() }}
+              }
+            </h2>
+            <p class="card-subtitle truncate">
+              @if (selected() === null) {
+                Not saved yet
+              } @else if (kind() === 'index') {
+                Index template
+                @if (selectedPatterns()) {
+                  · matches <span class="mono">{{ selectedPatterns() }}</span>
                 }
-              </h2>
-              <p class="card-subtitle truncate">
-                @if (selected() === null) {
-                  Not saved yet
-                } @else if (kind() === 'index') {
-                  Index template
-                  @if (selectedPatterns()) {
-                    · matches <span class="mono">{{ selectedPatterns() }}</span>
-                  }
-                } @else {
-                  Component template
-                  · {{ usedBy().length === 0 ? 'not used by any index template' : 'used by ' + usedBy().length + (usedBy().length === 1 ? ' index template' : ' index templates') }}
-                }
-              </p>
-            </div>
+              } @else {
+                Component template
+                · {{ usedBy().length === 0 ? 'not used by any index template' : 'used by ' + pluralize(usedBy().length, 'index template') }}
+              }
+            </p>
           </div>
           <div class="row it-editor__actions">
             @if (dirty()) {
@@ -313,7 +311,7 @@
             <dl class="it-facts">
               @if (kind() === 'index') {
                 <div class="it-fact it-fact--wide">
-                  <dt>Index patterns</dt>
+                  <dt class="section-label">Index patterns</dt>
                   <dd>
                     @for (pattern of facts.patterns; track $index) {
                       <span class="tag mono">{{ pattern }}</span>
@@ -323,11 +321,11 @@
                   </dd>
                 </div>
                 <div class="it-fact">
-                  <dt>Priority</dt>
+                  <dt class="section-label">Priority</dt>
                   <dd class="tabular">{{ facts.priority ?? 0 }}@if (facts.priority === null) { <span class="text-muted text-xs"> (default)</span> }</dd>
                 </div>
                 <div class="it-fact">
-                  <dt>Creates</dt>
+                  <dt class="section-label">Creates</dt>
                   <dd>
                     @if (facts.dataStream) {
                       <span class="badge badge-blue"><i class="bi bi-water" aria-hidden="true"></i> data streams</span>
@@ -337,7 +335,7 @@
                   </dd>
                 </div>
                 <div class="it-fact it-fact--wide">
-                  <dt>Composed of</dt>
+                  <dt class="section-label">Composed of</dt>
                   <dd>
                     @for (component of facts.composedOf; track $index; let i = $index) {
                       @if (i > 0) {
@@ -362,16 +360,16 @@
                   </dd>
                 </div>
                 <div class="it-fact">
-                  <dt>Own template block</dt>
+                  <dt class="section-label">Own template block</dt>
                   <dd [class.text-muted]="facts.contents === 'Empty'">{{ facts.contents === 'Empty' ? 'None' : facts.contents }}</dd>
                 </div>
               } @else {
                 <div class="it-fact it-fact--wide">
-                  <dt>Defines</dt>
+                  <dt class="section-label">Defines</dt>
                   <dd>{{ facts.contents }}</dd>
                 </div>
                 <div class="it-fact it-fact--wide">
-                  <dt>Used by</dt>
+                  <dt class="section-label">Used by</dt>
                   <dd>
                     @for (user of usedBy(); track $index) {
                       <button type="button" class="tag it-chip" [title]="'Open index template ' + user" (click)="openTemplate('index', user)">
@@ -384,12 +382,12 @@
                 </div>
               }
               <div class="it-fact">
-                <dt>Version</dt>
+                <dt class="section-label">Version</dt>
                 <dd class="tabular">{{ facts.version ?? '–' }}</dd>
               </div>
               @if (facts.description || facts.meta.length > 0) {
                 <div class="it-fact it-fact--full">
-                  <dt>{{ facts.description ? 'Description' : 'Metadata' }}</dt>
+                  <dt class="section-label">{{ facts.description ? 'Description' : 'Metadata' }}</dt>
                   <dd>
                     @if (facts.description) {
                       <span class="it-description">{{ facts.description }}</span>
@@ -412,7 +410,6 @@
               [class.is-invalid]="nameError()"
               [ngModel]="name()"
               (ngModelChange)="name.set($event)"
-              (blur)="nameTouched.set(true)"
               (keydown.enter)="save()"
               [placeholder]="kind() === 'index' ? 'e.g. logs-app' : 'e.g. logs-mappings'"
               autocomplete="off"
@@ -476,22 +473,22 @@
             />
             <div class="it-status" aria-live="polite">
               @if (syntaxError(); as error) {
-                <span class="status-pill status-pill--danger">
+                <span class="badge badge-red">
                   <i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid JSON
                 </span>
                 <span class="it-status__message text-danger">{{ error }}</span>
               } @else if (errors().length > 0) {
-                <span class="status-pill status-pill--danger">
-                  <i class="bi bi-x-circle-fill" aria-hidden="true"></i> {{ errors().length === 1 ? '1 problem' : errors().length + ' problems' }}
+                <span class="badge badge-red">
+                  <i class="bi bi-x-circle-fill" aria-hidden="true"></i> {{ pluralize(errors().length, 'problem') }}
                 </span>
                 <span class="it-status__message text-danger">{{ errors()[0]?.message }}</span>
               } @else if (warnings().length > 0) {
-                <span class="status-pill status-pill--warning">
+                <span class="badge badge-yellow">
                   <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check
                 </span>
                 <span class="it-status__message">{{ warnings()[0]?.message }}</span>
               } @else {
-                <span class="status-pill status-pill--ok">
+                <span class="badge badge-green">
                   <i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid
                 </span>
                 <span class="it-status__message text-muted">{{ bodyLinesLabel() }}</span>
@@ -540,8 +537,7 @@
               type="button"
               class="btn btn-primary"
               [class.is-loading]="saving()"
-              [disabled]="!canSave()"
-              [attr.title]="blocker()"
+              [disabled]="saving()"
               [attr.aria-busy]="saving() ? true : null"
               (click)="save()"
             >
@@ -562,7 +558,7 @@
                 <p class="card-subtitle">
                   @if (state.status === 'ready') {
                     What a new index matching <span class="mono">{{ state.patterns || state.name }}</span> receives from
-                    {{ state.components === 0 ? 'this template' : 'this template and ' + (state.components === 1 ? '1 component template' : state.components + ' component templates') }}.
+                    {{ state.components === 0 ? 'this template' : 'this template and ' + pluralize(state.components, 'component template') }}.
                   } @else {
                     Settings, mappings and aliases a new matching index receives.
                   }

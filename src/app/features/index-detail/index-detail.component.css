@@ -55,30 +55,6 @@
   justify-content: flex-end;
 }
 
-/* A fixed basis, not a percentage: the shrink-to-fit actions container would
-   otherwise size itself to the longest option name. */
-.index-picker {
-  position: relative;
-  flex: 0 1 300px;
-  width: 300px;
-  min-width: 0;
-  max-width: 100%;
-  display: flex;
-  align-items: center;
-}
-
-.index-picker__icon {
-  position: absolute;
-  left: 11px;
-  z-index: 1;
-  color: var(--text-3);
-  pointer-events: none;
-}
-
-.index-picker .select {
-  padding-left: 33px;
-}
-
 .quick-picks {
   display: flex;
   flex-wrap: wrap;
@@ -628,14 +604,6 @@ tr.is-multi .field-name {
   background: var(--red-soft);
 }
 
-.lifecycle-step__label {
-  color: var(--text-3);
-  font-size: var(--text-xs);
-  font-weight: 620;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .lifecycle-step__value {
   display: inline-flex;
   align-items: center;
@@ -730,11 +698,6 @@ tr.is-multi .field-name {
   .page-header__actions {
     width: 100%;
     justify-content: flex-start;
-  }
-
-  .index-picker {
-    flex: 1 1 100%;
-    width: 100%;
   }
 
   .detail-stats {

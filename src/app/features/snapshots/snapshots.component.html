@@ -6,9 +6,9 @@
     </div>
     @if (repositories().length > 0) {
       <div class="page-header__actions snapshots-actions">
-        <div class="repo-picker">
+        <div class="context-picker">
           <label class="visually-hidden" for="snapshot-repository">Repository</label>
-          <i class="bi bi-database repo-picker__icon" aria-hidden="true"></i>
+          <i class="bi bi-database" aria-hidden="true"></i>
           <select
             id="snapshot-repository"
             class="select"
@@ -125,7 +125,7 @@
               @if (snapshots(); as list) {
                 <span class="count-label">
                   @if (filtersActive()) {
-                    <strong>{{ visible().length }}</strong> of {{ list.length }} snapshots
+                    <strong>{{ visible().length }}</strong> of {{ pluralize(list.length, 'snapshot') }}
                   } @else {
                     <strong>{{ list.length }}</strong> {{ list.length === 1 ? 'snapshot' : 'snapshots' }}
                   }
@@ -150,20 +150,20 @@
                 <table class="data-table snapshots-table">
                   <thead>
                     <tr>
-                      <th scope="col" class="snapshot-cell" [attr.aria-sort]="ariaSort('name')">
-                        <button type="button" class="sort-button" [class.is-active]="sortField() === 'name'" (click)="sortBy('name')">
-                          Snapshot <i [class]="'bi ' + sortIcon('name')" aria-hidden="true"></i>
+                      <th scope="col" class="snapshot-cell" [attr.aria-sort]="sort.ariaSort('name')">
+                        <button type="button" class="sort-button" [class.is-active]="sort.isActive('name')" (click)="sort.sortBy('name')">
+                          Snapshot <i [class]="'bi ' + sort.icon('name')" aria-hidden="true"></i>
                         </button>
                       </th>
                       <th scope="col" class="col-state">State</th>
-                      <th scope="col" class="col-time" [attr.aria-sort]="ariaSort('start')">
-                        <button type="button" class="sort-button" [class.is-active]="sortField() === 'start'" (click)="sortBy('start')">
-                          Started <i [class]="'bi ' + sortIcon('start')" aria-hidden="true"></i>
+                      <th scope="col" class="col-time" [attr.aria-sort]="sort.ariaSort('start')">
+                        <button type="button" class="sort-button" [class.is-active]="sort.isActive('start')" (click)="sort.sortBy('start')">
+                          Started <i [class]="'bi ' + sort.icon('start')" aria-hidden="true"></i>
                         </button>
                       </th>
-                      <th scope="col" class="col-indices" [attr.aria-sort]="ariaSort('indices')">
-                        <button type="button" class="sort-button" [class.is-active]="sortField() === 'indices'" (click)="sortBy('indices')">
-                          Indices <i [class]="'bi ' + sortIcon('indices')" aria-hidden="true"></i>
+                      <th scope="col" class="col-indices" [attr.aria-sort]="sort.ariaSort('indices')">
+                        <button type="button" class="sort-button" [class.is-active]="sort.isActive('indices')" (click)="sort.sortBy('indices')">
+                          Indices <i [class]="'bi ' + sort.icon('indices')" aria-hidden="true"></i>
                         </button>
                       </th>
                       <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
@@ -319,11 +319,12 @@
 
         <aside class="card create-card" aria-labelledby="create-snapshot-title">
           <div class="card-header">
-            <div class="min-w-0">
-              <h2 id="create-snapshot-title" class="card-title">
-                <i class="bi bi-plus-circle" aria-hidden="true"></i> Create snapshot
-              </h2>
-              <p class="card-subtitle">Runs in the background and shows up in the list.</p>
+            <div class="row min-w-0">
+              <span class="card-icon" aria-hidden="true"><i class="bi bi-camera"></i></span>
+              <div class="min-w-0">
+                <h2 id="create-snapshot-title" class="card-title">Create snapshot</h2>
+                <p class="card-subtitle">Runs in the background and shows up in the list.</p>
+              </div>
             </div>
           </div>
           <form novalidate (ngSubmit)="create()">
@@ -334,6 +335,9 @@
                   id="create-snapshot-repository"
                   name="repository"
                   class="select"
+                  [class.is-invalid]="createSubmitted() && !!repositoryError()"
+                  [attr.aria-invalid]="createSubmitted() && !!repositoryError()"
+                  [attr.aria-describedby]="createSubmitted() && repositoryError() ? 'create-repository-error' : null"
                   [ngModel]="createRepository()"
                   (ngModelChange)="createRepository.set($event)"
                 >
@@ -342,7 +346,7 @@
                   }
                 </select>
                 @if (createSubmitted() && repositoryError(); as error) {
-                  <p class="field-error">{{ error }}</p>
+                  <p id="create-repository-error" class="field-error">{{ error }}</p>
                 }
               </div>
 
@@ -353,6 +357,7 @@
                     id="create-snapshot-name"
                     name="snapshot"
                     class="input input-mono"
+                    placeholder="e.g. nightly-2026.10.14"
                     autocomplete="off"
                     spellcheck="false"
                     [class.is-invalid]="showNameError()"
@@ -415,7 +420,7 @@
                     }
                   </cerebro-index-checklist>
                   @if (createSubmitted() && selectionError(); as error) {
-                    <p class="field-error">{{ error }}</p>
+                    <p class="field-error" role="alert">{{ error }}</p>
                   }
                 }
               </div>
@@ -452,7 +457,7 @@
                 type="submit"
                 class="btn btn-primary"
                 [class.is-loading]="creating()"
-                [disabled]="creating() || (createSubmitted() && !createValid())"
+                [disabled]="creating()"
               >
                 <i class="bi bi-camera" aria-hidden="true"></i> Create snapshot
               </button>

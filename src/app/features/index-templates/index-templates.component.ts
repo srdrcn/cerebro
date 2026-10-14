@@ -17,6 +17,11 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
+import { pluralize, sentence } from '../../core/format';
+import { JsonRecord, isRecord } from '../../core/json';
+import { validateResourceName } from '../../core/names';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -28,7 +33,6 @@ import {
   IndexTemplateBody,
   IndexTemplateEntry,
   IndexTemplatesResponse,
-  JsonObject,
   NEW_COMPONENT_TEMPLATE_BODY,
   NEW_INDEX_TEMPLATE_BODY,
   ResolvedView,
@@ -45,28 +49,23 @@ import {
   componentUsage,
   composedOf,
   describeContent,
-  failureMessage,
   filterRows,
   ignoredComponents,
   indexPatterns,
   indexTemplateRow,
   isDataStreamTemplate,
   isManagedTemplate,
-  isRecord,
   kindParam,
   metaDescription,
   metaTags,
   parseKind,
-  pluralize,
   removeByName,
   saveMode,
   templatePriority,
   templateSource,
   templateVersion,
   upsertByName,
-  validateTemplateName,
 } from './index-templates.utils';
-import { registerPendingChangesGuard } from './index-templates.guard';
 import { ResolvedTemplateComponent } from './resolved-template.component';
 
 interface EditorBaseline {
@@ -131,7 +130,7 @@ function skeleton(kind: TemplateKind): string {
   styleUrl: './index-templates.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class IndexTemplatesComponent {
+export class IndexTemplatesComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
@@ -160,7 +159,8 @@ export class IndexTemplatesComponent {
   readonly name = signal('');
   readonly body = signal(skeleton(this.tab()));
   readonly baseline = signal<EditorBaseline>({ name: '', body: skeleton(this.tab()) });
-  readonly nameTouched = signal(false);
+  /** Set by the first save attempt: from then on every field error shows. */
+  readonly submitted = signal(false);
   readonly saving = signal(false);
   readonly deleting = signal(false);
   readonly saveError = signal<string | null>(null);
@@ -216,7 +216,7 @@ export class IndexTemplatesComponent {
       : undefined;
   });
 
-  readonly selectedBody = computed<JsonObject | undefined>(
+  readonly selectedBody = computed<JsonRecord | undefined>(
     () => this.selectedIndexTemplate()?.index_template ?? this.selectedComponentTemplate()?.component_template,
   );
 
@@ -235,8 +235,9 @@ export class IndexTemplatesComponent {
     return this.kind() === 'component' && name !== null ? (this.usage().get(name) ?? []) : [];
   });
 
-  readonly nameValidation = computed(() => validateTemplateName(this.name()));
-  readonly nameError = computed(() => (this.name() !== '' || this.nameTouched() ? this.nameValidation() : null));
+  readonly nameValidation = computed(() => validateResourceName(this.name(), 'template'));
+  /** Shown after a save attempt, or live once a name has been typed. */
+  readonly nameError = computed(() => (this.name() !== '' || this.submitted() ? this.nameValidation() : null));
 
   readonly check = computed(() =>
     analyzeBody(this.body(), this.kind(), this.componentTemplates() === undefined ? null : this.componentNames()),
@@ -303,29 +304,7 @@ export class IndexTemplatesComponent {
   readonly mode = computed(() => saveMode(this.name(), this.selected(), this.namesOfKind()));
   readonly saveLabel = computed(() => SAVE_LABELS[this.mode()]);
   readonly noun = computed(() => KIND_NOUN[this.kind()]);
-
-  readonly blocker = computed<string | null>(() => {
-    // Without the lists, an existing name cannot be told apart from a new one.
-    if (!this.loaded()) {
-      return this.failed() ? 'Templates could not be loaded; try again first' : 'Loading templates…';
-    }
-    if (this.nameValidation()) {
-      return this.nameValidation();
-    }
-    if (this.syntaxError()) {
-      return 'Fix the JSON syntax';
-    }
-    const error = this.errors()[0];
-    if (error) {
-      return error.message;
-    }
-    if (this.mode() === 'update' && !this.dirty() && !this.selectedMissing()) {
-      return 'No changes to save';
-    }
-    return null;
-  });
-
-  readonly canSave = computed(() => this.blocker() === null && !this.saving() && !this.deleting());
+  readonly pluralize = pluralize;
 
   readonly canPreview = computed(
     () => this.kind() === 'index' && this.selectedIndexTemplate() !== undefined && this.preview().status !== 'loading',
@@ -340,7 +319,6 @@ export class IndexTemplatesComponent {
   private readonly lastSelected: Record<TemplateKind, string | null> = { index: null, component: null };
 
   constructor() {
-    registerPendingChangesGuard(this.route.routeConfig);
     inject(DestroyRef).onDestroy(() => {
       this.destroyed = true;
     });
@@ -402,16 +380,6 @@ export class IndexTemplatesComponent {
         this.loading.set(false);
       }
     }
-  }
-
-  /** Read by the CanDeactivate guard (in-app navigation away from the page). */
-  hasPendingChanges(): boolean {
-    return this.dirty();
-  }
-
-  /** What the pending changes belong to, for the leave confirmation. */
-  pendingChangesSubject(): string {
-    return this.selected() ?? (this.name() || `the new ${this.noun()}`);
   }
 
   /** Asks the browser to confirm closing the tab while edits are unsaved. */
@@ -503,7 +471,7 @@ export class IndexTemplatesComponent {
     const baseline = this.baseline();
     this.name.set(baseline.name);
     this.body.set(baseline.body);
-    this.nameTouched.set(false);
+    this.submitted.set(false);
     this.saveError.set(null);
   }
 
@@ -531,19 +499,30 @@ export class IndexTemplatesComponent {
     }
   }
 
+  /** Validates on submit: the first invalid field gets the focus. */
   async save(): Promise<void> {
-    if (this.saving()) {
+    if (this.saving() || this.deleting()) {
       return;
     }
-    if (!this.canSave()) {
-      this.nameTouched.set(true);
-      if (this.nameValidation()) {
-        this.nameInput()?.nativeElement.focus();
-      }
+    // Without the lists, an existing name cannot be told apart from a new one.
+    if (!this.loaded()) {
+      this.alerts.warn(
+        this.failed() ? 'Load the templates again before saving' : 'Wait for the templates to load before saving',
+      );
+      return;
+    }
+    this.submitted.set(true);
+    if (this.nameValidation()) {
+      this.nameInput()?.nativeElement.focus();
       return;
     }
     const check = this.check();
-    if (!check.ok) {
+    if (!check.ok || this.errors().length > 0) {
+      this.editor()?.focus();
+      return;
+    }
+    if (this.mode() === 'update' && !this.dirty() && !this.selectedMissing()) {
+      this.alerts.info(`${sentence(this.noun())} ${this.name()} has no unsaved changes`);
       return;
     }
     const kind = this.kind();
@@ -572,7 +551,7 @@ export class IndexTemplatesComponent {
     try {
       const path = kind === 'index' ? 'index_templates/save' : 'component_templates/save';
       const response = await this.api.post<unknown>(path, { name, template: check.value });
-      this.alerts.success(`${capitalize(noun)} ${name} ${created ? 'created' : 'updated'}`, response);
+      this.alerts.success(`${sentence(noun)} ${name} ${created ? 'created' : 'updated'}`, response);
       if (kind === 'index') {
         this.indexTemplates.update((list) => upsertByName(list, { name, index_template: check.value }));
       } else {
@@ -582,7 +561,7 @@ export class IndexTemplatesComponent {
       if (tracked) {
         this.selected.set(name);
         this.baseline.set({ name, body });
-        this.nameTouched.set(false);
+        this.submitted.set(false);
         this.lastSelected[kind] = name;
         this.syncUrl();
         if (this.preview().status !== 'idle') {
@@ -641,7 +620,7 @@ export class IndexTemplatesComponent {
     try {
       const path = kind === 'index' ? 'index_templates/delete' : 'component_templates/delete';
       const response = await this.api.post<unknown>(path, { name });
-      this.alerts.success(`${capitalize(noun)} ${name} deleted`, response);
+      this.alerts.success(`${sentence(noun)} ${name} deleted`, response);
       if (kind === 'index') {
         this.indexTemplates.update((list) => removeByName(list, name));
       } else {
@@ -711,20 +690,20 @@ export class IndexTemplatesComponent {
     this.showManaged.set(show);
   }
 
-  private bodyOf(kind: TemplateKind, name: string): JsonObject | undefined {
+  private bodyOf(kind: TemplateKind, name: string): JsonRecord | undefined {
     return kind === 'index'
       ? this.indexTemplates()?.find((entry) => entry.name === name)?.index_template
       : this.componentTemplates()?.find((entry) => entry.name === name)?.component_template;
   }
 
-  private open(kind: TemplateKind, name: string, body: JsonObject): void {
+  private open(kind: TemplateKind, name: string, body: JsonRecord): void {
     const source = templateSource(body);
     this.kind.set(kind);
     this.selected.set(name);
     this.name.set(name);
     this.body.set(source);
     this.baseline.set({ name, body: source });
-    this.nameTouched.set(false);
+    this.submitted.set(false);
     this.saveError.set(null);
     this.lastSelected[kind] = name;
     if (this.preview().status !== 'idle') {
@@ -739,7 +718,7 @@ export class IndexTemplatesComponent {
     this.name.set('');
     this.body.set(body);
     this.baseline.set({ name: '', body });
-    this.nameTouched.set(false);
+    this.submitted.set(false);
     this.saveError.set(null);
     this.closePreview();
   }
@@ -763,11 +742,15 @@ export class IndexTemplatesComponent {
     this.open(kind, name, entry);
   }
 
-  private async confirmDiscard(): Promise<boolean> {
+  /**
+   * Resolves `true` when the editor holds nothing unsaved or the user agreed
+   * to drop it. Used when switching templates and by the route guard.
+   */
+  async confirmDiscard(): Promise<boolean> {
     if (!this.dirty()) {
       return true;
     }
-    const subject = this.pendingChangesSubject();
+    const subject = this.selected() ?? (this.name() || `the new ${this.noun()}`);
     return this.dialogs.confirm({
       title: 'Discard unsaved changes?',
       message: `Your changes to ${subject} have not been saved and will be lost.`,
@@ -803,8 +786,4 @@ export class IndexTemplatesComponent {
   private revealPreview(): void {
     setTimeout(() => this.previewCard()?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
-}
-
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }

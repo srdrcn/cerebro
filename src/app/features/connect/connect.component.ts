@@ -13,6 +13,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiError } from '../../core/api-envelope';
 import { ConnectionService } from '../../core/connection.service';
+import { elasticsearchReason } from '../../core/errors';
 import { RecentHostsService } from '../../core/recent-hosts.service';
 import { ThemeService } from '../../core/theme.service';
 import { LogoComponent } from '../../shared/logo.component';
@@ -70,6 +71,13 @@ export class ConnectComponent implements OnInit {
   readonly host = signal('');
   readonly username = signal('');
   readonly password = signal('');
+  /** Set by the first submit of each form; field errors show from then on. */
+  readonly hostSubmitted = signal(false);
+  readonly authSubmitted = signal(false);
+
+  readonly hostError = computed(() => this.hostSubmitted() && !this.host().trim());
+  readonly usernameError = computed(() => this.authSubmitted() && !this.username());
+  readonly passwordError = computed(() => this.authSubmitted() && !this.password());
 
   /** Recent manual entries that are not already listed as configured clusters. */
   readonly recent = computed(() => {
@@ -91,6 +99,15 @@ export class ConnectComponent implements OnInit {
     this.host.set(params.get('host') ?? this.connection.host() ?? '');
     this.unauthorized.set(params.has('unauthorized'));
     void this.loadHosts();
+  }
+
+  submitHost(): void {
+    this.hostSubmitted.set(true);
+    if (this.hostError()) {
+      this.focus('host');
+      return;
+    }
+    void this.connectTo(this.host());
   }
 
   async connectTo(host: string): Promise<void> {
@@ -129,10 +146,15 @@ export class ConnectComponent implements OnInit {
   }
 
   async authorize(): Promise<void> {
+    this.authSubmitted.set(true);
+    if (this.usernameError() || this.passwordError()) {
+      this.focus(this.usernameError() ? 'username' : 'password');
+      return;
+    }
     const target = this.host().trim();
     const username = this.username();
     const password = this.password();
-    if (!target || !username || !password || this.connecting()) {
+    if (!target || this.connecting()) {
       return;
     }
 
@@ -162,6 +184,7 @@ export class ConnectComponent implements OnInit {
 
   cancelAuthorization(): void {
     this.unauthorized.set(false);
+    this.authSubmitted.set(false);
     this.feedback.set(undefined);
     this.username.set('');
     this.password.set('');
@@ -177,18 +200,9 @@ export class ConnectComponent implements OnInit {
   }
 
   private describeFailure(host: string, status: number, body: unknown): string {
-    const reason =
-      typeof body === 'object' && body !== null && 'error' in body
-        ? (body as { error: unknown }).error
-        : undefined;
-    const detail =
-      typeof reason === 'string'
-        ? reason
-        : typeof reason === 'object' && reason !== null && 'reason' in reason
-          ? String((reason as { reason: unknown }).reason)
-          : undefined;
-    return detail
-      ? `${host} responded with ${status}: ${detail}`
+    const reason = elasticsearchReason(body);
+    return reason
+      ? `${host} responded with ${status}: ${reason}`
       : `${host} responded with an unexpected status (${status}).`;
   }
 
@@ -201,6 +215,10 @@ export class ConnectComponent implements OnInit {
     } finally {
       this.loadingHosts.set(false);
     }
+  }
+
+  private focus(id: string): void {
+    this.document.getElementById(id)?.focus();
   }
 
   private errorDetails(error: unknown): unknown {

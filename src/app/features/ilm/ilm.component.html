@@ -179,7 +179,7 @@
         <div class="card" role="region" aria-labelledby="policy-detail-title">
           <div class="card-header detail-header">
             <div class="detail-header__heading min-w-0">
-              <span class="detail-header__icon" [class.is-new]="selected() === null" aria-hidden="true">
+              <span class="card-icon" aria-hidden="true">
                 <i class="bi" [class.bi-plus-lg]="selected() === null" [class.bi-hourglass-split]="selected() !== null"></i>
               </span>
               <div class="min-w-0">
@@ -391,7 +391,6 @@
                 [class.is-invalid]="nameError()"
                 [ngModel]="name()"
                 (ngModelChange)="name.set($event)"
-                (blur)="nameTouched.set(true)"
                 (keydown.enter)="save()"
                 placeholder="e.g. logs-30-days"
                 autocomplete="off"
@@ -456,7 +455,7 @@
                 } @else {
                   <span class="status-pill status-pill--ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON</span>
                   <span class="editor-status__message text-muted">
-                    {{ previewPhases().length }} {{ previewPhases().length === 1 ? 'phase' : 'phases' }}
+                    {{ pluralize(previewPhases().length, 'phase') }}
                   </span>
                 }
               </div>
@@ -473,8 +472,7 @@
                 type="button"
                 class="btn btn-primary"
                 [class.is-loading]="saving()"
-                [disabled]="!canSave()"
-                [attr.title]="blocker()"
+                [disabled]="saving()"
                 [attr.aria-busy]="saving() ? true : null"
                 (click)="save()"
               >
@@ -491,7 +489,7 @@
     <div id="ilm-panel-status" role="tabpanel" aria-labelledby="ilm-tab-status" class="stack">
       <div class="card">
         <form class="card-body explain-form" (submit)="$event.preventDefault(); submitExplain()">
-          <div class="field explain-form__field">
+          <div class="field">
             <label class="field-label" for="explain-target">Index, data stream or pattern</label>
             <div class="explain-form__controls">
               <div class="input-group explain-form__input">
@@ -500,6 +498,8 @@
                   #explainInput
                   id="explain-target"
                   class="input input-mono"
+                  [class.is-invalid]="explainTargetError()"
+                  [attr.aria-invalid]="explainTargetError() ? true : null"
                   [ngModel]="explainTarget()"
                   (ngModelChange)="explainTarget.set($event)"
                   name="explainTarget"
@@ -514,6 +514,9 @@
                 <i class="bi bi-activity" aria-hidden="true"></i> Explain
               </button>
             </div>
+            @if (explainTargetError(); as error) {
+              <p class="field-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+            }
             <p id="explain-target-help" class="field-hint">
               Comma separated names and wildcards. Hidden backing indices need an explicit pattern such as
               <button type="button" class="link-button mono" (click)="explainPreset('.ds-*')">.ds-*</button>; try
@@ -586,34 +589,38 @@
               @if (explainLoading()) {
                 <span class="spinner" role="status" aria-label="Refreshing"></span>
               }
-              <span class="count-label"><strong>{{ visibleExplainRows().length }}</strong> of {{ rows.length }} indices</span>
+              @if (explainFilter() !== 'all' || explainQuery().trim()) {
+                <span class="count-label"><strong>{{ visibleExplainRows().length }}</strong> of {{ pluralize(rows.length, 'index', 'indices') }}</span>
+              } @else {
+                <span class="count-label">{{ pluralize(rows.length, 'index', 'indices') }}</span>
+              }
             </div>
           </div>
           <div class="table-wrap explain-wrap">
             <table class="data-table explain-table">
               <thead>
                 <tr>
-                  <th scope="col" [attr.aria-sort]="ariaSort('index')">
-                    <button type="button" class="sort-button" [class.is-active]="explainSort() === 'index'" (click)="sortExplainBy('index')">
-                      Index <i class="bi" [class]="'bi ' + sortIcon('index')" aria-hidden="true"></i>
+                  <th scope="col" [attr.aria-sort]="explainSort.ariaSort('index')">
+                    <button type="button" class="sort-button" [class.is-active]="explainSort.isActive('index')" (click)="explainSort.sortBy('index')">
+                      Index <i class="bi" [class]="'bi ' + explainSort.icon('index')" aria-hidden="true"></i>
                     </button>
                   </th>
                   <th scope="col">Managed</th>
-                  <th scope="col" [attr.aria-sort]="ariaSort('policy')">
-                    <button type="button" class="sort-button" [class.is-active]="explainSort() === 'policy'" (click)="sortExplainBy('policy')">
-                      Policy <i class="bi" [class]="'bi ' + sortIcon('policy')" aria-hidden="true"></i>
+                  <th scope="col" [attr.aria-sort]="explainSort.ariaSort('policy')">
+                    <button type="button" class="sort-button" [class.is-active]="explainSort.isActive('policy')" (click)="explainSort.sortBy('policy')">
+                      Policy <i class="bi" [class]="'bi ' + explainSort.icon('policy')" aria-hidden="true"></i>
                     </button>
                   </th>
-                  <th scope="col" [attr.aria-sort]="ariaSort('phase')">
-                    <button type="button" class="sort-button" [class.is-active]="explainSort() === 'phase'" (click)="sortExplainBy('phase')">
-                      Phase <i class="bi" [class]="'bi ' + sortIcon('phase')" aria-hidden="true"></i>
+                  <th scope="col" [attr.aria-sort]="explainSort.ariaSort('phase')">
+                    <button type="button" class="sort-button" [class.is-active]="explainSort.isActive('phase')" (click)="explainSort.sortBy('phase')">
+                      Phase <i class="bi" [class]="'bi ' + explainSort.icon('phase')" aria-hidden="true"></i>
                     </button>
                   </th>
                   <th scope="col">Action</th>
                   <th scope="col">Step</th>
-                  <th scope="col" class="num" [attr.aria-sort]="ariaSort('age')">
-                    <button type="button" class="sort-button" [class.is-active]="explainSort() === 'age'" (click)="sortExplainBy('age')">
-                      Age <i class="bi" [class]="'bi ' + sortIcon('age')" aria-hidden="true"></i>
+                  <th scope="col" class="num" [attr.aria-sort]="explainSort.ariaSort('age')">
+                    <button type="button" class="sort-button" [class.is-active]="explainSort.isActive('age')" (click)="explainSort.sortBy('age')">
+                      Age <i class="bi" [class]="'bi ' + explainSort.icon('age')" aria-hidden="true"></i>
                     </button>
                   </th>
                   <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
@@ -657,7 +664,7 @@
                         <span class="badge badge-red"><i class="bi bi-x-octagon" aria-hidden="true"></i> Failed</span>
                         <span class="mono text-sm">{{ row.failedStep ?? row.step }}</span>
                       } @else if (row.retrying) {
-                        <span class="badge badge-yellow" [title]="'The step failed and ILM retries it automatically (' + row.retryCount + (row.retryCount === 1 ? ' retry' : ' retries') + ' so far)'">
+                        <span class="badge badge-yellow" [title]="'The step failed and ILM retries it automatically (' + pluralize(row.retryCount ?? 0, 'retry', 'retries') + ' so far)'">
                           <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Retrying ({{ row.retryCount }})
                         </span>
                         <span class="mono text-sm">{{ row.step ?? '–' }}</span>
@@ -699,7 +706,7 @@
                             <span class="visually-hidden">{{ row.index }}: </span>
                             {{ info }}
                             @if (needsAttention(row) && row.retryCount !== null) {
-                              <span class="explain-reason__meta">· {{ row.retryable ? 'retried automatically' : 'not retryable' }}, {{ row.retryCount }} {{ row.retryCount === 1 ? 'retry' : 'retries' }}</span>
+                              <span class="explain-reason__meta">· {{ row.retryable ? 'retried automatically' : 'not retryable' }}, {{ pluralize(row.retryCount, 'retry', 'retries') }}</span>
                             }
                           </span>
                         </p>

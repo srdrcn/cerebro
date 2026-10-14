@@ -4,16 +4,12 @@ import {
   aliasesByIndex,
   aliasesOf,
   badgeClass,
-  errorReason,
   failedShards,
   filterSnapshots,
-  formatRelative,
-  formatTimestamp,
   indexStatuses,
   isRenaming,
   isRestorable,
   matchesSnapshot,
-  pluralize,
   renameIndex,
   restoreTargetState,
   snapshotDuration,
@@ -96,18 +92,6 @@ describe('snapshot timing', () => {
       snapshotDuration(snapshot('x', { start_time_in_millis: 1_000, end_time_in_millis: 4_000 }), 0),
     ).toBe(3_000);
     expect(snapshotDuration(snapshot('y'), 0)).toBeNull();
-  });
-
-  it('formats timestamps and relative times', () => {
-    const local = new Date(2026, 9, 14, 9, 5).getTime();
-    expect(formatTimestamp(local)).toBe('2026-10-14 09:05');
-    expect(formatTimestamp(undefined)).toBe('–');
-    expect(formatRelative(local, local + 20_000)).toBe('just now');
-    expect(formatRelative(local, local + 5 * 60_000)).toBe('5m ago');
-    expect(formatRelative(local, local + 3 * 3_600_000 + 10)).toBe('3h ago');
-    expect(formatRelative(local, local + 2 * 86_400_000)).toBe('2d ago');
-    expect(formatRelative(local + 120_000, local)).toBe('in 2m');
-    expect(formatRelative(null, local)).toBe('–');
   });
 });
 
@@ -194,10 +178,10 @@ describe('snapshot names', () => {
     expect(validateSnapshotName('nightly-1')).toBeNull();
     expect(validateSnapshotName('  ')).toMatch(/Enter/);
     expect(validateSnapshotName('Nightly')).toMatch(/lowercase/);
-    expect(validateSnapshotName('my snapshot')).toMatch(/whitespace/);
-    expect(validateSnapshotName('_hidden')).toMatch(/underscore/);
-    expect(validateSnapshotName('a/b')).toMatch(/“\/”/);
-    expect(validateSnapshotName('a,b')).toMatch(/“,”/);
+    expect(validateSnapshotName('my snapshot')).toMatch(/spaces/);
+    expect(validateSnapshotName('_hidden')).toMatch(/start with "_"/);
+    expect(validateSnapshotName('a/b')).toMatch(/"\/"/);
+    expect(validateSnapshotName('a,b')).toMatch(/","/);
     expect(validateSnapshotName('taken', new Set(['taken']))).toMatch(/already exists/);
     expect(validateSnapshotName('<nightly-{now/d}>')).toBeNull();
   });
@@ -300,27 +284,5 @@ describe('restore targets', () => {
     ]);
     expect(aliasesOf(['logs-1'], aliases)).toEqual([{ alias: 'logs', write: false }]);
     expect(aliasesOf([], aliases)).toEqual([]);
-  });
-});
-
-describe('pluralize', () => {
-  it('chooses the singular or plural form', () => {
-    expect(pluralize(1, 'index', 'indices')).toBe('1 index');
-    expect(pluralize(3, 'index', 'indices')).toBe('3 indices');
-    expect(pluralize(0, 'snapshot')).toBe('0 snapshots');
-  });
-});
-
-describe('errorReason', () => {
-  it('prefers the root cause of Elasticsearch errors', () => {
-    expect(
-      errorReason({ status: 500, body: { error: { root_cause: [{ reason: 'root' }], reason: 'failed to create' } } }),
-    ).toBe('root');
-    expect(errorReason({ error: { reason: 'wrapper', caused_by: { reason: 'cause' } } })).toBe('cause');
-    expect(errorReason({ error: { root_cause: [], reason: 'only reason' } })).toBe('only reason');
-    expect(errorReason({ error: 'plain message' })).toBe('plain message');
-    expect(errorReason(new Error('boom'))).toBe('boom');
-    expect(errorReason({ unrelated: true })).toBeNull();
-    expect(errorReason(undefined)).toBeNull();
   });
 });

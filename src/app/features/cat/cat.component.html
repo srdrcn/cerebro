@@ -8,7 +8,7 @@
     </div>
   </header>
 
-  <div class="layout-sidebar-start cat-layout">
+  <div class="layout-sidebar-start">
     <nav class="card cat-apis" aria-labelledby="cat-apis-title">
       <div class="card-header">
         <h2 id="cat-apis-title" class="card-title">
@@ -60,8 +60,8 @@
     <section class="card cat-result" aria-labelledby="cat-result-title" [attr.aria-busy]="loading()">
       @if (selectedOption(); as option) {
         <div class="card-header cat-result__header">
-          <div class="cat-result__heading">
-            <span class="list-item__icon cat-result__icon" aria-hidden="true">
+          <div class="row min-w-0 cat-result__heading">
+            <span class="card-icon" aria-hidden="true">
               <i class="bi" [class]="'bi ' + option.info.icon"></i>
             </span>
             <div class="min-w-0">
@@ -86,7 +86,7 @@
               type="button"
               class="btn btn-sm"
               [disabled]="copyRows().length === 0"
-              [title]="'Copy the ' + copyRows().length + ' shown ' + (copyRows().length === 1 ? 'row' : 'rows') + ' as tab separated values'"
+              [title]="'Copy the ' + pluralize(copyRows().length, 'shown row') + ' as tab separated values'"
               (click)="copyTsv()"
             >
               <i class="bi bi-clipboard" aria-hidden="true"></i> Copy as TSV
@@ -117,7 +117,7 @@
             <dl class="cat-record">
               @for (column of data.columns; track column) {
                 <div class="cat-record__item">
-                  <dt class="cat-record__key">@for (part of keyParts(column); track $index) {{{ part }}<wbr />}</dt>
+                  <dt class="section-label cat-record__key">@for (part of keyParts(column); track $index) {{{ part }}<wbr />}</dt>
                   <dd class="cat-record__value" [class.tabular]="data.numeric.has(column)" [attr.title]="cellTitle(record, column)">
                     @if (cellTone(record, column); as tone) {
                       <span class="dot" [class]="'dot dot-' + tone" aria-hidden="true"></span>
@@ -138,11 +138,11 @@
               />
               <span class="count-label" aria-live="polite">
                 @if (filter()) {
-                  <strong>{{ visibleRows().length }}</strong> of {{ data.rows.length }} rows
+                  <strong>{{ visibleRows().length }}</strong> of {{ pluralize(data.rows.length, 'row') }}
                 } @else {
                   <strong>{{ data.rows.length }}</strong> {{ data.rows.length === 1 ? 'row' : 'rows' }}
                 }
-                · {{ data.columns.length }} columns
+                · {{ pluralize(data.columns.length, 'column') }}
               </span>
             </div>
 
@@ -155,15 +155,15 @@
                       <th
                         scope="col"
                         [class.num]="data.numeric.has(column)"
-                        [attr.aria-sort]="ariaSort(column)"
+                        [attr.aria-sort]="sort.ariaSort(column)"
                       >
                         <button
                           type="button"
                           class="sort-button"
-                          [class.is-active]="sortColumn() === column"
+                          [class.is-active]="sort.isActive(column)"
                           (click)="sortBy(column)"
                         >
-                          {{ column }} <i [class]="sortIcon(column)" aria-hidden="true"></i>
+                          {{ column }} <i class="bi" [class]="'bi ' + sort.icon(column)" aria-hidden="true"></i>
                         </button>
                       </th>
                     }

@@ -688,10 +688,19 @@
 
 /* Pane width, not viewport width: the panes are narrow both just above the
    two-column breakpoint and on phones. */
-/* Three request tabs leave less room for the body actions. */
+.pane-actions__label--short {
+  display: none;
+}
+
+/* Three request tabs leave less room for the body actions: "Copy as cURL"
+   becomes "cURL" rather than an unlabelled icon. */
 @container pane (max-width: 640px) {
   .pane-actions__label--long {
     display: none;
+  }
+
+  .pane-actions__label--short {
+    display: inline;
   }
 }
 

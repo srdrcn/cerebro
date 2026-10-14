@@ -63,9 +63,9 @@
       }
     </div>
     <div class="page-header__actions">
-      <div class="index-picker">
+      <div class="context-picker">
         <label class="visually-hidden" for="index-detail-picker">Index</label>
-        <i class="bi bi-database index-picker__icon" aria-hidden="true"></i>
+        <i class="bi bi-database" aria-hidden="true"></i>
         <select
           #picker
           id="index-detail-picker"
@@ -618,9 +618,9 @@
                   <span class="spacer"></span>
                   <span class="count-label">
                     @if (settingsQuery().trim()) {
-                      <strong>{{ visibleSettings().length }}</strong> of {{ flatSettings().length }} settings
+                      <strong>{{ visibleSettings().length | num }}</strong> of {{ pluralize(flatSettings().length, 'setting') }}
                     } @else {
-                      <strong>{{ flatSettings().length }}</strong> settings
+                      <strong>{{ flatSettings().length | num }}</strong> {{ flatSettings().length === 1 ? 'setting' : 'settings' }}
                     }
                   </span>
                   <a class="btn btn-sm" routerLink="/index_settings" [queryParams]="linkParams({ index: current.name })">
@@ -742,7 +742,13 @@
                       </button>
                     </div>
                     <span class="spacer"></span>
-                    <span class="count-label"><strong>{{ visibleShards().length }}</strong> of {{ shards().length }} copies</span>
+                    <span class="count-label">
+                      @if (shardFilter() !== 'all') {
+                        <strong>{{ visibleShards().length | num }}</strong> of {{ pluralize(shards().length, 'copy', 'copies') }}
+                      } @else {
+                        <strong>{{ shards().length | num }}</strong> {{ shards().length === 1 ? 'copy' : 'copies' }}
+                      }
+                    </span>
                     <button type="button" class="btn btn-sm" (click)="showShardsJson()">
                       <i class="bi bi-braces" aria-hidden="true"></i> View JSON
                     </button>
@@ -752,30 +758,30 @@
                       <caption class="visually-hidden">Shard copies of {{ current.name }}</caption>
                       <thead>
                         <tr>
-                          <th scope="col" [attr.aria-sort]="ariaSort('shard')">
-                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'shard'" (click)="sortShardsBy('shard')">
-                              Shard <i [class]="'bi ' + sortIcon('shard')" aria-hidden="true"></i>
+                          <th scope="col" [attr.aria-sort]="shardSort.ariaSort('shard')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort.isActive('shard')" (click)="shardSort.sortBy('shard')">
+                              Shard <i class="bi" [class]="'bi ' + shardSort.icon('shard')" aria-hidden="true"></i>
                             </button>
                           </th>
                           <th scope="col">Copy</th>
-                          <th scope="col" [attr.aria-sort]="ariaSort('state')">
-                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'state'" (click)="sortShardsBy('state')">
-                              State <i [class]="'bi ' + sortIcon('state')" aria-hidden="true"></i>
+                          <th scope="col" [attr.aria-sort]="shardSort.ariaSort('state')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort.isActive('state')" (click)="shardSort.sortBy('state')">
+                              State <i class="bi" [class]="'bi ' + shardSort.icon('state')" aria-hidden="true"></i>
                             </button>
                           </th>
-                          <th scope="col" class="num" [attr.aria-sort]="ariaSort('docs')">
-                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'docs'" (click)="sortShardsBy('docs')">
-                              Docs <i [class]="'bi ' + sortIcon('docs')" aria-hidden="true"></i>
+                          <th scope="col" class="num" [attr.aria-sort]="shardSort.ariaSort('docs')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort.isActive('docs')" (click)="shardSort.sortBy('docs')">
+                              Docs <i class="bi" [class]="'bi ' + shardSort.icon('docs')" aria-hidden="true"></i>
                             </button>
                           </th>
-                          <th scope="col" class="num" [attr.aria-sort]="ariaSort('size')">
-                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'size'" (click)="sortShardsBy('size')">
-                              Size <i [class]="'bi ' + sortIcon('size')" aria-hidden="true"></i>
+                          <th scope="col" class="num" [attr.aria-sort]="shardSort.ariaSort('size')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort.isActive('size')" (click)="shardSort.sortBy('size')">
+                              Size <i class="bi" [class]="'bi ' + shardSort.icon('size')" aria-hidden="true"></i>
                             </button>
                           </th>
-                          <th scope="col" [attr.aria-sort]="ariaSort('node')">
-                            <button type="button" class="sort-button" [class.is-active]="shardSort() === 'node'" (click)="sortShardsBy('node')">
-                              Node <i [class]="'bi ' + sortIcon('node')" aria-hidden="true"></i>
+                          <th scope="col" [attr.aria-sort]="shardSort.ariaSort('node')">
+                            <button type="button" class="sort-button" [class.is-active]="shardSort.isActive('node')" (click)="shardSort.sortBy('node')">
+                              Node <i class="bi" [class]="'bi ' + shardSort.icon('node')" aria-hidden="true"></i>
                             </button>
                           </th>
                           <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
@@ -871,7 +877,7 @@
                     </a>
                   </cerebro-empty>
                 } @else {
-                  <ul class="list alias-list" [attr.aria-label]="'Aliases of ' + current.name">
+                  <ul class="list" [attr.aria-label]="'Aliases of ' + current.name">
                     @for (alias of aliases(); track alias.name) {
                       <li class="list-item alias-item">
                         <span class="list-item__icon" aria-hidden="true"><i class="bi bi-link-45deg"></i></span>
@@ -1016,18 +1022,18 @@
 
                       <ol class="lifecycle-steps" aria-label="Current lifecycle position">
                         <li class="lifecycle-step" [class.is-error]="life.error">
-                          <span class="lifecycle-step__label">Phase</span>
+                          <span class="section-label">Phase</span>
                           <span class="lifecycle-step__value">
                             <span class="phase-dot" [attr.data-phase]="life.phase" aria-hidden="true"></span>
                             {{ lifecycleLabel(life.phase) }}
                           </span>
                         </li>
                         <li class="lifecycle-step" [class.is-error]="life.error">
-                          <span class="lifecycle-step__label">Action</span>
+                          <span class="section-label">Action</span>
                           <span class="lifecycle-step__value">{{ lifecycleLabel(life.action) }}</span>
                         </li>
                         <li class="lifecycle-step" [class.is-error]="life.error">
-                          <span class="lifecycle-step__label">Step</span>
+                          <span class="section-label">Step</span>
                           <span class="lifecycle-step__value">{{ lifecycleLabel(life.step) }}</span>
                           @if (life.step) {
                             <span class="mono text-xs text-muted">{{ life.step }}</span>

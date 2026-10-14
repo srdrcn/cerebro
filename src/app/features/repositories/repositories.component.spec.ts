@@ -125,12 +125,29 @@ describe('RepositoriesComponent', () => {
     const target = component();
     await target.load();
     target.setName('bad name');
-    await target.save();
+    const nameField = document.body.appendChild(document.createElement('input'));
+    nameField.id = 'repository-name';
+    try {
+      await target.save();
 
-    expect(target.submitted()).toBe(true);
-    expect(target.nameError()).toMatch(/whitespace/);
-    expect(target.typeError()).not.toBeNull();
-    expect(post).not.toHaveBeenCalledWith('repositories/create', expect.anything());
+      expect(target.submitted()).toBe(true);
+      expect(target.nameError()).toMatch(/spaces/);
+      expect(target.typeError()).not.toBeNull();
+      expect(document.activeElement).toBe(nameField);
+      expect(post).not.toHaveBeenCalledWith('repositories/create', expect.anything());
+    } finally {
+      nameField.remove();
+    }
+  });
+
+  it('offers "New repository" only when the form is not already blank', async () => {
+    const target = component();
+    await target.load();
+    expect(target.blankForm()).toBe(true);
+    target.edit(local);
+    expect(target.blankForm()).toBe(false);
+    target.newRepository(false);
+    expect(target.blankForm()).toBe(true);
   });
 
   it('deletes after a danger confirmation and clears the form of the deleted repository', async () => {

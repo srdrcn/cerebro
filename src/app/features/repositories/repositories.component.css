@@ -60,11 +60,6 @@
   border-radius: var(--radius-sm);
 }
 
-.repo-item.is-selected .list-item__icon {
-  background: var(--accent-soft-strong);
-  color: var(--accent-text);
-}
-
 .repo-item__title {
   display: flex;
   align-items: center;
@@ -187,12 +182,11 @@
 }
 
 .type-card__label {
-  overflow: hidden;
   color: var(--text);
   font-size: var(--text-base);
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: break-word;
 }
 
 .type-card__description {
@@ -348,7 +342,6 @@
 
   .type-card__label {
     font-size: var(--text-sm);
-    white-space: normal;
   }
 
   .type-card__description {

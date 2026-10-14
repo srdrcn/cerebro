@@ -11,6 +11,8 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { pluralize } from '../../core/format';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import {
@@ -19,7 +21,6 @@ import {
   buildClusterSettingRows,
   summarizeOverrides,
 } from './cluster-settings.models';
-import { PendingChangesAware } from './pending-changes.guard';
 import { SettingsEditorComponent } from './settings-editor.component';
 import { SettingsSkeletonComponent } from './settings-skeleton.component';
 import {
@@ -140,7 +141,7 @@ export class ClusterSettingsComponent implements PendingChangesAware {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Error while loading cluster settings', error);
+        this.alerts.error('Could not load cluster settings', error);
       }
     }
   }
@@ -169,8 +170,8 @@ export class ClusterSettingsComponent implements PendingChangesAware {
       return true;
     }
     return this.dialogs.confirm({
-      title: changes.length === 1 ? 'Discard 1 pending change?' : `Discard ${changes.length} pending changes?`,
-      message: 'Your cluster settings edits have not been saved and will be lost if you leave this page.',
+      title: 'Discard unsaved changes?',
+      message: `${pluralize(changes.length, 'unsaved change')} to the cluster settings will be lost if you leave this page.`,
       items: changes.map((change) => change.name),
       confirmLabel: 'Discard changes',
       cancelLabel: 'Keep editing',
@@ -196,7 +197,7 @@ export class ClusterSettingsComponent implements PendingChangesAware {
       const settings = buildClusterSavePayload(changes, this.rows() ?? []);
       const response = await this.api.post<unknown>('cluster_settings/save', { settings });
       this.alerts.success(
-        changes.length === 1 ? `Saved ${changes[0]?.name}` : `Saved ${changes.length} cluster settings`,
+        changes.length === 1 ? `Saved ${changes[0]?.name}` : `Saved ${pluralize(changes.length, 'cluster setting')}`,
         response,
       );
       this.lastResponse = '';
@@ -227,9 +228,7 @@ export class ClusterSettingsComponent implements PendingChangesAware {
     this.errors.set({});
     this.failed.set(false);
     if (discarded > 0 && next !== undefined) {
-      this.alerts.warn(
-        `Discarded ${discarded === 1 ? '1 pending change' : `${discarded} pending changes`} made on ${previous}`,
-      );
+      this.alerts.warn(`Discarded ${pluralize(discarded, 'pending change')} made on ${previous}`);
     }
   }
 }

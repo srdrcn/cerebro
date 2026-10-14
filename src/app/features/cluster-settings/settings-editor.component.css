@@ -265,14 +265,6 @@ code {
   font-size: 0.95em;
 }
 
-.setting__warning {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--yellow-text);
-  font-size: var(--text-xs);
-}
-
 .setting__error {
   display: flex;
   align-items: flex-start;
@@ -362,11 +354,6 @@ code {
 
 .settings-toc__title {
   padding: 8px 10px 6px;
-  color: var(--text-3);
-  font-size: var(--text-xs);
-  font-weight: 620;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .settings-toc__list {

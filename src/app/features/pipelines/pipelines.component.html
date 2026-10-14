@@ -87,7 +87,7 @@
                   </span>
                 </span>
                 <span class="pipeline-item__count">
-                  <span class="badge tabular" [title]="pipeline.processorCount + (pipeline.processorCount === 1 ? ' processor' : ' processors')">
+                  <span class="badge tabular" [title]="pluralize(pipeline.processorCount, 'processor')">
                     {{ pipeline.processorCount }}
                     <span class="visually-hidden">{{ pipeline.processorCount === 1 ? 'processor' : 'processors' }}</span>
                   </span>
@@ -144,7 +144,7 @@
       <div #editorCard class="card editor-card" role="region" aria-labelledby="pipeline-editor-title">
         <div class="card-header editor-card__header">
           <div class="editor-card__heading min-w-0">
-            <span class="editor-card__icon" [class.is-new]="selected() === null" aria-hidden="true">
+            <span class="card-icon" aria-hidden="true">
               <i class="bi" [class.bi-plus-lg]="selected() === null" [class.bi-pencil]="selected() !== null"></i>
             </span>
             <div class="min-w-0">
@@ -163,7 +163,7 @@
               </h2>
               <p class="card-subtitle truncate">
                 @if (selectedPipeline(); as pipeline) {
-                  {{ pipeline.processorCount }} {{ pipeline.processorCount === 1 ? 'processor' : 'processors' }}
+                  {{ pluralize(pipeline.processorCount, 'processor') }}
                   @if (pipeline.hasOnFailure) {
                     · pipeline-level failure handler
                   }
@@ -215,7 +215,7 @@
             </div>
           }
 
-          <div class="grid-2 meta-fields">
+          <div class="grid-2">
             <div class="field">
               <label class="field-label" for="pipeline-id">Id</label>
               <input
@@ -225,7 +225,6 @@
                 [class.is-invalid]="idError()"
                 [ngModel]="id()"
                 (ngModelChange)="id.set($event)"
-                (blur)="idTouched.set(true)"
                 (keydown.enter)="save()"
                 placeholder="e.g. logs-enrich"
                 autocomplete="off"
@@ -284,10 +283,10 @@
 
           <div class="pipeline-grid">
             <!-- Processor list -->
-            <section class="processors-panel" aria-labelledby="processors-title">
+            <section aria-labelledby="processors-title">
               <div class="panel-head">
                 <h3 id="processors-title" class="section-title">Processors</h3>
-                <span class="count-label"><strong>{{ processors().length }}</strong> in order</span>
+                <span class="count-label">{{ pluralize(processors().length, 'processor') }} in order</span>
               </div>
               @if (processors().length > 0) {
                 <ol class="processor-list">
@@ -326,7 +325,7 @@
                               <span class="flag"><i class="bi bi-shield-check" aria-hidden="true"></i> Ignores failures</span>
                             }
                             @if (processor.onFailureCount > 0) {
-                              <span class="flag flag--failure"><i class="bi bi-life-preserver" aria-hidden="true"></i> On failure: {{ processor.onFailureCount }} {{ processor.onFailureCount === 1 ? 'processor' : 'processors' }}</span>
+                              <span class="flag flag--failure"><i class="bi bi-life-preserver" aria-hidden="true"></i> On failure: {{ pluralize(processor.onFailureCount, 'processor') }}</span>
                             }
                             @if (processor.invalid) {
                               <span class="flag flag--invalid"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Malformed processor</span>
@@ -407,8 +406,7 @@
               type="button"
               class="btn btn-primary"
               [class.is-loading]="saving()"
-              [disabled]="!canSave()"
-              [attr.title]="blocker()"
+              [disabled]="saving()"
               [attr.aria-busy]="saving() ? true : null"
               (click)="save()"
             >
@@ -452,7 +450,7 @@
               @if (docsError(); as error) {
                 <i class="bi bi-x-circle" aria-hidden="true"></i> {{ error }}
               } @else {
-                A JSON array of <span class="mono">_source</span> objects ({{ docsCount() }} {{ docsCount() === 1 ? 'document' : 'documents' }}).
+                A JSON array of <span class="mono">_source</span> objects ({{ pluralize(docsCount(), 'document') }}).
               }
             </p>
             <div class="test-actions">
@@ -467,8 +465,8 @@
                 type="button"
                 class="btn btn-primary"
                 [class.is-loading]="simulating()"
-                [disabled]="simulating() || bodyError() !== null || docsError() !== null"
-                [attr.title]="bodyError() ? 'Fix the pipeline JSON first' : docsError() ? 'Fix the sample documents first' : null"
+                [disabled]="simulating()"
+                [attr.aria-busy]="simulating() ? true : null"
                 (click)="simulate()"
               >
                 <i class="bi bi-play-fill" aria-hidden="true"></i> Run

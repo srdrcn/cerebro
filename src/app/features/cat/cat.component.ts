@@ -14,10 +14,13 @@ import { AlertService } from '../../core/alert.service';
 import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
+import { elasticsearchReason } from '../../core/errors';
+import { pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { PagerComponent, clampPage, pageSlice } from '../../shared/pager.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
+import { createSort } from '../../shared/sort-state';
 import {
   CAT_APIS,
   CAT_API_INFO,
@@ -25,14 +28,12 @@ import {
   CatApiInfo,
   CatRow,
   CatTone,
-  SortDirection,
   asCatRows,
   catApiFromParam,
   catApiValue,
   catCellText,
   catCellTone,
   catColumns,
-  catErrorReason,
   catKeyParts,
   catRowsToTsv,
   filterCatRows,
@@ -80,6 +81,7 @@ export class CatComponent {
   readonly connection = inject(ConnectionService);
 
   readonly pageSize = CAT_PAGE_SIZE;
+  readonly pluralize = pluralize;
   readonly options: readonly CatApiOption[] = CAT_APIS.map((api) => ({
     api,
     value: catApiValue(api),
@@ -108,8 +110,11 @@ export class CatComponent {
   /** Loads the user asked for (silent auto refreshes do not spin buttons). */
   readonly manualLoading = signal(false);
   readonly filter = signal('');
-  readonly sortColumn = signal<string | null>(null);
-  readonly sortDirection = signal<SortDirection>('asc');
+  /** No column (`''`) keeps the order Elasticsearch returned. */
+  readonly sort = createSort<string>('', {
+    // Numbers are most useful largest first, text alphabetically.
+    descendingFirst: (column) => this.result()?.numeric.has(column) ?? false,
+  });
   readonly page = signal(1);
 
   /** Data of the selected API only — never show another API's rows. */
@@ -136,8 +141,8 @@ export class CatComponent {
     }
     return sortCatRows(
       filterCatRows(result.rows, result.columns, this.filter()),
-      this.sortColumn(),
-      this.sortDirection(),
+      this.sort.field() || null,
+      this.sort.reverse(),
     );
   });
 
@@ -176,8 +181,8 @@ export class CatComponent {
       // A different API: start from a clean table.
       this.result.set(null);
       this.filter.set('');
-      this.sortColumn.set(null);
-      this.sortDirection.set('asc');
+      this.sort.field.set('');
+      this.sort.reverse.set(false);
       this.page.set(1);
     }
     this.loading.set(true);
@@ -196,15 +201,15 @@ export class CatComponent {
         loadedAt: new Date(),
       });
       this.failure.set(null);
-      const sortColumn = this.sortColumn();
+      const sortColumn = this.sort.field();
       if (sortColumn && !columns.includes(sortColumn)) {
-        this.sortColumn.set(null);
+        this.sort.field.set('');
       }
     } catch (error: unknown) {
       if (sequence !== this.loadSequence) {
         return;
       }
-      this.failure.set({ api, reason: catErrorReason(error) });
+      this.failure.set({ api, reason: elasticsearchReason(error) });
       this.alerts.error(`Could not load _cat/${catApiValue(api)}`, error);
     } finally {
       if (sequence === this.loadSequence) {
@@ -250,28 +255,8 @@ export class CatComponent {
   }
 
   sortBy(column: string): void {
-    if (this.sortColumn() === column) {
-      this.sortDirection.update((direction) => (direction === 'asc' ? 'desc' : 'asc'));
-    } else {
-      this.sortColumn.set(column);
-      // Numbers are most useful largest first, text alphabetically.
-      this.sortDirection.set(this.result()?.numeric.has(column) ? 'desc' : 'asc');
-    }
+    this.sort.sortBy(column);
     this.page.set(1);
-  }
-
-  ariaSort(column: string): 'ascending' | 'descending' | 'none' {
-    if (this.sortColumn() !== column) {
-      return 'none';
-    }
-    return this.sortDirection() === 'asc' ? 'ascending' : 'descending';
-  }
-
-  sortIcon(column: string): string {
-    if (this.sortColumn() !== column) {
-      return 'bi bi-arrow-down-up';
-    }
-    return this.sortDirection() === 'asc' ? 'bi bi-arrow-up' : 'bi bi-arrow-down';
   }
 
   async copyTsv(): Promise<void> {
@@ -280,10 +265,9 @@ export class CatComponent {
       return;
     }
     const rows = this.copyRows();
-    const noun = rows.length === 1 ? 'row' : 'rows';
     await this.clipboard.copy(
       catRowsToTsv(result.columns, rows),
-      () => this.alerts.success(`Copied ${rows.length} ${noun} as TSV`),
+      () => this.alerts.success(`Copied ${pluralize(rows.length, 'row')} as TSV`),
       (error: unknown) => this.alerts.error('Could not copy to the clipboard', error),
     );
   }

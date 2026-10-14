@@ -77,14 +77,6 @@
   border-top: 1px dashed var(--border);
 }
 
-.alloc-copies__label {
-  color: var(--text-3);
-  font-size: var(--text-xs);
-  font-weight: 620;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .alloc-copies__list {
   display: flex;
   flex-wrap: wrap;
@@ -287,14 +279,6 @@
   grid-column: 1 / -1;
 }
 
-.fact dt {
-  color: var(--text-3);
-  font-size: var(--text-xs);
-  font-weight: 620;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .fact dd {
   display: grid;
   gap: 2px;
@@ -320,11 +304,6 @@
 .alloc-details__label {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-3);
-  font-size: var(--text-xs);
-  font-weight: 620;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .alloc-details__text {
@@ -713,14 +692,6 @@ td.alloc-nodes__weight {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   background: var(--surface-2);
-}
-
-.blockers__title {
-  color: var(--text-3);
-  font-size: var(--text-xs);
-  font-weight: 620;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .blockers__list {

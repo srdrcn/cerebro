@@ -1,7 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   computed,
+  inject,
   input,
   model,
   signal,
@@ -22,8 +24,6 @@ export interface ChecklistOption {
   readonly note?: string;
 }
 
-let nextChecklistId = 0;
-
 /**
  * Searchable list of checkboxes used to pick indices. Selection is a set of
  * names, so options that are filtered out keep their state.
@@ -39,11 +39,10 @@ let nextChecklistId = 0;
         (keydown.enter)="$event.preventDefault()"
         [(value)]="query"
         [small]="true"
-        [placeholder]="'Filter ' + noun()"
-        [ariaLabel]="'Filter ' + noun()"
-        [inputId]="id + '-search'"
+        placeholder="Filter indices"
+        ariaLabel="Filter indices"
       />
-      <div class="checklist__bulk" role="group" [attr.aria-label]="'Select ' + noun()">
+      <div class="checklist__bulk" role="group" aria-label="Select indices">
         <button
           type="button"
           class="btn btn-ghost btn-sm"
@@ -96,7 +95,7 @@ let nextChecklistId = 0;
           @if (options().length === 0) {
             {{ emptyText() }}
           } @else {
-            No {{ noun() }} match “{{ query() }}”.
+            No indices match “{{ query() }}”.
           }
         </li>
       }
@@ -207,12 +206,12 @@ let nextChecklistId = 0;
 export class IndexChecklistComponent {
   readonly options = input.required<readonly ChecklistOption[]>();
   readonly selected = model<ReadonlySet<string>>(new Set());
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
   readonly label = input('Indices');
-  readonly noun = input('indices');
   readonly emptyText = input('There is nothing to select.');
   readonly maxHeight = input(240);
 
-  readonly id = `index-checklist-${nextChecklistId++}`;
   readonly query = signal('');
 
   readonly visible = computed(() =>
@@ -230,6 +229,12 @@ export class IndexChecklistComponent {
   readonly hiddenSelectedCount = computed(
     () => this.selectedCount() - this.visibleSelectedCount(),
   );
+
+  /** Moves focus into the list (the first checkbox, or the filter when nothing is shown). */
+  focus(): void {
+    const element = this.host.nativeElement;
+    (element.querySelector<HTMLElement>('.checklist__items input') ?? element.querySelector<HTMLElement>('input'))?.focus();
+  }
 
   toggle(name: string): void {
     const next = new Set(this.selected());

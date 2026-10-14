@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ClusterApiError } from '../../core/api-envelope';
 import {
   CAT_APIS,
   CAT_API_INFO,
@@ -10,7 +9,6 @@ import {
   catCellText,
   catCellTone,
   catColumns,
-  catErrorReason,
   catKeyParts,
   catRowsToTsv,
   isCatRecord,
@@ -109,7 +107,7 @@ describe('CAT sorting', () => {
   ];
 
   it('sorts numeric-looking values numerically and stably', () => {
-    expect(sortCatRows(rows, 'docs', 'asc').map((row) => row['name'])).toEqual([
+    expect(sortCatRows(rows, 'docs', false).map((row) => row['name'])).toEqual([
       'node-2',
       'node-3',
       'node-10',
@@ -118,7 +116,7 @@ describe('CAT sorting', () => {
   });
 
   it('sorts descending while keeping missing values at the end', () => {
-    expect(sortCatRows(rows, 'docs', 'desc').map((row) => row['name'])).toEqual([
+    expect(sortCatRows(rows, 'docs', true).map((row) => row['name'])).toEqual([
       'node-10',
       'node-2',
       'node-3',
@@ -128,12 +126,12 @@ describe('CAT sorting', () => {
 
   it('does not mutate the API response', () => {
     const copy = [...rows];
-    sortCatRows(rows, 'name', 'asc');
+    sortCatRows(rows, 'name', false);
     expect(rows).toEqual(copy);
   });
 
   it('keeps the natural order without a sort column', () => {
-    expect(sortCatRows(rows, null, 'asc')).toEqual(rows);
+    expect(sortCatRows(rows, null, false)).toEqual(rows);
   });
 
   it('sorts sizes, durations and percentages by magnitude', () => {
@@ -143,14 +141,14 @@ describe('CAT sorting', () => {
       { i: 'c', size: '3gb' },
       { i: 'd', size: '900b' },
     ];
-    expect(sortCatRows(sizes, 'size', 'desc').map((row) => row['i'])).toEqual(['c', 'a', 'b', 'd']);
+    expect(sortCatRows(sizes, 'size', true).map((row) => row['i'])).toEqual(['c', 'a', 'b', 'd']);
 
     const times: readonly CatRow[] = [
       { i: 'a', time: '1.5s' },
       { i: 'b', time: '28ms' },
       { i: 'c', time: '2m' },
     ];
-    expect(sortCatRows(times, 'time', 'asc').map((row) => row['i'])).toEqual(['b', 'a', 'c']);
+    expect(sortCatRows(times, 'time', false).map((row) => row['i'])).toEqual(['b', 'a', 'c']);
   });
 
   it('treats CAT placeholders as missing values', () => {
@@ -160,8 +158,8 @@ describe('CAT sorting', () => {
       { i: 'c', wait: 'n/a' },
       { i: 'd', wait: '1s' },
     ];
-    expect(sortCatRows(waits, 'wait', 'asc').map((row) => row['i'])).toEqual(['b', 'd', 'a', 'c']);
-    expect(sortCatRows(waits, 'wait', 'desc').map((row) => row['i'])).toEqual(['d', 'b', 'a', 'c']);
+    expect(sortCatRows(waits, 'wait', false).map((row) => row['i'])).toEqual(['b', 'd', 'a', 'c']);
+    expect(sortCatRows(waits, 'wait', true).map((row) => row['i'])).toEqual(['d', 'b', 'a', 'c']);
   });
 });
 
@@ -232,21 +230,5 @@ describe('CAT filtering and export', () => {
         { index: 'c' },
       ]),
     ).toBe('index\tnote\na\tx y\nb\tline break\nc\t');
-  });
-});
-
-describe('CAT errors', () => {
-  it('extracts the Elasticsearch reason', () => {
-    expect(
-      catErrorReason(
-        new ClusterApiError(400, { error: { reason: 'failed to parse', type: 'x' }, status: 400 }),
-      ),
-    ).toBe('failed to parse');
-    expect(catErrorReason(new ClusterApiError(405, { error: 'Incorrect HTTP method', status: 405 }))).toBe(
-      'Incorrect HTTP method',
-    );
-    expect(catErrorReason(new ClusterApiError(500, {}))).toBe('The cluster answered with status 500.');
-    expect(catErrorReason(new Error('offline'))).toBe('offline');
-    expect(catErrorReason('weird')).toBeNull();
   });
 });

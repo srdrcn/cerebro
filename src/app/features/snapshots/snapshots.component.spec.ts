@@ -219,6 +219,27 @@ describe('SnapshotsComponent', () => {
     expect(target.filtersActive()).toBe(true);
   });
 
+  it('sorts names alphabetically first and counts largest first', async () => {
+    respond({
+      alpha: [
+        snapshot('b', { start_time_in_millis: 1_000, indices: ['x', 'y'] }),
+        snapshot('a', { start_time_in_millis: 9_000, indices: ['x'] }),
+      ],
+    });
+    const target = component();
+    await target.load();
+    expect(target.sort.ariaSort('start')).toBe('descending');
+
+    target.sort.sortBy('name');
+    expect(target.rows().map((row) => row.record.snapshot)).toEqual(['a', 'b']);
+    expect(target.sort.ariaSort('name')).toBe('ascending');
+    expect(target.sortDescription()).toBe('Sorted by name, A to Z');
+
+    target.sort.sortBy('indices');
+    expect(target.rows().map((row) => row.record.snapshot)).toEqual(['b', 'a']);
+    expect(target.sort.ariaSort('indices')).toBe('descending');
+  });
+
   it('creates a snapshot of the chosen visible indices only', async () => {
     respond({ alpha: [] });
     const target = component();
@@ -263,8 +284,12 @@ describe('SnapshotsComponent', () => {
     const target = component();
     await target.load();
 
+    const nameField = document.body.appendChild(document.createElement('input'));
+    nameField.id = 'create-snapshot-name';
     target.createName.set('Taken Name');
     await target.create();
+    expect(document.activeElement).toBe(nameField);
+    nameField.remove();
     target.createName.set('taken');
     expect(target.nameError()).toMatch(/already exists/);
     await target.create();

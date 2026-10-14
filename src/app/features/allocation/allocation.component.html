@@ -20,6 +20,8 @@
           name="index"
           class="select"
           [class.is-invalid]="submitted() && !formIndex()"
+          [attr.aria-invalid]="submitted() && !formIndex()"
+          [attr.aria-describedby]="submitted() && !formIndex() ? 'alloc-form-error' : null"
           [ngModel]="formIndex()"
           (ngModelChange)="selectIndex($event)"
         >
@@ -40,13 +42,14 @@
           min="0"
           step="1"
           [attr.max]="formShardCount() > 0 ? formShardCount() - 1 : null"
-          [class.is-invalid]="submitted() && !!formError()"
+          [class.is-invalid]="submitted() && !!formIndex() && !!formError()"
+          [attr.aria-invalid]="submitted() && !!formIndex() && !!formError()"
           [attr.aria-describedby]="submitted() && formError() ? 'alloc-form-error' : null"
           [ngModel]="formShard()"
           (ngModelChange)="setShard($event)"
         />
       </div>
-      <div class="field alloc-query__copy">
+      <div class="field">
         <span class="field-label" id="alloc-copy-label">Copy</span>
         <div class="segmented" role="group" aria-labelledby="alloc-copy-label">
           <button type="button" [attr.aria-pressed]="formPrimary()" (click)="formPrimary.set(true)">Primary</button>
@@ -77,7 +80,7 @@
 
     @if (formCopies().length > 0) {
       <div class="alloc-copies">
-        <span class="alloc-copies__label" id="alloc-copies-label">Copies of shard {{ formShard() }}</span>
+        <span class="section-label" id="alloc-copies-label">Copies of shard {{ formShard() }}</span>
         <div class="alloc-copies__list" role="group" aria-labelledby="alloc-copies-label">
           @for (copy of formCopies(); track $index) {
             <button
@@ -99,13 +102,13 @@
     }
   </form>
 
-  <div class="layout-sidebar-end alloc-layout">
+  <div class="layout-sidebar-end">
     <div class="stack-lg min-w-0" [attr.aria-busy]="state().kind === 'loading'">
       <p class="visually-hidden" role="status">{{ announcement() }}</p>
       @switch (state().kind) {
         @case ('done') {
           @if (view(); as view) {
-            <article class="card alloc-summary" aria-labelledby="alloc-summary-title">
+            <article class="card" aria-labelledby="alloc-summary-title">
               <div class="card-header alloc-summary__header">
                 <div class="alloc-identity">
                   <span
@@ -148,7 +151,7 @@
 
                 @if (showBlockerSummary()) {
                   <section class="blockers" aria-labelledby="alloc-blockers-title">
-                    <h3 id="alloc-blockers-title" class="blockers__title">What is blocking it</h3>
+                    <h3 id="alloc-blockers-title" class="section-label">What is blocking it</h3>
                     <ul class="blockers__list">
                       @for (blocker of blockers(); track blocker.decider) {
                         <li class="blocker">
@@ -178,7 +181,7 @@
                 @if (view.unassigned; as info) {
                   <dl class="facts">
                     <div class="fact fact--wide">
-                      <dt>Why it is unassigned</dt>
+                      <dt class="section-label">Why it is unassigned</dt>
                       <dd>
                         <strong>{{ info.reasonLabel }}</strong>
                         @if (info.reasonText) {
@@ -187,7 +190,7 @@
                       </dd>
                     </div>
                     <div class="fact">
-                      <dt>Unassigned since</dt>
+                      <dt class="section-label">Unassigned since</dt>
                       <dd>
                         @if (info.at !== null) {
                           <strong>{{ formatRelative(info.at, now()) }}</strong>
@@ -199,12 +202,12 @@
                     </div>
                     @if (info.lastStatusLabel) {
                       <div class="fact">
-                        <dt>Last allocation attempt</dt>
+                        <dt class="section-label">Last allocation attempt</dt>
                         <dd><strong>{{ info.lastStatusLabel }}</strong></dd>
                       </div>
                     }
                     <div class="fact">
-                      <dt>Failed attempts</dt>
+                      <dt class="section-label">Failed attempts</dt>
                       <dd>
                         <strong [class.text-danger]="info.failedAttempts > 0">{{ info.failedAttempts }}</strong>
                         @if (info.delayed) {
@@ -214,14 +217,14 @@
                     </div>
                     @if (info.lastNode) {
                       <div class="fact">
-                        <dt>Last node</dt>
+                        <dt class="section-label">Last node</dt>
                         <dd><strong class="mono">{{ info.lastNode }}</strong></dd>
                       </div>
                     }
                   </dl>
                   @if (info.details) {
                     <div class="alloc-details">
-                      <div class="alloc-details__label">Details from Elasticsearch</div>
+                      <div class="section-label alloc-details__label">Details from Elasticsearch</div>
                       <pre class="alloc-details__text">{{ info.details }}</pre>
                     </div>
                   }
@@ -231,7 +234,7 @@
                   <dl class="facts">
                     @for (fact of view.facts; track fact.label) {
                       <div class="fact">
-                        <dt>{{ fact.label }}</dt>
+                        <dt class="section-label">{{ fact.label }}</dt>
                         <dd><strong [title]="fact.title ?? ''">{{ fact.value }}</strong></dd>
                       </div>
                     }
@@ -313,26 +316,26 @@
                   <table class="data-table alloc-nodes">
                     <thead class="alloc-nodes__head">
                       <tr>
-                        <th scope="col" [attr.aria-sort]="ariaSort('name')">
-                          <button type="button" class="sort-button" [class.is-active]="sortField() === 'name'" (click)="sortBy('name')">
-                            Node <i class="bi" [class]="'bi ' + sortIcon('name')" aria-hidden="true"></i>
+                        <th scope="col" [attr.aria-sort]="sort.ariaSort('name')">
+                          <button type="button" class="sort-button" [class.is-active]="sort.isActive('name')" (click)="sort.sortBy('name')">
+                            Node <i class="bi" [class]="'bi ' + sort.icon('name')" aria-hidden="true"></i>
                           </button>
                         </th>
-                        <th scope="col" [attr.aria-sort]="ariaSort('decision')">
-                          <button type="button" class="sort-button" [class.is-active]="sortField() === 'decision'" (click)="sortBy('decision')">
-                            Decision <i class="bi" [class]="'bi ' + sortIcon('decision')" aria-hidden="true"></i>
+                        <th scope="col" [attr.aria-sort]="sort.ariaSort('decision')">
+                          <button type="button" class="sort-button" [class.is-active]="sort.isActive('decision')" (click)="sort.sortBy('decision')">
+                            Decision <i class="bi" [class]="'bi ' + sort.icon('decision')" aria-hidden="true"></i>
                           </button>
                         </th>
                         @if (hasRanking()) {
-                        <th scope="col" class="alloc-nodes__weight" [attr.aria-sort]="ariaSort('weight')">
+                        <th scope="col" class="alloc-nodes__weight" [attr.aria-sort]="sort.ariaSort('weight')">
                           <button
                             type="button"
                             class="sort-button"
-                            [class.is-active]="sortField() === 'weight'"
+                            [class.is-active]="sort.isActive('weight')"
                             title="How well the node fits the shard according to the balancer (1st is best)"
-                            (click)="sortBy('weight')"
+                            (click)="sort.sortBy('weight')"
                           >
-                            Weight rank <i class="bi" [class]="'bi ' + sortIcon('weight')" aria-hidden="true"></i>
+                            Weight rank <i class="bi" [class]="'bi ' + sort.icon('weight')" aria-hidden="true"></i>
                           </button>
                         </th>
                         }
@@ -362,7 +365,7 @@
                               <div class="alloc-node__store"><i class="bi bi-database" aria-hidden="true"></i> {{ node.store }}</div>
                             }
                           </th>
-                          <td class="alloc-nodes__decision">
+                          <td>
                             <span class="badge badge-lg" [class]="'badge badge-lg badge-' + node.tone">
                               <i
                                 class="bi"
@@ -463,7 +466,7 @@
           }
         }
         @default {
-          <div class="card alloc-skeleton" role="status" aria-label="Explaining shard allocation">
+          <div class="card" role="status" aria-label="Explaining shard allocation">
             <div class="card-header">
               <span class="skeleton" style="width: 220px; height: 28px"></span>
               <span class="skeleton" style="width: 120px; height: 28px"></span>
@@ -480,7 +483,7 @@
       }
     </div>
 
-    <aside class="stack alloc-aside" aria-label="Cluster allocation status">
+    <aside class="stack" aria-label="Cluster allocation status">
       <section class="card" aria-labelledby="alloc-unassigned-title">
         <div class="card-header">
           <h2 id="alloc-unassigned-title" class="card-title">
@@ -506,7 +509,7 @@
           <cerebro-empty [compact]="true" class="alloc-all-good" icon="bi-check2-all" heading="Nothing unassigned" text="Every shard copy is allocated to a node." />
         } @else {
           <p class="alloc-aside__hint">Choose a shard to see why Elasticsearch cannot place it.</p>
-          <ul class="list alloc-unassigned">
+          <ul class="list">
             @for (group of visibleUnassigned(); track group.index) {
               <li class="list-item alloc-unassigned__item">
                 <div class="list-item__body">

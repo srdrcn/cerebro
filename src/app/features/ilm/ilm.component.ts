@@ -16,13 +16,16 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { formatDuration } from '../../core/format';
+import { elasticsearchReason, failureMessage } from '../../core/errors';
+import { formatDuration, pluralize } from '../../core/format';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
+import { createSort } from '../../shared/sort-state';
 import {
   ExplainFilter,
   ExplainRow,
@@ -35,7 +38,6 @@ import {
 import {
   NEW_POLICY_BODY,
   analyzePolicyBody,
-  errorReason,
   filterExplain,
   filterPolicies,
   needsAttention,
@@ -85,7 +87,7 @@ const USAGE_PREVIEW = 8;
   styleUrl: './ilm.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class IlmComponent {
+export class IlmComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
@@ -114,7 +116,8 @@ export class IlmComponent {
   readonly name = signal('');
   readonly body = signal(NEW_POLICY_BODY);
   readonly baseline = signal<EditorBaseline>(NEW_BASELINE);
-  readonly nameTouched = signal(false);
+  /** Set by the first save attempt: field errors show from then on. */
+  readonly submitted = signal(false);
   readonly saving = signal(false);
   readonly deleting = signal(false);
   readonly expandedUsage = signal<ReadonlySet<string>>(new Set());
@@ -140,7 +143,7 @@ export class IlmComponent {
   );
 
   readonly nameValidation = computed(() => validatePolicyName(this.name()));
-  readonly nameError = computed(() => (this.name() !== '' || this.nameTouched() ? this.nameValidation() : null));
+  readonly nameError = computed(() => (this.name() !== '' || this.submitted() ? this.nameValidation() : null));
 
   readonly bodyState = computed(() => analyzePolicyBody(this.body()));
   readonly bodyError = computed(() => {
@@ -169,37 +172,28 @@ export class IlmComponent {
 
   readonly mode = computed(() => saveMode(this.name(), this.selected(), this.names()));
   readonly saveLabel = computed(() => SAVE_LABELS[this.mode()]);
-  readonly blocker = computed<string | null>(() => {
-    if (this.nameValidation()) {
-      return this.nameValidation();
-    }
-    if (this.bodyError()) {
-      return 'Fix the policy JSON';
-    }
-    if (this.mode() === 'update' && !this.dirty() && !this.selectedMissing()) {
-      return 'No changes to save';
-    }
-    return null;
-  });
-  readonly canSave = computed(() => this.blocker() === null && !this.saving() && !this.deleting());
 
   // ---- Lifecycle status ----
   readonly explainTarget = signal('');
+  readonly explainSubmitted = signal(false);
+  readonly explainTargetError = computed(() =>
+    this.explainSubmitted() && !this.explainTarget().trim() ? 'Enter an index, data stream or pattern' : null,
+  );
   readonly explainedTarget = signal<string | null>(null);
   readonly explainRows = signal<readonly ExplainRow[] | undefined>(undefined);
   readonly explainLoading = signal(false);
   readonly explainError = signal<string | null>(null);
   readonly explainFilter = signal<ExplainFilter>('all');
   readonly explainQuery = signal('');
-  readonly explainSort = signal<ExplainSortField>('index');
-  readonly explainReverse = signal(false);
+  /** Age starts with the oldest index first. */
+  readonly explainSort = createSort<ExplainSortField>('index', { descendingFirst: (field) => field === 'age' });
 
   readonly explainSummary = computed(() => summarizeExplain(this.explainRows() ?? []));
   readonly visibleExplainRows = computed(() =>
     sortExplain(
       filterExplain(this.explainRows() ?? [], this.explainFilter(), this.explainQuery()),
-      this.explainSort(),
-      this.explainReverse(),
+      this.explainSort.field(),
+      this.explainSort.reverse(),
     ),
   );
 
@@ -356,7 +350,7 @@ export class IlmComponent {
     this.name.set(policy.name);
     this.body.set(source);
     this.baseline.set({ name: policy.name, body: source });
-    this.nameTouched.set(false);
+    this.submitted.set(false);
     this.expandedUsage.set(new Set());
     this.updateUrl();
   }
@@ -384,7 +378,7 @@ export class IlmComponent {
     const baseline = this.baseline();
     this.name.set(baseline.name);
     this.body.set(baseline.body);
-    this.nameTouched.set(false);
+    this.submitted.set(false);
   }
 
   format(): void {
@@ -406,19 +400,23 @@ export class IlmComponent {
     }
   }
 
+  /** Validates on submit: the first invalid field gets the focus. */
   async save(): Promise<void> {
-    if (this.saving()) {
+    if (this.saving() || this.deleting()) {
       return;
     }
-    if (!this.canSave()) {
-      this.nameTouched.set(true);
-      if (this.nameValidation()) {
-        this.nameInput()?.nativeElement.focus();
-      }
+    this.submitted.set(true);
+    if (this.nameValidation()) {
+      this.nameInput()?.nativeElement.focus();
       return;
     }
     const state = this.bodyState();
     if (!state.ok) {
+      this.editor()?.focus();
+      return;
+    }
+    if (this.mode() === 'update' && !this.dirty() && !this.selectedMissing()) {
+      this.alerts.info(`Policy ${this.name()} has no unsaved changes`);
       return;
     }
     const name = this.name();
@@ -448,11 +446,11 @@ export class IlmComponent {
       if (tracked) {
         this.selected.set(name);
         this.baseline.set({ name, body });
-        this.nameTouched.set(false);
+        this.submitted.set(false);
         this.updateUrl();
       }
     } catch (error: unknown) {
-      this.alerts.error(`Could not save policy ${name}: ${errorReason(error) ?? 'unknown error'}`, error);
+      this.alerts.error(failureMessage(`Could not save policy ${name}`, error), error);
       return;
     } finally {
       this.saving.set(false);
@@ -496,7 +494,7 @@ export class IlmComponent {
       }
       await this.load();
     } catch (error: unknown) {
-      this.alerts.error(`Could not delete policy ${policy.name}: ${errorReason(error) ?? 'unknown error'}`, error);
+      this.alerts.error(failureMessage(`Could not delete policy ${policy.name}`, error), error);
     } finally {
       this.deleting.set(false);
     }
@@ -535,19 +533,24 @@ export class IlmComponent {
     void this.explain(explain.target);
   }
 
-  usageLabel = usageLabel;
-  needsAttention = needsAttention;
+  readonly usageLabel = usageLabel;
+  readonly needsAttention = needsAttention;
+  readonly pluralize = pluralize;
 
   private resetEditor(): void {
     this.selected.set(null);
     this.name.set(NEW_BASELINE.name);
     this.body.set(NEW_BASELINE.body);
     this.baseline.set(NEW_BASELINE);
-    this.nameTouched.set(false);
+    this.submitted.set(false);
     this.updateUrl();
   }
 
-  private async confirmDiscard(): Promise<boolean> {
+  /**
+   * Resolves `true` when the editor holds nothing unsaved or the user agreed
+   * to drop it. Used when switching policies and by the route guard.
+   */
+  async confirmDiscard(): Promise<boolean> {
     if (!this.dirty()) {
       return true;
     }
@@ -591,6 +594,7 @@ export class IlmComponent {
 
   submitExplain(): void {
     const target = this.explainTarget().trim();
+    this.explainSubmitted.set(true);
     if (!target) {
       this.explainInput()?.nativeElement.focus();
       return;
@@ -625,7 +629,7 @@ export class IlmComponent {
       }
     } catch (error: unknown) {
       if (sequence === this.explainSequence) {
-        this.explainError.set(errorReason(error) ?? 'The cluster did not answer the explain request.');
+        this.explainError.set(elasticsearchReason(error) ?? 'The cluster did not answer the explain request.');
         if (!silent) {
           this.explainRows.set(undefined);
           this.explainedTarget.set(null);
@@ -640,29 +644,6 @@ export class IlmComponent {
 
   retryExplain(): void {
     void this.explain(this.explainedTarget() ?? this.explainTarget());
-  }
-
-  sortExplainBy(field: ExplainSortField): void {
-    if (this.explainSort() === field) {
-      this.explainReverse.update((value) => !value);
-    } else {
-      this.explainSort.set(field);
-      this.explainReverse.set(field === 'age');
-    }
-  }
-
-  ariaSort(field: ExplainSortField): 'ascending' | 'descending' | 'none' {
-    if (this.explainSort() !== field) {
-      return 'none';
-    }
-    return this.explainReverse() ? 'descending' : 'ascending';
-  }
-
-  sortIcon(field: ExplainSortField): string {
-    if (this.explainSort() !== field) {
-      return 'bi-arrow-down-up';
-    }
-    return this.explainReverse() ? 'bi-arrow-down' : 'bi-arrow-up';
   }
 
   showExplainJson(row: ExplainRow): void {

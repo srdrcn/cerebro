@@ -13,12 +13,12 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { matchesText } from '../../core/format';
+import { elasticsearchReason } from '../../core/errors';
+import { matchesText, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
-import { errorReason } from '../snapshots/snapshots.utils';
 import {
   REPOSITORY_TYPES,
   RepositoryExtraSetting,
@@ -77,6 +77,7 @@ export class RepositoriesComponent {
 
   readonly filterThreshold = FILTER_THRESHOLD;
   readonly showsSettingKey = showsSettingKey;
+  readonly pluralize = pluralize;
 
   readonly repositories = signal<readonly RepositoryRecord[] | undefined>(undefined);
   readonly failed = signal(false);
@@ -123,9 +124,13 @@ export class RepositoriesComponent {
     (this.repositories() ?? []).find((repository) => repository.name === this.name().trim()),
   );
   readonly updateMode = computed(() => this.original() !== undefined);
+  /** The form is already an empty "Register repository" form. */
+  readonly blankForm = computed(
+    () => this.editing() === null && !this.name() && !this.type() && this.extras().length === 0,
+  );
 
   readonly nameError = computed(() => validateRepositoryName(this.name()));
-  readonly typeError = computed(() => (this.type() ? null : 'Choose where the snapshots are stored.'));
+  readonly typeError = computed(() => (this.type() ? null : 'Choose where the snapshots are stored'));
   readonly extrasError = computed(() => validateExtraSettings(this.type(), this.extras()));
   readonly valid = computed(() => !this.nameError() && !this.typeError() && !this.extrasError());
 
@@ -301,8 +306,12 @@ export class RepositoriesComponent {
 
   async save(): Promise<void> {
     this.submitted.set(true);
+    if (this.saving()) {
+      return;
+    }
     const payload = this.payload();
-    if (!payload || this.saving()) {
+    if (!payload) {
+      this.focusFirstInvalid();
       return;
     }
     const updating = this.updateMode();
@@ -336,7 +345,7 @@ export class RepositoriesComponent {
         this.edit(saved);
       }
     } catch (error: unknown) {
-      this.saveError.set(errorReason(error) ?? 'Elasticsearch rejected the request.');
+      this.saveError.set(elasticsearchReason(error) ?? 'Elasticsearch rejected the request.');
       this.alerts.error(
         updating ? `Could not update repository ${payload.name}` : `Could not register repository ${payload.name}`,
         error,
@@ -380,6 +389,23 @@ export class RepositoriesComponent {
         next.delete(name);
         return next;
       });
+    }
+  }
+
+  private focusFirstInvalid(): void {
+    if (this.nameError()) {
+      document.getElementById('repository-name')?.focus();
+      return;
+    }
+    if (this.typeError()) {
+      document.querySelector<HTMLInputElement>('input[name="repository-type"]')?.focus();
+      return;
+    }
+    // The first additional setting that makes the list invalid.
+    const extras = this.extras();
+    const culprit = extras.find((_, index) => validateExtraSettings(this.type(), extras.slice(0, index + 1)) !== null);
+    if (culprit) {
+      document.getElementById(`repository-extra-key-${culprit.id}`)?.focus();
     }
   }
 

@@ -17,6 +17,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import { DialogService } from '../../core/dialog.service';
+import { pluralize } from '../../core/format';
 import { readPreference, writePreference } from '../../core/preferences';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
@@ -117,6 +118,7 @@ export class SettingsEditorComponent {
   readonly review = output<readonly PendingChange[]>();
 
   readonly id = `settings-editor-${nextEditorId++}`;
+  readonly pluralize = pluralize;
   readonly query = signal('');
   readonly showStatic = signal(false);
   readonly onlyOverridden = signal(false);
@@ -191,10 +193,15 @@ export class SettingsEditorComponent {
     });
   });
 
+  /** The search or "Only overridden" narrows the list (the static toggle only shapes it). */
+  readonly filtering = computed(() => this.query().trim() !== '' || this.onlyOverridden());
+
   readonly counts = computed(() => {
     const rows = this.rows();
+    const showStatic = this.showStatic();
     return {
-      total: this.allRows().length,
+      /** Settings listed while no filter is active. */
+      total: this.allRows().filter((row) => showStatic || row.editable).length,
       static: rows.filter((row) => !row.editable).length,
       overridden: rows.filter((row) => isOverridden(row)).length,
     };
@@ -390,8 +397,8 @@ export class SettingsEditorComponent {
     const count = this.pending().length;
     if (count > 1) {
       const confirmed = await this.dialogs.confirm({
-        title: `Discard ${count} pending changes?`,
-        message: 'Your edits have not been saved and will be lost.',
+        title: 'Discard unsaved changes?',
+        message: `${pluralize(count, 'unsaved change')} will be lost.`,
         items: this.pending().map((change) => change.name),
         confirmLabel: 'Discard changes',
         cancelLabel: 'Keep editing',
@@ -486,23 +493,6 @@ export class SettingsEditorComponent {
     }
     this.cancelAdd();
     this.reveal(name);
-  }
-
-  originLabel(row: SettingRow): string {
-    switch (row.origin) {
-      case 'persistent':
-        return 'Persistent';
-      case 'transient':
-        return 'Transient';
-      case 'index':
-        return 'Overridden';
-      default:
-        return '';
-    }
-  }
-
-  plural(count: number, noun: string): string {
-    return `${count} ${noun}${count === 1 ? '' : 's'}`;
   }
 
   private inputIdFor(name: string): string {

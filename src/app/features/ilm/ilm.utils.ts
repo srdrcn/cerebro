@@ -1,3 +1,6 @@
+import { elasticsearchReason } from '../../core/errors';
+import { formatCompact, formatNumber, pluralize, sentence } from '../../core/format';
+import { JsonRecord, isRecord, stringList } from '../../core/json';
 import {
   ActionView,
   ExplainFilter,
@@ -19,20 +22,6 @@ import {
   SaveMode,
   UsageExplainTarget,
 } from './ilm.models';
-
-type JsonRecord = Readonly<Record<string, unknown>>;
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
-
-function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
-  return `${count.toLocaleString('en-US')} ${count === 1 ? singular : pluralForm}`;
-}
 
 // ---------------------------------------------------------------------------
 // Values
@@ -70,7 +59,7 @@ const SIZE_UNITS = ['b', 'kb', 'mb', 'gb', 'tb', 'pb'];
 /** "10gb" → "10 GB"; anything else is returned unchanged. */
 export function formatSizeValue(value: unknown): string {
   if (typeof value === 'number') {
-    return `${value.toLocaleString('en-US')} B`;
+    return `${formatNumber(value)} B`;
   }
   const text = String(value ?? '');
   const match = /^\s*(\d+(?:\.\d+)?)\s*([kmgtp]?b)\s*$/i.exec(text);
@@ -85,9 +74,7 @@ function formatCount(value: unknown): string {
   if (!Number.isFinite(number)) {
     return String(value);
   }
-  return number >= 10_000
-    ? new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(number)
-    : number.toLocaleString('en-US');
+  return number >= 10_000 ? formatCompact(number) : formatNumber(number);
 }
 
 /** Compact JSON for unknown option values shown inline. */
@@ -113,10 +100,6 @@ export function isManagedPolicy(name: string, policy: IlmPolicyBody | undefined)
 
 export function phaseTone(name: string | null | undefined): PhaseTone {
   return PHASE_ORDER.includes(name as never) ? (name as PhaseTone) : 'other';
-}
-
-export function phaseLabel(name: string): string {
-  return name ? name.charAt(0).toUpperCase() + name.slice(1) : name;
 }
 
 /** True when the phase starts right away (no min_age, or a zero min_age). */
@@ -159,10 +142,10 @@ function describeRollover(config: JsonRecord): Pick<ActionView, 'label' | 'detai
 function describeAllocate(config: JsonRecord): Pick<ActionView, 'label' | 'detail'> {
   const parts: string[] = [];
   if (typeof config['number_of_replicas'] === 'number') {
-    parts.push(plural(config['number_of_replicas'], 'replica'));
+    parts.push(pluralize(config['number_of_replicas'], 'replica'));
   }
   if (typeof config['total_shards_per_node'] === 'number' && config['total_shards_per_node'] >= 0) {
-    parts.push(`at most ${plural(config['total_shards_per_node'], 'shard')} per node`);
+    parts.push(`at most ${pluralize(config['total_shards_per_node'], 'shard')} per node`);
   }
   const rules: string[] = [];
   for (const kind of ['require', 'include', 'exclude'] as const) {
@@ -202,7 +185,7 @@ export function describeAction(type: string, value: unknown, phase = ''): Action
       const segments = config['max_num_segments'];
       const codec = config['index_codec'];
       return view(
-        typeof segments === 'number' ? `Force merge to ${plural(segments, 'segment')}` : 'Force merge',
+        typeof segments === 'number' ? `Force merge to ${pluralize(segments, 'segment')}` : 'Force merge',
         'bi-arrows-collapse',
         typeof codec === 'string' ? `Recompress with the ${codec} codec` : null,
       );
@@ -212,7 +195,7 @@ export function describeAction(type: string, value: unknown, phase = ''): Action
       const size = config['max_primary_shard_size'];
       const label =
         typeof shards === 'number'
-          ? `Shrink to ${plural(shards, 'shard')}`
+          ? `Shrink to ${pluralize(shards, 'shard')}`
           : size !== undefined
             ? `Shrink to primary shards of at most ${formatSizeValue(size)}`
             : 'Shrink';
@@ -280,7 +263,7 @@ export function phaseViews(policy: IlmPolicyBody | undefined): PhaseView[] {
     const actions = isRecord(phase.actions) ? phase.actions : {};
     return {
       name,
-      label: phaseLabel(name),
+      label: sentence(name),
       tone: phaseTone(name),
       minAge: immediate ? null : minAge,
       startLabel: immediate
@@ -301,9 +284,9 @@ export function policyUsage(entry: IlmPolicyEntry): IlmUsage {
 /** "3 indices · 2 data streams", or "Not in use". */
 export function usageLabel(usage: IlmUsage): string {
   const parts = [
-    usage.indices.length > 0 ? plural(usage.indices.length, 'index', 'indices') : '',
-    usage.dataStreams.length > 0 ? plural(usage.dataStreams.length, 'data stream') : '',
-    usage.templates.length > 0 ? plural(usage.templates.length, 'template') : '',
+    usage.indices.length > 0 ? pluralize(usage.indices.length, 'index', 'indices') : '',
+    usage.dataStreams.length > 0 ? pluralize(usage.dataStreams.length, 'data stream') : '',
+    usage.templates.length > 0 ? pluralize(usage.templates.length, 'template') : '',
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(' · ') : 'Not in use';
 }
@@ -483,7 +466,7 @@ function stepInfoReason(info: unknown): string | null {
   if (!isRecord(info)) {
     return typeof info === 'string' && info.trim() ? info : null;
   }
-  const reason = errorReason(info);
+  const reason = elasticsearchReason(info);
   if (reason) {
     return reason;
   }
@@ -633,44 +616,4 @@ export function usageExplainTarget(usage: IlmUsage, policyName: string): UsageEx
     return { target: '*,.ds-*', query: policyName };
   }
   return { target, query: '' };
-}
-
-// ---------------------------------------------------------------------------
-// Errors
-// ---------------------------------------------------------------------------
-
-/**
- * Human readable reason of a failed request. For Elasticsearch errors the
- * root cause is preferred over generic wrappers such as "failed to parse
- * field [policy]", and parser positions like "[1:40]" are removed.
- */
-export function errorReason(value: unknown, depth = 0): string | null {
-  if (depth > 6 || value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === 'string') {
-    const text = value.replace(/^\[\d+:\d+\]\s*/, '').trim();
-    return text || null;
-  }
-  if (!isRecord(value)) {
-    return null;
-  }
-  const rootCause = value['root_cause'];
-  for (const candidate of [Array.isArray(rootCause) ? rootCause[0] : undefined, value['caused_by']]) {
-    const reason = errorReason(candidate, depth + 1);
-    if (reason) {
-      return reason;
-    }
-  }
-  if (typeof value['reason'] === 'string') {
-    const reason = errorReason(value['reason'], depth + 1);
-    if (reason) {
-      return reason;
-    }
-  }
-  const nested = errorReason(value['error'], depth + 1) ?? errorReason(value['body'], depth + 1);
-  if (nested) {
-    return nested;
-  }
-  return value instanceof Error && value.message ? value.message : null;
 }

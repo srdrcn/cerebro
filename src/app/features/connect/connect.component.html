@@ -106,13 +106,16 @@
             <div class="auth-divider">or enter a node address</div>
           }
 
-          <form class="stack-sm" (ngSubmit)="connectTo(host())">
+          <form class="stack-sm" (ngSubmit)="submitHost()">
             <label class="field-label" for="host">Node address</label>
             <div class="connect-row">
               <input
                 id="host"
                 name="host"
                 class="input"
+                [class.is-invalid]="hostError()"
+                [attr.aria-invalid]="hostError() ? true : null"
+                [attr.aria-describedby]="hostError() ? 'host-error' : null"
                 type="text"
                 inputmode="url"
                 autocomplete="url"
@@ -126,12 +129,15 @@
                 type="submit"
                 class="btn btn-primary"
                 [class.is-loading]="connecting() !== undefined && connecting() === host().trim()"
-                [disabled]="connecting() !== undefined || !host().trim()"
+                [disabled]="connecting() !== undefined"
               >
                 Connect
                 <i class="bi bi-arrow-right" aria-hidden="true"></i>
               </button>
             </div>
+            @if (hostError()) {
+              <p id="host-error" class="field-error">Enter the address of an Elasticsearch node</p>
+            }
           </form>
         </div>
       } @else {
@@ -170,9 +176,15 @@
                 autocomplete="username"
                 required
                 placeholder="elastic"
+                [class.is-invalid]="usernameError()"
+                [attr.aria-invalid]="usernameError() ? true : null"
+                [attr.aria-describedby]="usernameError() ? 'username-error' : null"
                 [ngModel]="username()"
                 (ngModelChange)="username.set($event)"
               />
+              @if (usernameError()) {
+                <p id="username-error" class="field-error">Enter a username</p>
+              }
             </div>
             <div class="field">
               <label class="field-label" for="password">Password</label>
@@ -183,15 +195,21 @@
                 type="password"
                 autocomplete="current-password"
                 required
+                [class.is-invalid]="passwordError()"
+                [attr.aria-invalid]="passwordError() ? true : null"
+                [attr.aria-describedby]="passwordError() ? 'password-error' : null"
                 [ngModel]="password()"
                 (ngModelChange)="password.set($event)"
               />
+              @if (passwordError()) {
+                <p id="password-error" class="field-error">Enter a password</p>
+              }
             </div>
             <button
               type="submit"
               class="btn btn-primary btn-block"
               [class.is-loading]="connecting() !== undefined"
-              [disabled]="connecting() !== undefined || !username() || !password()"
+              [disabled]="connecting() !== undefined"
             >
               Authenticate
             </button>

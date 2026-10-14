@@ -16,12 +16,13 @@ import { FormsModule } from '@angular/forms';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { DialogService } from '../../core/dialog.service';
+import { elasticsearchReason } from '../../core/errors';
+import { pluralize } from '../../core/format';
 import { readJsonPreference, writeJsonPreference } from '../../core/preferences';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { AnalysisMode, AnalysisRun, OptionGroup, TextSegment } from './analysis.models';
 import {
   analysisAnnouncement,
-  analysisErrorReason,
   analyzerGroups,
   asNames,
   asTokens,
@@ -97,6 +98,7 @@ export class AnalysisPanelComponent {
   readonly indicesLoading = input(false);
 
   readonly id = `analysis-${nextPanelId++}`;
+  readonly pluralize = pluralize;
   readonly config = computed(() => MODES[this.mode()]);
   readonly shortcut = /Mac|iPhone|iPad/.test(this.document.defaultView?.navigator.userAgent ?? '')
     ? '⌘'
@@ -306,7 +308,7 @@ export class AnalysisPanelComponent {
         return;
       }
       this.run.set(null);
-      this.runError.set(analysisErrorReason(error) ?? 'The cluster could not analyze the text.');
+      this.runError.set(elasticsearchReason(error) ?? 'The cluster could not analyze the text.');
       this.alerts.error(`Could not analyze the text with ${request.target}`, error);
     } finally {
       if (sequence === this.analyzeSequence) {

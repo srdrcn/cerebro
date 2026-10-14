@@ -160,7 +160,7 @@
             <button type="button" class="btn btn-sm" (click)="resetFilters()">Clear filters</button>
           </cerebro-empty>
         } @else {
-          <div class="rec-groups">
+          <div>
             @for (group of visibleGroups(); track group.index) {
               <section class="rec-group" [class.is-done]="group.active === 0" [attr.aria-label]="'Recoveries of ' + group.index">
                 <header class="rec-group__head">
@@ -205,7 +205,7 @@
                       </div>
 
                       <div class="rec-row__route">
-                        <span class="rec-label">Route</span>
+                        <span class="section-label rec-label">Route</span>
                         <div class="rec-route">
                           <span class="rec-route__node truncate" [title]="source(recovery)">{{ source(recovery) }}</span>
                           <i class="bi bi-arrow-right rec-route__arrow" aria-hidden="true"></i>
@@ -215,7 +215,7 @@
                       </div>
 
                       <div class="rec-row__stage">
-                        <span class="rec-label">Stage</span>
+                        <span class="section-label rec-label">Stage</span>
                         <div class="rec-stage">
                           <ol class="rec-steps" [attr.aria-label]="'Stage: ' + stageLabel(recovery.stage)">
                             @for (step of stages; track step; let i = $index) {
@@ -231,7 +231,7 @@
                           @let view = metricView(recovery, metric.kind);
                           <div class="rec-metric">
                             <div class="rec-metric__head">
-                              <span class="rec-label">{{ metric.label }}</span>
+                              <span class="section-label rec-label">{{ metric.label }}</span>
                               <span class="rec-metric__value tabular">{{ view.label }}</span>
                             </div>
                             <cerebro-meter [value]="view.value" [small]="true" [warn]="101" [danger]="101" [label]="metric.label + ' progress of shard ' + recovery.shard" />
@@ -241,7 +241,7 @@
                       </div>
 
                       <div class="rec-row__time">
-                        <span class="rec-label">{{ recovery.done ? 'Took' : 'Elapsed' }}</span>
+                        <span class="section-label rec-label">{{ recovery.done ? 'Took' : 'Elapsed' }}</span>
                         <span class="rec-time tabular">{{ recovery.timeMs | duration }}</span>
                         @if (rate(recovery); as rate) {
                           <span class="rec-time__rate tabular">{{ rate | bytes }}/s</span>
@@ -260,8 +260,10 @@
             <span class="text-xs text-muted">
               @if (loading()) {
                 <span class="spinner rec-inline-spinner" aria-hidden="true"></span> Updating…
+              } @else if (filtersActive()) {
+                {{ filtered().length | num }} of {{ pluralize(all.length, 'recovery', 'recoveries') }}
               } @else {
-                {{ pluralize(filtered().length, 'recovery', 'recoveries') }}
+                {{ pluralize(all.length, 'recovery', 'recoveries') }}
               }
             </span>
             <cerebro-pager [page]="currentPage()" [pageSize]="pageSize" [total]="groups().length" noun="indices" (pageChange)="page.set($event)" />

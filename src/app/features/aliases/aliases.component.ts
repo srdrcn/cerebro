@@ -3,6 +3,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
   afterNextRender,
   computed,
   effect,
@@ -12,18 +13,21 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
+import { pluralize } from '../../core/format';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { PagerComponent, clampPage, pageSlice } from '../../shared/pager.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
-import { PendingChangesAware, registerPendingChangesGuard } from './aliases.guard';
+import { createSort } from '../../shared/sort-state';
 import {
   AliasChange,
   AliasDraft,
@@ -56,7 +60,6 @@ import {
   filterAliasRows,
   filterLabel,
   otherWriteIndices,
-  pluralize,
   prettyJson,
   revertChange,
   routingTags,
@@ -93,8 +96,12 @@ export class AliasesComponent implements PendingChangesAware {
   private readonly clipboard = inject(ClipboardService);
   private readonly refreshService = inject(RefreshService);
   private readonly connection = inject(ConnectionService);
+  private readonly injector = inject(Injector);
 
   private readonly aliasInput = viewChild<ElementRef<HTMLInputElement>>('aliasInput');
+  private readonly indexSelect = viewChild<ElementRef<HTMLSelectElement>>('indexSelect');
+  private readonly indexRoutingInput = viewChild<ElementRef<HTMLInputElement>>('indexRoutingInput');
+  private readonly filterEditor = viewChild<CodeEditorComponent>('filterEditor');
   private readonly pendingCard = viewChild<ElementRef<HTMLElement>>('pendingCard');
   private readonly pendingHeading = viewChild<ElementRef<HTMLElement>>('pendingHeading');
 
@@ -110,8 +117,7 @@ export class AliasesComponent implements PendingChangesAware {
   // ---- Table --------------------------------------------------------------
   readonly aliasQuery = signal('');
   readonly indexQuery = signal('');
-  readonly sortField = signal<AliasSortField>('alias');
-  readonly reverse = signal(false);
+  readonly sort = createSort<AliasSortField>('alias');
   readonly page = signal(1);
   readonly expanded = signal<ReadonlySet<string>>(new Set());
 
@@ -140,8 +146,8 @@ export class AliasesComponent implements PendingChangesAware {
   readonly visibleRows = computed(() =>
     sortAliasRows(
       filterAliasRows(this.rows(), this.aliasQuery(), this.indexQuery()),
-      this.sortField(),
-      this.reverse(),
+      this.sort.field(),
+      this.sort.reverse(),
     ),
   );
 
@@ -260,14 +266,12 @@ export class AliasesComponent implements PendingChangesAware {
   readonly routing = routingTags;
   readonly filterLabel = filterLabel;
   readonly pretty = prettyJson;
+  readonly pluralize = pluralize;
 
   private loadSequence = 0;
   private loadedHost: string | undefined;
 
   constructor() {
-    // Asks before in-app navigation drops staged changes.
-    registerPendingChangesGuard(inject(ActivatedRoute).routeConfig);
-
     effect(() => {
       this.refreshService.tick();
       const host = this.connection.host();
@@ -321,21 +325,21 @@ export class AliasesComponent implements PendingChangesAware {
         } catch (error: unknown) {
           // An unexpected response shape.
           this.failed.set(true);
-          this.alerts.error('Error while loading aliases', error);
+          this.alerts.error(failureMessage('Could not load aliases', error), error);
         }
       } else {
         this.failed.set(true);
-        this.alerts.error('Error while loading aliases', aliases.reason);
+        this.alerts.error(failureMessage('Could not load aliases', aliases.reason), aliases.reason);
       }
       if (indices.status === 'fulfilled') {
         this.indices.set(sortIndexOptions(indices.value));
       } else if (aliasesLoaded) {
-        this.alerts.error('Error while loading the index list', indices.reason);
+        this.alerts.error(failureMessage('Could not load the index list', indices.reason), indices.reason);
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Error while loading aliases', error);
+        this.alerts.error(failureMessage('Could not load aliases', error), error);
       }
     } finally {
       if (sequence === this.loadSequence) {
@@ -343,7 +347,6 @@ export class AliasesComponent implements PendingChangesAware {
       }
     }
   }
-
 
   private resetForHost(): void {
     this.loadSequence++;
@@ -381,29 +384,6 @@ export class AliasesComponent implements PendingChangesAware {
     if (card.getBoundingClientRect().top < 64) {
       card.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
-  }
-
-  sortBy(field: AliasSortField): void {
-    if (this.sortField() === field) {
-      this.reverse.update((value) => !value);
-    } else {
-      this.sortField.set(field);
-      this.reverse.set(false);
-    }
-  }
-
-  ariaSort(field: AliasSortField): 'ascending' | 'descending' | 'none' {
-    if (this.sortField() !== field) {
-      return 'none';
-    }
-    return this.reverse() ? 'descending' : 'ascending';
-  }
-
-  sortIcon(field: AliasSortField): string {
-    if (this.sortField() !== field) {
-      return 'bi-arrow-down-up';
-    }
-    return this.reverse() ? 'bi-arrow-down' : 'bi-arrow-up';
   }
 
   isExpanded(key: string): boolean {
@@ -481,10 +461,12 @@ export class AliasesComponent implements PendingChangesAware {
       if (errors.filter || errors.indexRouting) {
         this.advancedOpen.set(true);
       }
+      this.focusFirstInvalid(errors);
       return;
     }
     const status = this.draftStatus();
     if (status === 'same') {
+      this.announce('Nothing to stage: the assignment already has these settings.');
       return;
     }
     const record = this.tryBuildRecord();
@@ -521,6 +503,24 @@ export class AliasesComponent implements PendingChangesAware {
     this.advancedOpen.set(false);
     this.submitted.set(false);
     this.touched.set(new Set());
+  }
+
+  /** Moves focus to the first field with an error, once the advanced section has rendered. */
+  private focusFirstInvalid(errors: AliasDraftErrors): void {
+    afterNextRender(
+      () => {
+        if (errors.alias) {
+          this.aliasInput()?.nativeElement.focus();
+        } else if (errors.index) {
+          this.indexSelect()?.nativeElement.focus();
+        } else if (errors.indexRouting) {
+          this.indexRoutingInput()?.nativeElement.focus();
+        } else if (errors.filter) {
+          this.filterEditor()?.focus();
+        }
+      },
+      { injector: this.injector },
+    );
   }
 
   touch(field: DraftField): void {
@@ -597,7 +597,7 @@ export class AliasesComponent implements PendingChangesAware {
       }
       this.alerts.success(`Applied ${pluralize(submitted.length, 'alias change')}`, response);
     } catch (error: unknown) {
-      this.alerts.error('Error while updating aliases', error);
+      this.alerts.error(failureMessage('Could not apply the alias changes', error), error);
       // The cluster probably changed underneath: reloading flags the staged
       // changes that can no longer apply.
       if (this.connection.host() === host) {
@@ -634,8 +634,19 @@ export class AliasesComponent implements PendingChangesAware {
     this.pendingHeading()?.nativeElement.focus({ preventScroll: true });
   }
 
-  pluralizeChanges(count: number): string {
-    return pluralize(count, 'change');
+  /** Asks before in-app navigation drops staged changes (route guard). */
+  async confirmDiscard(): Promise<boolean> {
+    const count = this.changes().length;
+    if (count === 0) {
+      return true;
+    }
+    return this.dialogs.confirm({
+      title: 'Discard unsaved changes?',
+      message: `${pluralize(count, 'staged alias change')} ${count === 1 ? 'has' : 'have'} not been applied and will be lost.`,
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+      tone: 'danger',
+    });
   }
 
   onBeforeUnload(event: BeforeUnloadEvent): void {

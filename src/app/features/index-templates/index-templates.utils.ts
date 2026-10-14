@@ -1,3 +1,5 @@
+import { pluralize } from '../../core/format';
+import { JsonRecord, isRecord, stringList } from '../../core/json';
 import {
   AliasEntry,
   BodyCheck,
@@ -6,7 +8,6 @@ import {
   ComponentTemplateEntry,
   IndexTemplateBody,
   IndexTemplateEntry,
-  JsonObject,
   MappingField,
   Origin,
   ResolvedAlias,
@@ -21,23 +22,12 @@ import {
   TemplateRow,
 } from './index-templates.models';
 
-export function isRecord(value: unknown): value is JsonObject {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function stringList(value: unknown): string[] {
-  if (typeof value === 'string') {
-    return value ? [value] : [];
-  }
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
+// TEMPORARY-UNIFY: data-streams.component.ts still imports these two from here.
+export { failureMessage } from '../../core/errors';
+export { pluralize };
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -206,29 +196,6 @@ export function filterRows(
 /* Editor                                                              */
 /* ------------------------------------------------------------------ */
 
-const INVALID_NAME_CHARACTERS = ['\\', '/', '*', '?', '"', '<', '>', '|', ',', '#'];
-
-/** Mirrors the template name rules enforced by Elasticsearch. */
-export function validateTemplateName(name: string): string | null {
-  if (!name) {
-    return 'Enter a name for the template';
-  }
-  if (/\s/.test(name)) {
-    return 'Template names cannot contain spaces';
-  }
-  if (name !== name.toLowerCase()) {
-    return 'Template names must be lowercase';
-  }
-  if (name.startsWith('_')) {
-    return 'Template names cannot start with "_"';
-  }
-  const invalid = INVALID_NAME_CHARACTERS.filter((character) => name.includes(character));
-  if (invalid.length > 0) {
-    return `Template names cannot contain ${invalid.map((character) => `"${character}"`).join(', ')}`;
-  }
-  return null;
-}
-
 /**
  * What saving does: create a new template, update the one being edited,
  * overwrite another existing template with the typed name, or save a copy of
@@ -267,7 +234,7 @@ const CONTENT_KEYS = new Set(['settings', 'mappings', 'aliases', 'lifecycle', 'd
 
 const MISPLACED_KEYS = ['settings', 'mappings', 'aliases'];
 
-function checkContent(body: JsonObject, problems: BodyProblem[]): void {
+function checkContent(body: JsonRecord, problems: BodyProblem[]): void {
   for (const key of MISPLACED_KEYS) {
     if (key in body) {
       problems.push({ level: 'error', message: `Move "${key}" inside "template": { … }` });
@@ -293,7 +260,7 @@ function checkContent(body: JsonObject, problems: BodyProblem[]): void {
   }
 }
 
-function checkVersion(body: JsonObject, problems: BodyProblem[]): void {
+function checkVersion(body: JsonRecord, problems: BodyProblem[]): void {
   const version = body['version'];
   if (version !== undefined && !(typeof version === 'number' && Number.isInteger(version))) {
     problems.push({ level: 'error', message: '"version" must be a whole number' });
@@ -303,7 +270,7 @@ function checkVersion(body: JsonObject, problems: BodyProblem[]): void {
   }
 }
 
-function checkUnknownKeys(body: JsonObject, known: ReadonlySet<string>, problems: BodyProblem[]): void {
+function checkUnknownKeys(body: JsonRecord, known: ReadonlySet<string>, problems: BodyProblem[]): void {
   for (const key of Object.keys(body)) {
     if (!known.has(key) && !MISPLACED_KEYS.includes(key)) {
       problems.push({ level: 'warning', message: `Unknown field "${key}"; Elasticsearch may reject it` });
@@ -315,12 +282,11 @@ function isStringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
-/** Structural checks of an index template body (errors block saving). */
 /**
  * Problems of an index template body. `components` lists the existing
  * component templates; null (not loaded yet) skips the existence check.
  */
-export function checkIndexTemplate(body: JsonObject, components: readonly string[] | null): BodyProblem[] {
+export function checkIndexTemplate(body: JsonRecord, components: readonly string[] | null): BodyProblem[] {
   const problems: BodyProblem[] = [];
   const patterns = body['index_patterns'];
   if (patterns === undefined || (Array.isArray(patterns) && patterns.length === 0) || patterns === '') {
@@ -360,7 +326,7 @@ export function checkIndexTemplate(body: JsonObject, components: readonly string
 }
 
 /** Structural checks of a component template body (errors block saving). */
-export function checkComponentTemplate(body: JsonObject): BodyProblem[] {
+export function checkComponentTemplate(body: JsonRecord): BodyProblem[] {
   const problems: BodyProblem[] = [];
   if (body['template'] === undefined) {
     problems.push({ level: 'error', message: 'Add a "template" object with settings, mappings or aliases' });
@@ -459,7 +425,7 @@ export function mappingFields(mappings: unknown): MappingField[] {
   let root = mappings;
   const keys = Object.keys(mappings);
   if (!('properties' in mappings) && keys.length === 1 && isRecord(mappings[keys[0] ?? ''])) {
-    const inner = mappings[keys[0] ?? ''] as JsonObject;
+    const inner = mappings[keys[0] ?? ''] as JsonRecord;
     if ('properties' in inner) {
       root = inner;
     }
@@ -597,7 +563,7 @@ export function buildResolvedView(
   }));
   const overlaps = response?.overlapping;
   const overlapping = (Array.isArray(overlaps) ? overlaps : [])
-    .filter((item) => typeof item === 'object' && item !== null && typeof item.name === 'string')
+    .filter((item) => isRecord(item) && typeof item['name'] === 'string')
     .map((item) => ({ name: item.name, patterns: stringList(item.index_patterns).join(', ') }));
   return {
     settings,
@@ -610,46 +576,8 @@ export function buildResolvedView(
 }
 
 /* ------------------------------------------------------------------ */
-/* Misc                                                                */
+/* URL                                                                 */
 /* ------------------------------------------------------------------ */
-
-/**
- * Best-effort human readable reason of a failed request. For Elasticsearch
- * errors the root cause is preferred over generic wrappers.
- */
-export function errorReason(value: unknown, depth = 0): string | null {
-  if (depth > 6 || value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === 'string') {
-    return value.trim() || null;
-  }
-  if (typeof value !== 'object') {
-    return null;
-  }
-  const record = value as JsonObject;
-  const rootCause = record['root_cause'];
-  for (const candidate of [Array.isArray(rootCause) ? rootCause[0] : undefined, record['caused_by']]) {
-    const reason = errorReason(candidate, depth + 1);
-    if (reason) {
-      return reason;
-    }
-  }
-  if (typeof record['reason'] === 'string' && record['reason'].trim()) {
-    return record['reason'];
-  }
-  const nested = errorReason(record['error'], depth + 1) ?? errorReason(record['body'], depth + 1);
-  if (nested) {
-    return nested;
-  }
-  return value instanceof Error && value.message ? value.message : null;
-}
-
-/** Message with the Elasticsearch reason appended when one is available. */
-export function failureMessage(action: string, error: unknown): string {
-  const reason = errorReason(error);
-  return reason ? `${action}: ${reason}` : action;
-}
 
 export function parseKind(value: string | null | undefined): TemplateKind {
   return value === 'components' || value === 'component' ? 'component' : 'index';

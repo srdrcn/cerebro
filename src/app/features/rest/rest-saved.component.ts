@@ -58,6 +58,7 @@ export class RestSavedComponent {
   readonly sort = signal<SavedSort>(this.initialSort());
 
   readonly requests = this.store.requests;
+  readonly readOnly = this.store.readOnly;
   readonly linked = this.store.linked;
   readonly visible = computed(() =>
     filterSavedRequests(sortSavedRequests(this.store.requests(), this.sort()), this.query()),
@@ -104,7 +105,7 @@ export class RestSavedComponent {
     } else {
       this.alerts.warn(
         `Duplicated as “${copy.name}”, but the browser did not store it`,
-        'Local storage is full or disabled: the copy is lost when the page is reloaded.',
+        this.store.notStoredDetail(),
       );
     }
   }
@@ -130,6 +131,7 @@ export class RestSavedComponent {
     } else {
       this.alerts.warn(
         `“${request.name}” was removed from this page, but the browser storage could not be updated`,
+        this.store.notStoredDetail(),
       );
     }
   }
