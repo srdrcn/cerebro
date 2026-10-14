@@ -1,0 +1,71 @@
+:host {
+  display: block;
+}
+
+.logout-form {
+  display: flex;
+  margin: 0;
+}
+
+.cluster-menu-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 9px 8px;
+}
+
+.cluster-menu-summary__name {
+  font-weight: 600;
+}
+
+:host ::ng-deep .refresh-control__interval {
+  height: calc(var(--control-height) - 2px);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+}
+
+:host ::ng-deep .refresh-control__interval:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+:host ::ng-deep .refresh-control__interval .bi-chevron-down {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.refresh-control > button {
+  height: calc(var(--control-height) - 2px);
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+.shell__content:focus {
+  outline: none;
+}

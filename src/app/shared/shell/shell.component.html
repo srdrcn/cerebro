@@ -1,0 +1,215 @@
+<button type="button" class="skip-link" (click)="focusMain()">Skip to content</button>
+<div
+  class="shell"
+  [class.is-collapsed]="collapsed()"
+  [class.is-drawer-open]="drawerOpen()"
+>
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="sidebar__brand">
+      <a class="brand-link" routerLink="/overview" [queryParams]="connection.hostQuery()" aria-label="cerebro overview">
+        <cerebro-logo />
+        <span class="brand-name">cerebro</span>
+      </a>
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon btn-sm sidebar__collapse"
+        aria-label="Collapse sidebar"
+        title="Collapse sidebar"
+        (click)="toggleCollapsed()"
+      >
+        <i class="bi bi-layout-sidebar" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <cerebro-menu
+      triggerClass="cluster-switcher"
+      [label]="'Cluster ' + status.displayName()"
+      [tooltip]="collapsed()"
+      [minWidth]="260"
+    >
+      <ng-container trigger>
+        <span class="dot" [class]="'dot ' + healthDotClass()" aria-hidden="true"></span>
+        <span class="cluster-switcher__body">
+          <span class="cluster-switcher__name">{{ status.displayName() }}</span>
+          <span class="cluster-switcher__host">{{ connection.host() }}</span>
+        </span>
+        <i class="bi bi-chevron-expand" aria-hidden="true"></i>
+      </ng-container>
+
+      <div class="menu-label">Connected cluster</div>
+      <div class="cluster-menu-summary">
+        <span class="dot" [class]="'dot ' + healthDotClass()" aria-hidden="true"></span>
+        <div class="min-w-0">
+          <div class="truncate cluster-menu-summary__name">{{ status.displayName() }}</div>
+          <div class="truncate mono text-muted text-xs">{{ connection.host() }}</div>
+        </div>
+        <span class="badge badge-uppercase" [class]="'badge badge-uppercase ' + healthBadgeClass()">
+          {{ status.status() ?? (status.reachable() ? 'connecting' : 'unreachable') }}
+        </span>
+      </div>
+      <div class="menu-separator"></div>
+      <button type="button" class="menu-item" (click)="copyHost()">
+        <i class="bi bi-clipboard" aria-hidden="true"></i> Copy host address
+      </button>
+      <button type="button" class="menu-item" (click)="refresh.refresh()">
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh now
+      </button>
+      <div class="menu-separator"></div>
+      <button type="button" class="menu-item" (click)="connection.disconnect()">
+        <i class="bi bi-arrow-left-right" aria-hidden="true"></i> Switch cluster
+      </button>
+    </cerebro-menu>
+
+    <nav class="sidebar__nav">
+      @for (group of navigation; track group.label) {
+        <div class="nav-group">
+          <div class="nav-group__label">{{ group.label }}</div>
+          @for (item of group.items; track item.route) {
+            <a
+              class="nav-link"
+              [routerLink]="item.route"
+              [queryParams]="connection.hostQuery()"
+              routerLinkActive="is-active"
+              ariaCurrentWhenActive="page"
+              [attr.title]="collapsed() ? item.label : null"
+              (click)="closeDrawer()"
+            >
+              <i class="bi" [class]="'bi ' + item.icon" aria-hidden="true"></i>
+              <span class="nav-link__label">{{ item.label }}</span>
+            </a>
+          }
+        </div>
+      }
+    </nav>
+
+    <div class="sidebar__footer">
+      @if (status.username(); as username) {
+        <div class="sidebar__user" [title]="'Signed in as ' + username">
+          <span class="avatar" aria-hidden="true">{{ username.slice(0, 2) }}</span>
+          <span class="sidebar__user-name truncate">{{ username }}</span>
+        </div>
+      } @else {
+        <span class="sidebar__version">{{ version }}</span>
+      }
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon btn-sm"
+        [attr.aria-label]="themeLabel()"
+        [title]="themeLabel()"
+        (click)="theme.cycle()"
+      >
+        <i class="bi" [class]="'bi ' + themeIcon()" aria-hidden="true"></i>
+      </button>
+      @if (collapsed()) {
+        <button
+          type="button"
+          class="btn btn-ghost btn-icon btn-sm"
+          aria-label="Expand sidebar"
+          title="Expand sidebar"
+          (click)="toggleCollapsed()"
+        >
+          <i class="bi bi-layout-sidebar-inset" aria-hidden="true"></i>
+        </button>
+      }
+      @if (status.username()) {
+        <form action="./auth/logout" method="post" class="logout-form">
+          <input type="hidden" name="csrfToken" [value]="csrfToken" />
+          <button
+            type="submit"
+            class="btn btn-ghost btn-icon btn-sm"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+          </button>
+        </form>
+      }
+    </div>
+  </aside>
+
+  <div class="shell__backdrop" aria-hidden="true" (click)="closeDrawer()"></div>
+
+  <div class="shell__main">
+    <header class="topbar">
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon topbar__menu"
+        aria-label="Open navigation"
+        [attr.aria-expanded]="drawerOpen()"
+        (click)="drawerOpen.set(true)"
+      >
+        <i class="bi bi-list" aria-hidden="true"></i>
+      </button>
+
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a routerLink="/overview" [queryParams]="connection.hostQuery()" class="breadcrumb__cluster">
+          {{ status.displayName() }}
+        </a>
+        @if (currentPage(); as page) {
+          <i class="bi bi-chevron-right" aria-hidden="true"></i>
+          <span class="breadcrumb__current" aria-current="page">{{ page.label }}</span>
+        }
+      </nav>
+
+      <div class="topbar__actions">
+        <button type="button" class="search-trigger" (click)="palette.open()" aria-label="Search (Ctrl+K)">
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <span class="search-trigger__label">Search…</span>
+          <span class="kbd">{{ shortcutKey }}K</span>
+        </button>
+
+        <div class="refresh-control" role="group" aria-label="Refresh">
+          <button
+            type="button"
+            [attr.aria-label]="'Refresh now'"
+            title="Refresh now"
+            (click)="refresh.refresh()"
+          >
+            <i
+              class="bi bi-arrow-clockwise"
+              [class.is-spinning]="status.loading()"
+              aria-hidden="true"
+            ></i>
+          </button>
+          <span class="refresh-control__divider" aria-hidden="true"></span>
+          <cerebro-menu
+            triggerClass="refresh-control__interval"
+            label="Auto-refresh interval"
+            [tooltip]="false"
+            align="end"
+            [minWidth]="180"
+          >
+            <ng-container trigger>
+              @if (refresh.paused()) {
+                <i class="bi bi-pause-fill" aria-hidden="true"></i>
+              }
+              <span class="refresh-control__label">{{ intervalLabel(refresh.interval()) }}</span>
+              <i class="bi bi-chevron-down" aria-hidden="true"></i>
+            </ng-container>
+            <div class="menu-label">Auto-refresh</div>
+            @for (interval of refresh.intervals; track interval) {
+              <button
+                type="button"
+                class="menu-item"
+                role="menuitemradio"
+                [attr.aria-checked]="refresh.interval() === interval"
+                (click)="refresh.setInterval(interval)"
+              >
+                <i
+                  class="bi"
+                  [class.bi-check2]="refresh.interval() === interval"
+                  aria-hidden="true"
+                ></i>
+                {{ interval === 0 ? 'Paused' : 'Every ' + intervalLabel(interval) }}
+              </button>
+            }
+          </cerebro-menu>
+        </div>
+      </div>
+    </header>
+
+    <main #main class="shell__content" id="main-content" tabindex="-1">
+      <ng-content />
+    </main>
+  </div>
+</div>

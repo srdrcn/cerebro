@@ -1,200 +1,196 @@
 import {
-  AfterViewInit,
   ChangeDetectionStrategy,
-  ChangeDetectorRef,
   Component,
+  DestroyRef,
   ElementRef,
-  EventEmitter,
-  forwardRef,
-  Input,
-  OnChanges,
-  OnDestroy,
-  Output,
-  SimpleChanges,
-  ViewChild,
+  afterNextRender,
+  effect,
+  inject,
+  input,
+  model,
+  output,
+  untracked,
+  viewChild,
 } from '@angular/core';
-import {
-  ControlValueAccessor,
-  NG_VALUE_ACCESSOR,
-} from '@angular/forms';
 import * as ace from 'ace-builds';
 import type { Ace } from 'ace-builds';
 import 'ace-builds/src-noconflict/mode-json';
-import 'ace-builds/src-noconflict/theme-tomorrow_night_eighties';
+import 'ace-builds/src-noconflict/mode-text';
+import 'ace-builds/src-noconflict/ext-searchbox';
+import { ThemeService } from '../core/theme.service';
 
+export type CodeEditorMode = 'json' | 'text';
+
+/**
+ * Ace based JSON editor styled by the design tokens (see styles/ace.css).
+ *
+ * Height: either set `fill` and size the host with CSS, or use
+ * `minLines`/`maxLines` to grow with the content.
+ */
 @Component({
   selector: 'cerebro-code-editor',
-  template: `
-    <div class="shared-code-editor">
-      <div
-        #aceHost
-        class="shared-code-editor__ace"
-        [class.d-none]="!aceAvailable"
-        [style.min-height.px]="minHeight"
-      ></div>
-      <textarea
-        class="shared-code-editor__fallback"
-        [class.d-none]="aceAvailable"
-        [attr.aria-label]="ariaLabel"
-        [disabled]="disabled"
-        [readOnly]="readOnly"
-        [style.min-height.px]="minHeight"
-        [value]="value"
-        (blur)="markTouched()"
-        (input)="updateFromTextarea($event)"
-      ></textarea>
-    </div>
+  host: {
+    class: 'code-frame',
+    '[class.code-frame--flush]': 'flush()',
+    '[class.is-fill]': 'fill()',
+    '[class.is-readonly]': 'readOnly()',
+  },
+  template: `<div #host class="code-editor__surface"></div>`,
+  styles: `
+    :host {
+      display: block;
+    }
+
+    :host(.is-fill) {
+      height: 100%;
+    }
+
+    .code-editor__surface {
+      width: 100%;
+      min-height: 60px;
+    }
+
+    :host(.is-fill) .code-editor__surface {
+      height: 100%;
+    }
+
+    :host(.is-readonly) ::ng-deep .ace_cursor-layer {
+      display: none;
+    }
   `,
-  providers: [
-    {
-      provide: NG_VALUE_ACCESSOR,
-      useExisting: forwardRef(() => CodeEditorComponent),
-      multi: true,
-    },
-  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CodeEditorComponent
-  implements AfterViewInit, OnChanges, OnDestroy, ControlValueAccessor
-{
-  @ViewChild('aceHost', { static: true })
-  private aceHost!: ElementRef<HTMLElement>;
+export class CodeEditorComponent {
+  readonly value = model('');
+  readonly mode = input<CodeEditorMode>('json');
+  readonly readOnly = input(false);
+  readonly placeholder = input('');
+  readonly ariaLabel = input('Code editor');
+  readonly minLines = input(12);
+  readonly maxLines = input(40);
+  readonly fill = input(false);
+  readonly flush = input(false);
+  readonly wrap = input(false);
+  readonly showGutter = input(true);
+  /** Emitted on Ctrl/⌘ + Enter. */
+  readonly submit = output<void>();
 
-  @Input() value = '';
-  @Input() ariaLabel = 'JSON editor';
-  @Input() minHeight = 240;
-  @Input() readOnly = false;
-  @Output() readonly valueChange = new EventEmitter<string>();
-
-  aceAvailable = false;
-  disabled = false;
+  private readonly hostRef = viewChild.required<ElementRef<HTMLElement>>('host');
+  private readonly theme = inject(ThemeService);
+  private readonly destroyRef = inject(DestroyRef);
   private editor: Ace.Editor | undefined;
-  private writingValue = false;
-  private onChange: (value: string) => void = () => undefined;
-  private onTouched: () => void = () => undefined;
+  private writing = false;
+  private resizeObserver: ResizeObserver | undefined;
 
-  constructor(private readonly changeDetector: ChangeDetectorRef) {}
+  constructor() {
+    afterNextRender(() => this.createEditor());
 
-  ngAfterViewInit(): void {
-    try {
-      const editor = ace.edit(this.aceHost.nativeElement);
-      editor.setTheme('ace/theme/tomorrow_night_eighties');
-      editor.session.setMode('ace/mode/json');
-      editor.session.setUseWorker(false);
-      editor.setOptions({
-        fontFamily: 'Monaco, Menlo, Consolas, "Courier New", monospace',
-        fontSize: '12px',
-        readOnly: this.readOnly || this.disabled,
-        showPrintMargin: false,
-        tabSize: 2,
-        useSoftTabs: true,
-      });
-      editor.setValue(this.value, -1);
-      editor.textInput.getElement().setAttribute('aria-label', this.ariaLabel);
-      editor.on('change', () => {
-        if (!this.writingValue) {
-          this.publish(editor.getValue());
-        }
-      });
-      editor.on('blur', () => this.markTouched());
-      this.editor = editor;
-      this.aceAvailable = true;
-      this.changeDetector.markForCheck();
-    } catch {
-      this.editor = undefined;
-      this.aceAvailable = false;
-      this.changeDetector.markForCheck();
-    }
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['value'] && this.editor?.getValue() !== this.value) {
-      this.writeEditorValue(this.value);
-    }
-    if (changes['readOnly']) {
-      this.editor?.setReadOnly(this.readOnly || this.disabled);
-    }
-    if (changes['ariaLabel']) {
-      this.editor?.textInput
-        .getElement()
-        .setAttribute('aria-label', this.ariaLabel);
-    }
-  }
-
-  ngOnDestroy(): void {
-    this.editor?.destroy();
-    this.editor = undefined;
-  }
-
-  writeValue(value: string | null | undefined): void {
-    const nextValue = value ?? '';
-    this.value = nextValue;
-    this.writeEditorValue(nextValue);
-    this.changeDetector.markForCheck();
-  }
-
-  registerOnChange(onChange: (value: string) => void): void {
-    this.onChange = onChange;
-  }
-
-  registerOnTouched(onTouched: () => void): void {
-    this.onTouched = onTouched;
-  }
-
-  setDisabledState(disabled: boolean): void {
-    this.disabled = disabled;
-    this.editor?.setReadOnly(disabled || this.readOnly);
-    this.changeDetector.markForCheck();
-  }
-
-  setValue(value: string): void {
-    this.value = value;
-    this.writeEditorValue(value);
-    this.publish(value);
-  }
-
-  getStringValue(): string {
-    return this.editor?.getValue() ?? this.value;
-  }
-
-  getValue(): unknown {
-    const content = this.getStringValue();
-    return content.trim() ? JSON.parse(content) : undefined;
-  }
-
-  format(): void {
-    try {
-      const parsed = this.getValue();
-      if (parsed !== undefined) {
-        this.setValue(JSON.stringify(parsed, null, 2));
-        this.editor?.gotoLine(0, 0, false);
+    effect(() => {
+      const value = this.value();
+      const editor = this.editor;
+      if (editor && editor.getValue() !== value) {
+        this.writing = true;
+        editor.session.setValue(value);
+        this.writing = false;
       }
+    });
+
+    effect(() => {
+      const dark = this.theme.resolved() === 'dark';
+      this.editor?.setTheme({ cssClass: 'ace-cerebro', isDark: dark, cssText: '' } as Ace.Theme);
+    });
+
+    effect(() => {
+      const readOnly = this.readOnly();
+      const mode = this.mode();
+      const wrap = this.wrap();
+      const placeholder = this.placeholder();
+      const editor = this.editor;
+      if (!editor) {
+        return;
+      }
+      editor.setReadOnly(readOnly);
+      editor.session.setMode(`ace/mode/${mode}`);
+      editor.session.setUseWrapMode(wrap);
+      editor.setOption('placeholder', placeholder);
+    });
+
+    this.destroyRef.onDestroy(() => {
+      this.resizeObserver?.disconnect();
+      this.editor?.destroy();
+      this.editor?.container.remove();
+      this.editor = undefined;
+    });
+  }
+
+  /** Pretty-prints JSON content; invalid JSON is left untouched. */
+  format(): boolean {
+    try {
+      const content = this.value();
+      if (!content.trim()) {
+        return true;
+      }
+      this.value.set(JSON.stringify(JSON.parse(content), null, 2));
+      return true;
     } catch {
-      // Keep invalid JSON untouched so the user can correct it.
+      return false;
     }
   }
 
-  updateFromTextarea(event: Event): void {
-    this.publish((event.target as HTMLTextAreaElement).value);
+  focus(): void {
+    this.editor?.focus();
   }
 
-  markTouched(): void {
-    this.onTouched();
-  }
+  private createEditor(): void {
+    const editor = ace.edit(this.hostRef().nativeElement, {
+      mode: `ace/mode/${this.mode()}`,
+      value: this.value(),
+      readOnly: this.readOnly(),
+      fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim(),
+      fontSize: '12.5px',
+      showPrintMargin: false,
+      highlightActiveLine: !this.readOnly(),
+      highlightGutterLine: !this.readOnly(),
+      showGutter: this.showGutter(),
+      tabSize: 2,
+      useSoftTabs: true,
+      wrap: this.wrap(),
+      placeholder: this.placeholder(),
+      scrollPastEnd: 0,
+      fixedWidthGutter: true,
+      ...(this.fill() ? {} : { minLines: this.minLines(), maxLines: this.maxLines() }),
+    });
+    untracked(() => {
+      const dark = this.theme.resolved() === 'dark';
+      editor.setTheme({ cssClass: 'ace-cerebro', isDark: dark, cssText: '' } as Ace.Theme);
+    });
+    editor.session.setUseWorker(false);
+    editor.renderer.setScrollMargin(8, 8, 0, 0);
+    editor.renderer.setPadding(10);
+    editor.textInput.getElement().setAttribute('aria-label', this.ariaLabel());
+    editor.selection.clearSelection();
+    editor.session.getUndoManager().reset();
 
-  private writeEditorValue(value: string): void {
-    if (!this.editor || this.editor.getValue() === value) {
-      return;
+    editor.on('change', () => {
+      if (!this.writing) {
+        this.value.set(editor.getValue());
+      }
+    });
+    editor.commands.addCommand({
+      name: 'cerebroSubmit',
+      bindKey: { win: 'Ctrl-Enter', mac: 'Command-Enter' },
+      exec: () => this.submit.emit(),
+    });
+    editor.commands.addCommand({
+      name: 'cerebroFormat',
+      bindKey: { win: 'Ctrl-Shift-F', mac: 'Command-Shift-F' },
+      exec: () => this.format(),
+    });
+
+    this.editor = editor;
+    if (this.fill()) {
+      this.resizeObserver = new ResizeObserver(() => editor.resize());
+      this.resizeObserver.observe(this.hostRef().nativeElement);
     }
-    this.writingValue = true;
-    this.editor.setValue(value, -1);
-    this.writingValue = false;
-  }
-
-  private publish(value: string): void {
-    this.value = value;
-    this.onChange(value);
-    this.valueChange.emit(value);
-    this.changeDetector.markForCheck();
   }
 }

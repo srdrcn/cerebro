@@ -2,6 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { NoClusterConnectionError } from './api-envelope';
+import { RecentHostsService } from './recent-hosts.service';
 import { RefreshService } from './refresh.service';
 
 export interface ConnectionSnapshot {
@@ -10,11 +11,17 @@ export interface ConnectionSnapshot {
   readonly password?: string;
 }
 
+/**
+ * Holds the Elasticsearch target of the session. The host is mirrored into
+ * the URL (`#/route?host=…`) so views can be bookmarked and shared; the
+ * credentials only ever live in memory.
+ */
 @Injectable({ providedIn: 'root' })
 export class ConnectionService {
   private readonly document = inject(DOCUMENT);
   private readonly router = inject(Router);
   private readonly refreshService = inject(RefreshService);
+  private readonly recentHosts = inject(RecentHostsService);
   private readonly initialHost = this.hostFromHash();
 
   private readonly hostState = signal<string | undefined>(this.initialHost);
@@ -24,6 +31,8 @@ export class ConnectionService {
   readonly host = this.hostState.asReadonly();
   readonly username = this.usernameState.asReadonly();
   readonly connected = computed(() => this.hostState() !== undefined);
+  /** Query parameters every in-app link carries to keep the target host. */
+  readonly hostQuery = computed(() => ({ host: this.hostState() ?? null }));
 
   connect(host: string, username?: string, password?: string): void {
     const normalizedHost = host.trim();
@@ -34,6 +43,7 @@ export class ConnectionService {
     this.hostState.set(normalizedHost);
     this.usernameState.set(username || undefined);
     this.passwordState.set(password || undefined);
+    this.recentHosts.remember(normalizedHost);
     this.writeHostToHash(normalizedHost);
     this.refreshService.refresh();
   }
@@ -101,7 +111,7 @@ export class ConnectionService {
     const query = params.toString();
     const hash = `${route}${query ? `?${query}` : ''}`;
     view.history.replaceState(
-      null,
+      view.history.state,
       '',
       `${view.location.pathname}${view.location.search}${hash}`,
     );

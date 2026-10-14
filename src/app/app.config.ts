@@ -4,7 +4,11 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideRouter, withHashLocation } from '@angular/router';
+import {
+  provideRouter,
+  withHashLocation,
+  withInMemoryScrolling,
+} from '@angular/router';
 import { routes } from './app.routes';
 import { csrfInterceptor } from './core/csrf.interceptor';
 
@@ -13,6 +17,10 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
     provideHttpClient(withInterceptors([csrfInterceptor])),
-    provideRouter(routes, withHashLocation()),
+    provideRouter(
+      routes,
+      withHashLocation(),
+      withInMemoryScrolling({ scrollPositionRestoration: 'top' }),
+    ),
   ],
 };

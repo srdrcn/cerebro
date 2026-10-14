@@ -7,38 +7,63 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Sign in to Cerebro">
+    <meta name="description" content="Sign in to cerebro">
+    <meta name="color-scheme" content="light dark">
     <meta name="csrf-token" content="@play.filters.csrf.CSRF.getToken(request).map(_.value).getOrElse("")">
-    <title>Cerebro</title>
+    <title>Sign in · cerebro</title>
     <link rel="icon" type="image/png" href="img/favicon.png">
+    <script src="theme-init.js"></script>
     <link rel="stylesheet" href="js/styles.css">
   </head>
-  <body class="login-page">
-    <main class="login-shell" aria-labelledby="login-title">
-      <header class="login-brand">
-        <img src="img/logo.png" alt="" width="126">
-        <h1 id="login-title">Cerebro</h1>
-        <p>v@BuildInfo.version</p>
-      </header>
+  <body>
+    <div class="auth-page">
+      <div class="auth-topbar"></div>
+      <main class="auth-shell" aria-labelledby="login-title">
+        <header class="auth-brand">
+          <span class="auth-brand__mark">
+            <svg class="brand-mark" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+              <path d="M15 43c0-15.5 7.6-25 17-25s17 9.5 17 25" fill="currentColor" fill-opacity=".18"/>
+              <path d="M27.5 12.5C19 11.5 12.5 18 11.5 31" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+              <path d="M36.5 12.5C45 11.5 51.5 18 52.5 31" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+              <path d="M27 9h10l-1.6 13h-6.8z" fill="currentColor"/>
+              <circle cx="32" cy="26" r="5.2" fill="var(--surface)" stroke="currentColor" stroke-width="3"/>
+              <rect x="7" y="30" width="9" height="18" rx="4" fill="currentColor"/>
+              <rect x="48" y="30" width="9" height="18" rx="4" fill="currentColor"/>
+              <ellipse cx="24.5" cy="41.5" rx="4.2" ry="1.7" fill="var(--accent)"/>
+              <ellipse cx="39.5" cy="41.5" rx="4.2" ry="1.7" fill="var(--accent)"/>
+            </svg>
+          </span>
+          <div>
+            <h1 id="login-title">cere<span>bro</span></h1>
+            <p>Sign in to continue</p>
+          </div>
+        </header>
 
-      @if(flash.get(controllers.AuthController.LOGIN_MSG).exists(_.nonEmpty)) {
-        <div class="login-error" role="alert">
-          @flash.get(controllers.AuthController.LOGIN_MSG).getOrElse("")
-        </div>
-      }
+        <section class="auth-card">
+          <div class="auth-card__body">
+            @if(flash.get(controllers.AuthController.LOGIN_MSG).exists(_.nonEmpty)) {
+              <div class="login-error" role="alert">
+                @flash.get(controllers.AuthController.LOGIN_MSG).getOrElse("")
+              </div>
+            }
 
-      <form class="login-form" action="auth/login" method="POST">
-        @helper.CSRF.formField
-        <div>
-          <label for="inputUser">User</label>
-          <input type="text" name="user" id="inputUser" autocomplete="username" required autofocus>
-        </div>
-        <div>
-          <label for="inputPassword">Password</label>
-          <input type="password" name="password" id="inputPassword" autocomplete="current-password" required>
-        </div>
-        <button type="submit">Sign in</button>
-      </form>
-    </main>
+            <form class="auth-form" action="auth/login" method="POST">
+              @helper.CSRF.formField
+              <div>
+                <label class="login-label" for="inputUser">Username</label>
+                <input class="input" type="text" name="user" id="inputUser" autocomplete="username" required autofocus>
+              </div>
+              <div>
+                <label class="login-label" for="inputPassword">Password</label>
+                <input class="input" type="password" name="password" id="inputPassword" autocomplete="current-password" required>
+              </div>
+              <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+            </form>
+          </div>
+        </section>
+
+        <p class="auth-footnote">cerebro v@BuildInfo.version</p>
+      </main>
+    </div>
   </body>
 </html>

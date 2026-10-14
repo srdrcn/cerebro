@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -7,22 +6,50 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
+import { DialogService } from '../../core/dialog.service';
 import { RefreshService } from '../../core/refresh.service';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { BytesPipe, DurationPipe } from '../../shared/format.pipes';
+import { MenuComponent } from '../../shared/menu.component';
+import { MeterComponent } from '../../shared/meter.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
 import { NodeSortField, NodesFilter, NodesNode } from './nodes.models';
 import {
-  formatNodeBytes,
-  formatUptime,
+  attributeEntries,
   matchesNode,
+  nodeRoles,
+  prettyByteString,
   sortNodes,
+  summarizeNodes,
 } from './nodes.utils';
+
+type RoleKey = 'master' | 'data' | 'ingest' | 'coordinating';
+
+interface RoleFilter {
+  readonly key: RoleKey;
+  readonly label: string;
+}
+
+const ROLE_FILTERS: readonly RoleFilter[] = [
+  { key: 'master', label: 'Master' },
+  { key: 'data', label: 'Data' },
+  { key: 'ingest', label: 'Ingest' },
+  { key: 'coordinating', label: 'Coordinating' },
+];
 
 @Component({
   selector: 'cerebro-nodes',
-  imports: [CommonModule, FormsModule],
+  imports: [
+    BytesPipe,
+    DurationPipe,
+    EmptyStateComponent,
+    MenuComponent,
+    MeterComponent,
+    SearchInputComponent,
+  ],
   templateUrl: './nodes.component.html',
   styleUrl: './nodes.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -30,26 +57,26 @@ import {
 export class NodesComponent {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
+  private readonly dialogs = inject(DialogService);
   private readonly refreshService = inject(RefreshService);
   private readonly connection = inject(ConnectionService);
 
+  readonly roleFilters = ROLE_FILTERS;
   readonly nodes = signal<readonly NodesNode[] | undefined>(undefined);
   readonly loading = signal(false);
+  readonly failed = signal(false);
   readonly name = signal('');
-  readonly master = signal(true);
-  readonly data = signal(true);
-  readonly ingest = signal(true);
-  readonly coordinating = signal(true);
+  readonly roles = signal<Readonly<Record<RoleKey, boolean>>>({
+    master: true,
+    data: true,
+    ingest: true,
+    coordinating: true,
+  });
   readonly sortField = signal<NodeSortField>('name');
   readonly reverse = signal(false);
+  readonly showInternalAttributes = signal(false);
 
-  readonly filter = computed<NodesFilter>(() => ({
-    name: this.name(),
-    master: this.master(),
-    data: this.data(),
-    ingest: this.ingest(),
-    coordinating: this.coordinating(),
-  }));
+  readonly filter = computed<NodesFilter>(() => ({ name: this.name(), ...this.roles() }));
 
   readonly visibleNodes = computed(() =>
     sortNodes(
@@ -59,6 +86,18 @@ export class NodesComponent {
     ),
   );
 
+  readonly summary = computed(() => summarizeNodes(this.nodes() ?? []));
+
+  readonly roleCounts = computed<Readonly<Record<RoleKey, number>>>(() => {
+    const nodes = this.nodes() ?? [];
+    return {
+      master: nodes.filter((node) => node.master).length,
+      data: nodes.filter((node) => node.data).length,
+      ingest: nodes.filter((node) => node.ingest).length,
+      coordinating: nodes.filter((node) => node.coordinating).length,
+    };
+  });
+
   private loadSequence = 0;
 
   constructor() {
@@ -66,8 +105,6 @@ export class NodesComponent {
       this.refreshService.tick();
       if (this.connection.connected()) {
         void this.load();
-      } else {
-        this.reset();
       }
     });
   }
@@ -79,10 +116,11 @@ export class NodesComponent {
       const nodes = await this.api.post<readonly NodesNode[]>('nodes');
       if (sequence === this.loadSequence) {
         this.nodes.set(nodes);
+        this.failed.set(false);
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
-        this.nodes.set(undefined);
+        this.failed.set(true);
         this.alerts.error('Error while loading nodes data', error);
       }
     } finally {
@@ -92,11 +130,23 @@ export class NodesComponent {
     }
   }
 
-  setSortBy(field: NodeSortField): void {
+  toggleRole(role: RoleKey): void {
+    this.roles.update((roles) => ({ ...roles, [role]: !roles[role] }));
+  }
+
+  resetFilters(): void {
+    this.name.set('');
+    this.roles.set({ master: true, data: true, ingest: true, coordinating: true });
+  }
+
+  sortBy(field: NodeSortField): void {
     if (this.sortField() === field) {
       this.reverse.update((value) => !value);
+    } else {
+      this.sortField.set(field);
+      // Resource columns are most useful with the busiest node first.
+      this.reverse.set(field !== 'name');
     }
-    this.sortField.set(field);
   }
 
   ariaSort(field: NodeSortField): 'ascending' | 'descending' | 'none' {
@@ -106,29 +156,30 @@ export class NodesComponent {
     return this.reverse() ? 'descending' : 'ascending';
   }
 
-  requestRefresh(): void {
-    this.refreshService.refresh();
+  sortIcon(field: NodeSortField): string {
+    if (this.sortField() !== field) {
+      return 'bi-arrow-down-up';
+    }
+    return this.reverse() ? 'bi-arrow-down' : 'bi-arrow-up';
   }
 
-  uptime(value: number): string {
-    return formatUptime(value);
+  async showStats(node: NodesNode): Promise<void> {
+    try {
+      const stats = await this.api.post<unknown>('commons/get_node_stats', { node: node.id });
+      this.dialogs.showJson(`${node.name} stats`, stats, node.host ?? node.id);
+    } catch (error: unknown) {
+      this.alerts.error(`Could not load stats for ${node.name}`, error);
+    }
   }
 
-  bytes(value: number): string {
-    return formatNodeBytes(value);
+  roleBadges = nodeRoles;
+  bytesString = prettyByteString;
+
+  attributes(node: NodesNode): readonly (readonly [string, string])[] {
+    return attributeEntries(node.attributes, this.showInternalAttributes());
   }
 
-  attributeEntries(
-    attributes: Readonly<Record<string, unknown>>,
-  ): readonly (readonly [string, string])[] {
-    return Object.entries(attributes).map(
-      ([name, value]) => [name, String(value)] as const,
-    );
-  }
-
-  private reset(): void {
-    this.loadSequence += 1;
-    this.nodes.set(undefined);
-    this.loading.set(false);
+  diskUsed(node: NodesNode): number | null {
+    return node.disk ? node.disk.total - node.disk.available : null;
   }
 }

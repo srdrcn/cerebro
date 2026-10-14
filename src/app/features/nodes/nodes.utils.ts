@@ -3,7 +3,7 @@ import { NodeSortField, NodesFilter, NodesNode } from './nodes.models';
 export function matchesNode(node: NodesNode, filter: NodesFilter): boolean {
   const matchesName = node.name
     .toLocaleLowerCase()
-    .includes(filter.name.toLocaleLowerCase());
+    .includes(filter.name.trim().toLocaleLowerCase());
   const matchesRole =
     (node.master && filter.master) ||
     (node.data && filter.data) ||
@@ -12,10 +12,7 @@ export function matchesNode(node: NodesNode, filter: NodesFilter): boolean {
   return matchesName && matchesRole;
 }
 
-function sortValue(
-  node: NodesNode,
-  field: NodeSortField,
-): string | number | null {
+function sortValue(node: NodesNode, field: NodeSortField): string | number | null {
   switch (field) {
     case 'name':
       return node.name;
@@ -32,6 +29,7 @@ function sortValue(
   }
 }
 
+/** Stable sort; missing values always go last, ties fall back to the name. */
 export function sortNodes(
   nodes: readonly NodesNode[],
   field: NodeSortField,
@@ -57,32 +55,92 @@ export function sortNodes(
   });
 }
 
-export function formatUptime(milliseconds: number): string {
-  const units: readonly (readonly [string, number])[] = [
-    ['yr', 31_536_000_000],
-    ['mo', 2_678_400_000],
-    ['d', 86_400_000],
-    ['h', 3_600_000],
-    ['min', 60_000],
-    ['sec', 1_000],
-  ];
-  for (const [label, measure] of units) {
-    const amount = Math.floor(milliseconds / measure);
-    if (amount > 0) {
-      return `${amount}${label}`;
-    }
-  }
-  return '0sec';
+/** Attributes Elasticsearch adds on its own; hidden unless asked for. */
+const INTERNAL_ATTRIBUTE_PREFIXES = ['ml.', 'xpack.', 'transform.'] as const;
+
+export function isInternalAttribute(name: string): boolean {
+  return INTERNAL_ATTRIBUTE_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 
-export function formatNodeBytes(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return '0b';
+export function attributeEntries(
+  attributes: Readonly<Record<string, unknown>>,
+  includeInternal = false,
+): readonly (readonly [string, string])[] {
+  return Object.entries(attributes)
+    .filter(([name]) => includeInternal || !isInternalAttribute(name))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => [name, String(value)] as const);
+}
+
+export interface NodeRoleBadge {
+  readonly key: 'master' | 'data' | 'ingest' | 'coordinating';
+  readonly label: string;
+  readonly title: string;
+}
+
+export function nodeRoles(node: NodesNode): readonly NodeRoleBadge[] {
+  const roles: NodeRoleBadge[] = [];
+  if (node.master) {
+    roles.push({
+      key: 'master',
+      label: node.current_master ? 'master ★' : 'master',
+      title: node.current_master ? 'Elected master' : 'Master-eligible',
+    });
   }
-  const units = ['b', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  const unit = Math.min(
-    Math.floor(Math.log(value) / Math.log(1024)),
-    units.length - 1,
-  );
-  return `${(value / 1024 ** unit).toFixed(2)}${units[unit]}`;
+  if (node.data) {
+    roles.push({ key: 'data', label: 'data', title: 'Data node' });
+  }
+  if (node.ingest) {
+    roles.push({ key: 'ingest', label: 'ingest', title: 'Ingest node' });
+  }
+  if (node.coordinating) {
+    roles.push({ key: 'coordinating', label: 'coordinating', title: 'Coordinating only' });
+  }
+  return roles;
+}
+
+function average(values: readonly number[]): number | null {
+  return values.length === 0
+    ? null
+    : values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+export interface NodesSummary {
+  readonly total: number;
+  readonly master?: string;
+  readonly versions: readonly string[];
+  readonly averageHeap: number | null;
+  readonly averageCpu: number | null;
+  readonly diskUsed: number;
+  readonly diskTotal: number;
+}
+
+export function summarizeNodes(nodes: readonly NodesNode[]): NodesSummary {
+  const disks = nodes.flatMap((node) => (node.disk ? [node.disk] : []));
+  const diskTotal = disks.reduce((sum, disk) => sum + disk.total, 0);
+  const diskUsed = disks.reduce((sum, disk) => sum + (disk.total - disk.available), 0);
+  const master = nodes.find((node) => node.current_master)?.name;
+  return {
+    total: nodes.length,
+    ...(master ? { master } : {}),
+    versions: [...new Set(nodes.map((node) => node.version))].sort(),
+    averageHeap: average(nodes.map((node) => node.heap.percent)),
+    averageCpu: average(
+      nodes.flatMap((node) => (node.cpu.process === null ? [] : [node.cpu.process])),
+    ),
+    diskUsed,
+    diskTotal,
+  };
+}
+
+/** Elasticsearch byte strings such as "274mb" → "274 MB". */
+export function prettyByteString(value: string | null | undefined): string {
+  if (!value) {
+    return '–';
+  }
+  const match = /^([\d.]+)\s*([kmgtp]?b)$/i.exec(value.trim());
+  if (!match) {
+    return value;
+  }
+  return `${match[1]} ${(match[2] ?? '').toUpperCase()}`;
 }

@@ -2,19 +2,52 @@ import { TestBed } from '@angular/core/testing';
 import { AlertService } from './alert.service';
 
 describe('AlertService', () => {
-  it('keeps the newest three alerts', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps the newest alerts up to the limit', () => {
     const service = TestBed.inject(AlertService);
 
-    service.info('one', undefined, 0);
-    service.warn('two', undefined, 0);
-    service.error('three', undefined, 0);
-    service.success('four', undefined, 0);
+    ['one', 'two', 'three', 'four', 'five'].forEach((message) =>
+      service.info(message, undefined, 0),
+    );
 
     expect(service.alerts().map((alert) => alert.message)).toEqual([
+      'five',
       'four',
       'three',
       'two',
     ]);
+  });
+
+  it('folds identical alerts instead of stacking them', () => {
+    const service = TestBed.inject(AlertService);
+
+    service.error('Error connecting to the server', { attempt: 1 }, 0);
+    service.error('Error connecting to the server', { attempt: 2 }, 0);
+    service.warn('Error connecting to the server', undefined, 0);
+
+    const alerts = service.alerts();
+    expect(alerts).toHaveLength(2);
+    expect(alerts[1]).toMatchObject({
+      level: 'error',
+      count: 2,
+      response: { attempt: 2 },
+    });
+  });
+
+  it('dismisses alerts after their timeout unless pinned', () => {
+    vi.useFakeTimers();
+    const service = TestBed.inject(AlertService);
+
+    const transient = service.success('Saved', undefined, 1_000);
+    const pinned = service.error('Failed', { reason: 'boom' }, 1_000);
+    service.pin(pinned);
+    vi.advanceTimersByTime(1_500);
+
+    expect(service.alerts().map((alert) => alert.id)).toEqual([pinned]);
+    expect(service.alerts().some((alert) => alert.id === transient)).toBe(false);
   });
 
   it('renders response values as plain JSON text', () => {

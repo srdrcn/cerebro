@@ -8,16 +8,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Cerebro Elasticsearch administration console">
+    <meta name="color-scheme" content="light dark">
     <meta name="csrf-token" content="@play.filters.csrf.CSRF.getToken(request).map(_.value).getOrElse("")">
     <meta name="cerebro-version" content="v@BuildInfo.version">
-    <title>cerebro - no connection</title>
+    <title>cerebro</title>
     <link rel="icon" type="image/png" href="img/favicon.png">
+    <script src="theme-init.js"></script>
     <link rel="stylesheet" href="js/styles.css">
     <script type="module" src="js/main.js"></script>
   </head>
   <body>
     <cerebro-root>
-      <main class="boot-state" aria-live="polite">Loading Cerebro…</main>
+      <main class="boot-state" aria-live="polite">Loading cerebro…</main>
     </cerebro-root>
   </body>
 </html>

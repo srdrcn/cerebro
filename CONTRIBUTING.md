@@ -47,3 +47,8 @@ npm start
 ```
 
 Production builds write deterministic assets to `public/js` with `npm run build`.
+
+The web application's architecture, shared components and design system
+(colour tokens, layout and component classes, accessibility rules) are
+documented in [docs/FRONTEND.md](docs/FRONTEND.md). New screens must follow it
+and work in both the light and the dark theme.

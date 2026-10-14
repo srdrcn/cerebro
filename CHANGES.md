@@ -331,11 +331,21 @@ First cerebro release.
 
 ### Unreleased
 
+#### User interface
+
+- Rebuild every screen from scratch on a dedicated design system (see `docs/FRONTEND.md`): sidebar navigation, light and dark themes that follow the operating system, bundled Inter / JetBrains Mono fonts and responsive layouts down to phone width.
+- New command palette (Ctrl/⌘ + K) to jump to any page, action or index.
+- Auto-refresh can be paused, remembers its interval and skips polling while the tab is hidden.
+- Repeated notifications are folded together, and error details stay open while they are being read.
+- Connect screen remembers recently used cluster addresses (never credentials).
+- JSON is edited and displayed with a themed, searchable code editor with folding.
+- Drop Bootstrap CSS; feature pages are lazy loaded to keep the initial bundle small.
+
 #### Security updates
 
 - Migrate the backend to Play 3.0.11, Pekko, Scala 2.13.18 and a Java 17 baseline.
 - Align Jackson 2.18.10, Logback 1.5.38 and SQLite JDBC 3.53.2.1 to patched releases.
-- Replace AngularJS, Bootstrap 3, Grunt, Karma and PhantomJS with Angular 22, Bootstrap 5 and Vitest.
+- Replace AngularJS, Bootstrap 3, Grunt, Karma and PhantomJS with Angular 22 and Vitest.
 - Restore Play CSRF, allowed-host and security-header filters; require a production application secret.
 - Harden session cookies, redirects and LDAP filter construction.
 - Add npm, staged-JAR and legacy-bundle security gates to CI.

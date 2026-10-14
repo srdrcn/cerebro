@@ -3,8 +3,9 @@ import { DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  inject,
   OnInit,
+  computed,
+  inject,
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -12,131 +13,41 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiError } from '../../core/api-envelope';
 import { ConnectionService } from '../../core/connection.service';
+import { RecentHostsService } from '../../core/recent-hosts.service';
+import { ThemeService } from '../../core/theme.service';
+import { LogoComponent } from '../../shared/logo.component';
 import { ConnectApiService } from './connect-api.service';
 
 @Component({
   selector: 'cerebro-connect',
-  imports: [FormsModule],
-  template: `
-    <main class="connect-shell" aria-labelledby="connect-title">
-      <header class="connect-brand">
-        <img class="connect-logo" src="./img/logo.png" alt="" />
-        <div>
-          <h1 id="connect-title">Cerebro</h1>
-          <p>Elasticsearch administration console</p>
-        </div>
-        @if (appVersion) {
-          <span class="connect-version">{{ appVersion }}</span>
-        }
-      </header>
+  imports: [FormsModule, LogoComponent],
+  templateUrl: './connect.component.html',
+  styles: `
+    :host {
+      display: block;
+    }
 
-      <section class="connect-workspace" aria-label="Cluster connection">
-        <div class="connect-status" role="status" aria-live="polite">
-          @if (connecting()) {
-            <span><i class="bi bi-arrow-repeat spin" aria-hidden="true"></i> Connecting…</span>
-          } @else if (feedback()) {
-            <span class="connect-feedback">
-              <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
-              {{ feedback() }}
-            </span>
-          } @else {
-            <span class="connect-hint">
-              {{ unauthorized() ? 'Authentication is required for this cluster.' : 'Choose a known cluster or enter a node address.' }}
-            </span>
-          }
-        </div>
+    .recent-option {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
 
-        @if (!unauthorized()) {
-          @if (hosts().length > 0) {
-            <div class="known-clusters">
-              <h2>Known clusters</h2>
-              <div class="known-clusters__list">
-                @for (knownHost of hosts(); track knownHost) {
-                  <button
-                    type="button"
-                    [disabled]="connecting()"
-                    (click)="connectTo(knownHost)"
-                  >
-                    <i class="bi bi-hdd-network" aria-hidden="true"></i>
-                    <span>{{ knownHost }}</span>
-                    <i class="bi bi-arrow-right" aria-hidden="true"></i>
-                  </button>
-                }
-              </div>
-            </div>
-          }
+    .recent-option .cluster-option {
+      padding-right: 44px;
+    }
 
-          <form class="connect-form" (ngSubmit)="connectTo(host)">
-            <label for="host">Node address</label>
-            <div class="connect-input-row">
-              <input
-                id="host"
-                name="host"
-                type="text"
-                inputmode="url"
-                autocomplete="url"
-                required
-                placeholder="e.g. http://localhost:9200"
-                [(ngModel)]="host"
-              />
-              <button
-                type="submit"
-                class="button-primary"
-                [disabled]="connecting() || !host.trim()"
-              >
-                Connect
-                <i class="bi bi-plug" aria-hidden="true"></i>
-              </button>
-            </div>
-          </form>
-        } @else {
-          <form class="connect-form authentication-form" (ngSubmit)="authorize()">
-            <div class="authentication-target">
-              <span>Cluster</span>
-              <strong>{{ host }}</strong>
-              <button type="button" (click)="cancelAuthorization()">change</button>
-            </div>
+    .recent-option__remove {
+      position: absolute;
+      right: 34px;
+      opacity: 0;
+      transition: opacity var(--duration-fast) ease;
+    }
 
-            <div class="form-field-grid">
-              <label for="username">
-                <span>Username</span>
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  autocomplete="username"
-                  required
-                  placeholder="admin"
-                  [(ngModel)]="username"
-                />
-              </label>
-              <label for="password">
-                <span>Password</span>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autocomplete="current-password"
-                  required
-                  [(ngModel)]="password"
-                />
-              </label>
-            </div>
-
-            <div class="connect-form__actions">
-              <button
-                type="submit"
-                class="button-primary"
-                [disabled]="connecting() || !host.trim() || !username || !password"
-              >
-                Authenticate
-                <i class="bi bi-shield-lock" aria-hidden="true"></i>
-              </button>
-            </div>
-          </form>
-        }
-      </section>
-    </main>
+    .recent-option:hover .recent-option__remove,
+    .recent-option__remove:focus-visible {
+      opacity: 1;
+    }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -147,15 +58,29 @@ export class ConnectComponent implements OnInit {
   private readonly alerts = inject(AlertService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  readonly recentHosts = inject(RecentHostsService);
+  readonly theme = inject(ThemeService);
 
   readonly hosts = signal<readonly string[]>([]);
-  readonly connecting = signal(false);
+  readonly loadingHosts = signal(true);
+  /** Host currently being tested, if any. */
+  readonly connecting = signal<string | undefined>(undefined);
   readonly unauthorized = signal(false);
   readonly feedback = signal<string | undefined>(undefined);
+  readonly host = signal('');
+  readonly username = signal('');
+  readonly password = signal('');
 
-  host = '';
-  username = '';
-  password = '';
+  /** Recent manual entries that are not already listed as configured clusters. */
+  readonly recent = computed(() => {
+    const configured = new Set(this.hosts());
+    return this.recentHosts.hosts().filter((host) => !configured.has(host));
+  });
+
+  readonly themeLabel = computed(() =>
+    this.theme.resolved() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
+  );
+
   readonly appVersion =
     this.document
       .querySelector<HTMLMetaElement>('meta[name="cerebro-version"]')
@@ -163,7 +88,7 @@ export class ConnectComponent implements OnInit {
 
   ngOnInit(): void {
     const params = this.route.snapshot.queryParamMap;
-    this.host = params.get('host') ?? this.connection.host() ?? '';
+    this.host.set(params.get('host') ?? this.connection.host() ?? '');
     this.unauthorized.set(params.has('unauthorized'));
     void this.loadHosts();
   }
@@ -174,17 +99,14 @@ export class ConnectComponent implements OnInit {
       return;
     }
 
-    this.host = target;
+    this.host.set(target);
     this.feedback.set(undefined);
-    this.connecting.set(true);
+    this.connecting.set(target);
     try {
       const response = await this.api.testConnection({ host: target });
       switch (response.status) {
         case 200:
-          this.connection.connect(target);
-          await this.router.navigate(['/overview'], {
-            queryParams: { host: target },
-          });
+          await this.enter(target);
           break;
         case 401:
           this.unauthorized.set(true);
@@ -196,75 +118,78 @@ export class ConnectComponent implements OnInit {
         case 303:
           break;
         default:
-          this.feedback.set(
-            `Unexpected response status: [${response.status}]`,
-          );
+          this.feedback.set(this.describeFailure(target, response.status, response.body));
       }
     } catch (error: unknown) {
-      this.alerts.error(
-        `Error connecting to [${target}]`,
-        this.errorDetails(error),
-      );
+      this.feedback.set(`Could not reach ${target}.`);
+      this.alerts.error(`Error connecting to [${target}]`, this.errorDetails(error));
     } finally {
-      this.connecting.set(false);
+      this.connecting.set(undefined);
     }
   }
 
   async authorize(): Promise<void> {
-    const target = this.host.trim();
-    if (
-      !target ||
-      !this.username ||
-      !this.password ||
-      this.connecting()
-    ) {
+    const target = this.host().trim();
+    const username = this.username();
+    const password = this.password();
+    if (!target || !username || !password || this.connecting()) {
       return;
     }
 
     this.feedback.set(undefined);
-    this.connecting.set(true);
+    this.connecting.set(target);
     try {
-      const response = await this.api.testConnection({
-        host: target,
-        username: this.username,
-        password: this.password,
-      });
+      const response = await this.api.testConnection({ host: target, username, password });
       switch (response.status) {
         case 200:
-          this.connection.connect(target, this.username, this.password);
-          await this.router.navigate(['/overview'], {
-            queryParams: { host: target },
-          });
+          await this.enter(target, username, password);
           break;
         case 401:
-          this.feedback.set('Invalid username or password');
+          this.feedback.set('Invalid username or password.');
           break;
         case 303:
           break;
         default:
-          this.feedback.set(
-            `Unexpected response status: [${response.status}]`,
-          );
+          this.feedback.set(this.describeFailure(target, response.status, response.body));
       }
     } catch (error: unknown) {
-      this.alerts.error(
-        `Error connecting to [${target}]`,
-        this.errorDetails(error),
-      );
+      this.feedback.set(`Could not reach ${target}.`);
+      this.alerts.error(`Error connecting to [${target}]`, this.errorDetails(error));
     } finally {
-      this.connecting.set(false);
+      this.connecting.set(undefined);
     }
   }
 
   cancelAuthorization(): void {
     this.unauthorized.set(false);
     this.feedback.set(undefined);
-    this.username = '';
-    this.password = '';
+    this.username.set('');
+    this.password.set('');
     void this.router.navigate([], {
-      queryParams: { host: this.host || null, unauthorized: null },
+      queryParams: { host: this.host() || null, unauthorized: null },
       replaceUrl: true,
     });
+  }
+
+  private async enter(host: string, username?: string, password?: string): Promise<void> {
+    this.connection.connect(host, username, password);
+    await this.router.navigate(['/overview'], { queryParams: { host } });
+  }
+
+  private describeFailure(host: string, status: number, body: unknown): string {
+    const reason =
+      typeof body === 'object' && body !== null && 'error' in body
+        ? (body as { error: unknown }).error
+        : undefined;
+    const detail =
+      typeof reason === 'string'
+        ? reason
+        : typeof reason === 'object' && reason !== null && 'reason' in reason
+          ? String((reason as { reason: unknown }).reason)
+          : undefined;
+    return detail
+      ? `${host} responded with ${status}: ${detail}`
+      : `${host} responded with an unexpected status (${status}).`;
   }
 
   private async loadHosts(): Promise<void> {
@@ -272,10 +197,9 @@ export class ConnectComponent implements OnInit {
       const hosts = await this.api.getHosts();
       this.hosts.set([...hosts].sort((left, right) => left.localeCompare(right)));
     } catch (error: unknown) {
-      this.alerts.error(
-        'Error while fetching list of known hosts',
-        this.errorDetails(error),
-      );
+      this.alerts.error('Error while fetching list of known hosts', this.errorDetails(error));
+    } finally {
+      this.loadingHosts.set(false);
     }
   }
 
