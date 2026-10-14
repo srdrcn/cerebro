@@ -1,14 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import {
+  OverviewData,
   OverviewIndex,
   OverviewIndexFilter,
+  OverviewNode,
   OverviewShard,
 } from './overview.models';
 import {
-  buildBulkIndicesPayload,
+  OPERATIONS,
   canReceiveShard,
+  describeShard,
   filterOverviewIndices,
+  hasShardActivity,
+  healthTone,
+  escapeRegExp,
+  indexBreakdown,
+  indexSummary,
+  indicesPayload,
+  loadPercent,
   matchesOverviewIndex,
+  nodeAttributes,
+  nodeRoleIcons,
+  normalizeOverview,
+  operationConfirmation,
+  operationSuccess,
+  pageOfIndex,
+  primaryStoreSize,
+  revealFlags,
+  revealIndexFilter,
+  shardChipClass,
+  shardMapLayout,
+  shardsOn,
+  stillRelocatable,
+  visibleDataNodes,
 } from './overview.utils';
 
 const defaultFilter: OverviewIndexFilter = {
@@ -70,13 +94,10 @@ describe('overview index filtering and bulk payloads', () => {
       index('logs-01'),
       index('logs-02'),
     ];
+    const names = filterOverviewIndices(indices, { ...defaultFilter, name: '^logs-' }).map((item) => item.name);
 
-    const payload = buildBulkIndicesPayload(indices, {
-      ...defaultFilter,
-      name: '^logs-',
-    });
-
-    expect(payload).toEqual({ indices: 'logs-01,logs-02,logs-03' });
+    expect(indicesPayload(names)).toEqual({ indices: 'logs-01,logs-02,logs-03' });
+    expect(indicesPayload(['products'])).toEqual({ indices: 'products' });
   });
 
   it('falls back to literal case-insensitive matching for an invalid regexp', () => {
@@ -121,5 +142,240 @@ describe('shard relocation eligibility', () => {
     expect(canReceiveShard(selected, index('metrics'), 'node-b')).toBe(false);
     expect(canReceiveShard(selected, targetIndex, 'node-b')).toBe(false);
     expect(canReceiveShard(undefined, targetIndex, 'node-c')).toBe(false);
+  });
+});
+
+describe('overview helpers', () => {
+  const node = (overrides: Partial<OverviewNode> = {}): OverviewNode => ({
+    id: 'n1',
+    current_master: false,
+    name: 'es-node-1',
+    host: '127.0.0.1',
+    es_version: '8.15.3',
+    jvm_version: '22',
+    load_average: 2,
+    available_processors: 4,
+    cpu_percent: 10,
+    master: true,
+    data: true,
+    coordinating: false,
+    ingest: false,
+    heap: { used: 1, committed: 2, used_percent: 50, max: 2 },
+    disk: { total: 10, free: 5, used_percent: 50 },
+    attributes: {},
+    ...overrides,
+  });
+
+  it('normalizes legacy closed indices without a routing table', () => {
+    const data = normalizeOverview({
+      cluster_name: 'c',
+      status: 'green',
+      number_of_nodes: 1,
+      active_primary_shards: 0,
+      active_shards: 0,
+      relocating_shards: 0,
+      initializing_shards: 0,
+      unassigned_shards: 0,
+      docs_count: 0,
+      size_in_bytes: 0,
+      total_indices: 1,
+      closed_indices: 1,
+      special_indices: 0,
+      shard_allocation: true,
+      indices: [{ name: 'old', closed: true, special: false }],
+    });
+    expect(data.nodes).toEqual([]);
+    expect(data.indices[0]).toMatchObject({ aliases: [], shards: {}, num_shards: 0, unhealthy: false });
+    expect(indexSummary(data.indices[0]!)).toBe('0 × 1 shards');
+  });
+
+  it('derives the number of index columns from the grid width', () => {
+    expect(shardMapLayout(1130)).toEqual({ nodeColumn: 248, columns: 4, columnWidth: 220, scroll: false });
+    expect(shardMapLayout(356)).toEqual({ nodeColumn: 136, columns: 1, columnWidth: 220, scroll: false });
+    expect(shardMapLayout(200).scroll).toBe(true);
+    expect(shardMapLayout(0).columns).toBe(1);
+    const wide = shardMapLayout(2400);
+    expect(wide.columns).toBe(10);
+    expect(wide.nodeColumn + wide.columns * wide.columnWidth).toBeLessThanOrEqual(2400);
+  });
+
+  it('describes shards and builds chip classes', () => {
+    const names = new Map([['n2', 'es-node-2']]);
+    const relocating: OverviewShard = {
+      shard: 1,
+      index: 'logs',
+      node: 'n1',
+      relocating_node: 'n2',
+      state: 'RELOCATING',
+      primary: true,
+    };
+    expect(describeShard(relocating, names)).toBe('Shard 1 of logs · primary · relocating to es-node-2');
+    expect(describeShard({ ...relocating, primary: false, state: 'STARTED' }, names, true)).toBe(
+      'Shard 1 of logs · replica · closed',
+    );
+    expect(shardChipClass(relocating, false, true)).toBe('shard-chip is-relocating is-primary is-selected');
+    expect(shardChipClass({ ...relocating, state: 'weird', primary: false }, false)).toBe(
+      'shard-chip is-unknown is-replica',
+    );
+  });
+
+  it('sorts shards of a node with primaries first', () => {
+    const shard = (number: number, primary: boolean): OverviewShard => ({
+      shard: number,
+      index: 'logs',
+      node: 'n1',
+      state: 'STARTED',
+      primary,
+    });
+    const target = index('logs', { shards: { n1: [shard(2, false), shard(0, false), shard(0, true)] } });
+    expect(shardsOn(target, 'n1').map((item) => `${item.shard}${item.primary ? 'p' : 'r'}`)).toEqual([
+      '0p',
+      '0r',
+      '2r',
+    ]);
+    expect(shardsOn(target, 'missing')).toEqual([]);
+  });
+
+  it('keeps a selected shard only while it is still started on its node', () => {
+    const started: OverviewShard = { shard: 0, index: 'logs', node: 'n1', state: 'STARTED', primary: true };
+    const data = (shards: OverviewShard[], closed = false): OverviewData => ({
+      cluster_name: 'c',
+      status: 'green',
+      number_of_nodes: 1,
+      active_primary_shards: 1,
+      active_shards: 1,
+      relocating_shards: 0,
+      initializing_shards: 0,
+      unassigned_shards: 0,
+      docs_count: 0,
+      size_in_bytes: 0,
+      total_indices: 1,
+      closed_indices: 0,
+      special_indices: 0,
+      shard_allocation: true,
+      nodes: [],
+      indices: [index('logs', { closed, shards: { n1: shards } })],
+    });
+    expect(stillRelocatable(data([started]), started)).toEqual(started);
+    expect(stillRelocatable(data([{ ...started, state: 'RELOCATING' }]), started)).toBeUndefined();
+    expect(stillRelocatable(data([started], true), started)).toBeUndefined();
+    expect(stillRelocatable(data([]), started)).toBeUndefined();
+    expect(stillRelocatable(data([started]), undefined)).toBeUndefined();
+  });
+
+  it('filters data nodes by name with regex support', () => {
+    const nodes = [
+      node({ id: 'b', name: 'es-node-2' }),
+      node({ id: 'a', name: 'es-node-1' }),
+      node({ id: 'c', name: 'coordinator', data: false }),
+    ];
+    expect(visibleDataNodes(nodes, '').map((item) => item.id)).toEqual(['a', 'b']);
+    expect(visibleDataNodes(nodes, '-2$').map((item) => item.id)).toEqual(['b']);
+    expect(visibleDataNodes(nodes, 'coord')).toEqual([]);
+  });
+
+  it('describes node roles, attributes and load', () => {
+    expect(nodeRoleIcons(node({ current_master: true, ingest: true })).map((role) => role.icon)).toEqual([
+      'bi-star-fill',
+      'bi-hdd',
+      'bi-funnel',
+    ]);
+    expect(nodeAttributes({ 'ml.config_version': '1', zone: 'z1', rack: 'r1' })).toEqual([
+      ['rack', 'r1'],
+      ['zone', 'z1'],
+    ]);
+    expect(loadPercent(node())).toBe(50);
+    expect(loadPercent(node({ available_processors: 0 }))).toBe(0);
+  });
+
+  it('summarizes health and sizes', () => {
+    expect(healthTone('YELLOW')).toBe('yellow');
+    expect(healthTone(undefined)).toBe('gray');
+    expect(
+      primaryStoreSize([index('a', { size_in_bytes: 10 }), index('b', { size_in_bytes: 5, closed: true })]),
+    ).toBe(10);
+    expect(hasShardActivity({ unassigned: 0, relocating: 0, initializing: 1 })).toBe(true);
+    expect(hasShardActivity({ unassigned: 0, relocating: 0, initializing: 0 })).toBe(false);
+    expect(pageOfIndex([index('a'), index('b'), index('c')], 'c', 2)).toBe(2);
+    expect(pageOfIndex([index('a')], 'z', 2)).toBeUndefined();
+  });
+
+  it('reveals closed or special indices linked from the command palette', () => {
+    const indices = [index('archive', { closed: true }), index('.kibana', { special: true }), index('logs')];
+    expect(revealFlags(indices, 'archive')).toEqual({ closed: true, special: false });
+    expect(revealFlags(indices, ' .kibana ')).toEqual({ closed: false, special: true });
+    expect(revealFlags(indices, 'log')).toEqual({ closed: false, special: false });
+  });
+
+  it('builds specific confirmations and success messages for index operations', () => {
+    expect(operationConfirmation('delete', ['products'])).toEqual({
+      title: 'Delete index products?',
+      message: OPERATIONS.delete.message,
+      confirmLabel: 'Delete index',
+      tone: 'danger',
+    });
+    expect(operationConfirmation('close', ['a', 'b'])).toMatchObject({
+      title: 'Close 2 indices?',
+      items: ['a', 'b'],
+      confirmLabel: 'Close 2 indices',
+      tone: 'danger',
+    });
+    expect(operationConfirmation('cache', ['a', 'b'])).toMatchObject({
+      title: 'Clear the cache of 2 indices?',
+      confirmLabel: 'Clear 2 caches',
+      tone: 'default',
+    });
+    expect(operationConfirmation('merge', ['a']).tone).toBe('warning');
+    expect(operationSuccess('refresh', ['a', 'b', 'c'])).toBe('3 indices refreshed');
+    expect(operationSuccess('close', ['products'])).toBe('Index products closed');
+  });
+
+  it('summarizes the index breakdown briefly with the full text as a title', () => {
+    expect(indexBreakdown(18, 1, 3)).toEqual({
+      short: '1 closed · 3 special',
+      full: '17 open · 1 closed · 3 special',
+    });
+    expect(indexBreakdown(4, 0, 0)).toEqual({ short: 'all open', full: '4 open · 0 closed · 0 special' });
+    expect(indexBreakdown(4, 0, 1).short).toBe('1 special');
+  });
+});
+
+describe('revealing the index of a selected shard', () => {
+  const indices = [
+    index('audit-trail'),
+    index('logs-1', { unhealthy: true }),
+    index('.kibana', { special: true }),
+    index('archive', { closed: true }),
+    index('a.b+c'),
+  ];
+  const names = (filter: OverviewIndexFilter) =>
+    filterOverviewIndices(indices, filter).map((item) => item.name);
+
+  it('keeps the filter when the index is already visible or unknown', () => {
+    expect(revealIndexFilter(indices, defaultFilter, 'audit-trail')).toBe(defaultFilter);
+    expect(revealIndexFilter(indices, defaultFilter, 'missing')).toBe(defaultFilter);
+  });
+
+  it('turns Affected only off but keeps a text filter that matches', () => {
+    const filter = { ...defaultFilter, name: 'audit', healthy: false };
+    const revealed = revealIndexFilter(indices, filter, 'audit-trail');
+    expect(revealed).toEqual({ ...filter, healthy: true });
+    expect(names(revealed)).toContain('audit-trail');
+  });
+
+  it('switches on the Special and Closed chips when needed', () => {
+    expect(revealIndexFilter(indices, defaultFilter, '.kibana')).toMatchObject({ special: true, name: '' });
+    expect(revealIndexFilter(indices, { ...defaultFilter, healthy: false }, 'archive')).toMatchObject({
+      closed: true,
+      healthy: true,
+    });
+  });
+
+  it('narrows the text filter to the index only when the text hides it', () => {
+    const revealed = revealIndexFilter(indices, { ...defaultFilter, name: 'logs', healthy: false }, 'a.b+c');
+    expect(revealed.name).toBe('^a\\.b\\+c$');
+    expect(revealed.healthy).toBe(true);
+    expect(names(revealed)).toEqual(['a.b+c']);
+    expect(escapeRegExp('x(1)')).toBe('x\\(1\\)');
   });
 });

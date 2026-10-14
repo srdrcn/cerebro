@@ -3,12 +3,40 @@ export interface SnapshotIndex {
   special: boolean;
 }
 
+/** Snapshot states reported by `GET _snapshot/<repository>/_all`. */
+export type SnapshotState = 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'IN_PROGRESS' | 'INCOMPATIBLE';
+
+export interface SnapshotShardStats {
+  total?: number;
+  failed?: number;
+  successful?: number;
+}
+
+export interface SnapshotFailure {
+  index?: string;
+  shard_id?: number;
+  reason?: string;
+  node_id?: string;
+  status?: string;
+}
+
 export interface SnapshotRecord {
   snapshot: string;
   uuid?: string;
-  start_time?: string;
+  repository?: string;
+  version?: string;
   state?: string;
+  reason?: string;
+  start_time?: string;
+  start_time_in_millis?: number;
+  end_time?: string;
+  end_time_in_millis?: number;
+  duration_in_millis?: number;
   indices?: string[];
+  data_streams?: string[];
+  include_global_state?: boolean;
+  failures?: SnapshotFailure[];
+  shards?: SnapshotShardStats;
   [key: string]: unknown;
 }
 

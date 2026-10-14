@@ -1,0 +1,256 @@
+<section class="page" aria-labelledby="cat-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="cat-title" class="page-title">CAT APIs</h1>
+      <p class="page-subtitle">
+        Compact, tabular views of cluster internals from the <span class="mono">_cat</span> endpoints.
+      </p>
+    </div>
+  </header>
+
+  <div class="layout-sidebar-start cat-layout">
+    <nav class="card cat-apis" aria-labelledby="cat-apis-title">
+      <div class="card-header">
+        <h2 id="cat-apis-title" class="card-title">
+          <i class="bi bi-table" aria-hidden="true"></i> Endpoints
+        </h2>
+        <span class="count-label"><strong>{{ options.length }}</strong> APIs</span>
+      </div>
+
+      <div class="cat-apis__picker field">
+        <label class="field-label" for="cat-api-select">CAT API</label>
+        <select
+          id="cat-api-select"
+          class="select"
+          [ngModel]="selectedOption()?.value ?? ''"
+          (ngModelChange)="choose($event)"
+        >
+          <option value="" disabled>Choose an API</option>
+          @for (option of options; track option.api) {
+            <option [value]="option.value">{{ option.info.label }}</option>
+          }
+        </select>
+      </div>
+
+      <ul class="list cat-apis__list">
+        @for (option of options; track option.api) {
+          <li>
+            <a
+              class="list-item list-item--interactive cat-api"
+              routerLink="/cat"
+              [queryParams]="links().get(option.api)"
+              [class.is-selected]="option.api === selectedApi()"
+              [attr.aria-current]="option.api === selectedApi() ? 'page' : null"
+              [title]="option.info.description"
+              (click)="rerunIfSelected(option.api)"
+            >
+              <span class="list-item__icon" aria-hidden="true">
+                <i class="bi" [class]="'bi ' + option.info.icon"></i>
+              </span>
+              <span class="list-item__body">
+                <span class="list-item__title">{{ option.info.label }}</span>
+                <span class="list-item__meta">{{ option.info.description }}</span>
+              </span>
+            </a>
+          </li>
+        }
+      </ul>
+    </nav>
+
+    <section class="card cat-result" aria-labelledby="cat-result-title" [attr.aria-busy]="loading()">
+      @if (selectedOption(); as option) {
+        <div class="card-header cat-result__header">
+          <div class="cat-result__heading">
+            <span class="list-item__icon cat-result__icon" aria-hidden="true">
+              <i class="bi" [class]="'bi ' + option.info.icon"></i>
+            </span>
+            <div class="min-w-0">
+              <h2 id="cat-result-title" class="card-title">{{ option.info.label }}</h2>
+              <div class="card-subtitle truncate">
+                <span class="method method-GET">GET</span>
+                <span class="mono">/_cat/{{ option.value }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="cat-result__actions">
+            <button
+              type="button"
+              class="btn btn-sm"
+              [class.is-loading]="manualLoading()"
+              [disabled]="manualLoading()"
+              (click)="refresh()"
+            >
+              <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
+            </button>
+            <button
+              type="button"
+              class="btn btn-sm"
+              [disabled]="copyRows().length === 0"
+              [title]="'Copy the ' + copyRows().length + ' shown ' + (copyRows().length === 1 ? 'row' : 'rows') + ' as tab separated values'"
+              (click)="copyTsv()"
+            >
+              <i class="bi bi-clipboard" aria-hidden="true"></i> Copy as TSV
+            </button>
+          </div>
+        </div>
+
+        @if (current(); as data) {
+          @if (currentFailure(); as failure) {
+            <div class="callout callout-warning cat-callout" role="status">
+              <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+              <div class="min-w-0">
+                <p><strong>The last refresh failed.</strong> Showing data from {{ data.loadedAt.toLocaleTimeString() }}.</p>
+                @if (failure.reason) {
+                  <p class="cat-callout__reason text-secondary break-all">Reason: {{ failure.reason }}</p>
+                }
+              </div>
+            </div>
+          }
+
+          @if (data.rows.length === 0) {
+            <cerebro-empty icon="bi-inbox" heading="No rows" [text]="option.info.emptyText">
+              <button type="button" class="btn btn-sm" (click)="refresh()">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Run again
+              </button>
+            </cerebro-empty>
+          } @else if (record(); as record) {
+            <dl class="cat-record">
+              @for (column of data.columns; track column) {
+                <div class="cat-record__item">
+                  <dt class="cat-record__key">@for (part of keyParts(column); track $index) {{{ part }}<wbr />}</dt>
+                  <dd class="cat-record__value" [class.tabular]="data.numeric.has(column)" [attr.title]="cellTitle(record, column)">
+                    @if (cellTone(record, column); as tone) {
+                      <span class="dot" [class]="'dot dot-' + tone" aria-hidden="true"></span>
+                    }
+                    {{ cellText(record, column) || '–' }}
+                  </dd>
+                </div>
+              }
+            </dl>
+          } @else {
+            <div class="card-header cat-result__toolbar">
+              <cerebro-search
+                [value]="filter()"
+                (valueChange)="setFilter($event)"
+                placeholder="Filter rows"
+                ariaLabel="Filter rows by any column (text or regular expression)"
+                [small]="true"
+              />
+              <span class="count-label" aria-live="polite">
+                @if (filter()) {
+                  <strong>{{ visibleRows().length }}</strong> of {{ data.rows.length }} rows
+                } @else {
+                  <strong>{{ data.rows.length }}</strong> {{ data.rows.length === 1 ? 'row' : 'rows' }}
+                }
+                · {{ data.columns.length }} columns
+              </span>
+            </div>
+
+            <div class="table-wrap cat-table-wrap">
+              <table class="data-table data-table--compact cat-table">
+                <caption class="visually-hidden">Output of _cat/{{ option.value }}</caption>
+                <thead>
+                  <tr>
+                    @for (column of data.columns; track column) {
+                      <th
+                        scope="col"
+                        [class.num]="data.numeric.has(column)"
+                        [attr.aria-sort]="ariaSort(column)"
+                      >
+                        <button
+                          type="button"
+                          class="sort-button"
+                          [class.is-active]="sortColumn() === column"
+                          (click)="sortBy(column)"
+                        >
+                          {{ column }} <i [class]="sortIcon(column)" aria-hidden="true"></i>
+                        </button>
+                      </th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of pageRows(); track $index) {
+                    <tr>
+                      @for (column of data.columns; track column) {
+                        <td [class.num]="data.numeric.has(column)" [attr.title]="cellTitle(row, column)">
+                          @if (cellTone(row, column); as tone) {
+                            <span class="cat-tone">
+                              <span class="dot" [class]="'dot dot-' + tone" aria-hidden="true"></span>
+                              {{ cellText(row, column) }}
+                            </span>
+                          } @else {
+                            {{ cellText(row, column) }}
+                          }
+                        </td>
+                      }
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td [attr.colspan]="data.columns.length" class="cat-table__empty">
+                        <cerebro-empty
+                          icon="bi-funnel"
+                          heading="No matching rows"
+                          text="No row has a column that matches the filter."
+                          [compact]="true"
+                        >
+                          <button type="button" class="btn btn-sm" (click)="setFilter('')">Clear filter</button>
+                        </cerebro-empty>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            @if (visibleRows().length > pageSize) {
+              <div class="card-footer">
+                <cerebro-pager
+                  [page]="currentPage()"
+                  [pageSize]="pageSize"
+                  [total]="visibleRows().length"
+                  noun="rows"
+                  (pageChange)="page.set($event)"
+                />
+              </div>
+            }
+          }
+        } @else if (loading()) {
+          <div class="loading-block" role="status">
+            <span class="spinner"></span>
+            <span>Running <span class="mono">_cat/{{ option.value }}</span>…</span>
+          </div>
+        } @else if (currentFailure(); as failure) {
+          <cerebro-empty
+            icon="bi-exclamation-triangle"
+            [heading]="'Could not load _cat/' + option.value"
+            [text]="failure.reason ?? 'The cluster did not answer the request.'"
+          >
+            <button type="button" class="btn btn-sm" (click)="refresh()">
+              <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+            </button>
+          </cerebro-empty>
+        } @else {
+          <div class="loading-block" role="status">
+            <span class="spinner"></span>
+            <span>Running <span class="mono">_cat/{{ option.value }}</span>…</span>
+          </div>
+        }
+      } @else if (unknownApi()) {
+        <h2 id="cat-result-title" class="visually-hidden">Unknown CAT API</h2>
+        <cerebro-empty
+          icon="bi-question-circle"
+          heading="Unknown CAT API"
+          [text]="'“' + apiParam() + '” is not one of the supported CAT APIs. Pick an endpoint from the list.'"
+        />
+      } @else {
+        <h2 id="cat-result-title" class="visually-hidden">CAT API output</h2>
+        <cerebro-empty
+          icon="bi-table"
+          heading="Pick a CAT API"
+          text="Choose an endpoint to see its output as a sortable, filterable table. The choice is kept in the URL so you can share it."
+        />
+      }
+    </section>
+  </div>
+</section>

@@ -1,0 +1,295 @@
+<section class="page" aria-labelledby="create-index-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="create-index-title" class="page-title">Create index</h1>
+      <p class="page-subtitle">
+        Name a new index and pick its shard layout, or start from the settings and mappings of an existing one.
+      </p>
+    </div>
+  </header>
+
+  <div class="layout-sidebar-start create-layout">
+    <div class="card basics-card">
+      <div class="card-header">
+        <div class="min-w-0">
+          <h2 class="card-title"><i class="bi bi-input-cursor-text" aria-hidden="true"></i> Basics</h2>
+          <p class="card-subtitle">Name and shard layout of the new index</p>
+        </div>
+      </div>
+
+      <div class="card-body stack">
+        <div class="field">
+          <label class="field-label" for="create-index-name">Index name</label>
+          <input
+            #nameInput
+            id="create-index-name"
+            class="input input-mono"
+            [class.is-invalid]="nameError()"
+            [ngModel]="name()"
+            (ngModelChange)="name.set($event)"
+            (blur)="nameTouched.set(true)"
+            (keydown.enter)="create()"
+            placeholder="e.g. logs-2026.10.15"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            maxlength="512"
+            required
+            aria-required="true"
+            [attr.aria-invalid]="nameError() ? true : null"
+            aria-describedby="create-index-name-help"
+          />
+          <div id="create-index-name-help" aria-live="polite">
+            @if (nameError(); as error) {
+              <p class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+            } @else if (nameCheck().warning; as warning) {
+              <p class="field-hint text-warning"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ warning }}</p>
+            } @else {
+              <p class="field-hint">Lowercase, without spaces or <span class="mono">\ / * ? " &lt; &gt; | , # :</span></p>
+            }
+          </div>
+        </div>
+
+        <div class="grid-2 count-grid">
+          <div class="field">
+            <label class="field-label" for="create-index-shards">Shards</label>
+            <input
+              #shardsInput
+              id="create-index-shards"
+              class="input tabular"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              [placeholder]="countPlaceholders().shards"
+              [class.is-invalid]="shardsError()"
+              [disabled]="fieldsLocked()"
+              [value]="fieldsLocked() ? (bodyLayout().shards ?? '') : shards()"
+              (input)="setShards(shardsInput.value)"
+              (keydown.enter)="create()"
+              [attr.aria-invalid]="shardsError() ? true : null"
+              aria-describedby="create-index-shards-help"
+            />
+            <p id="create-index-shards-help" [class]="shardsError() ? 'field-error' : 'field-hint'">
+              {{ shardsError() ?? 'Fixed after creation' }}
+            </p>
+          </div>
+          <div class="field">
+            <label class="field-label" for="create-index-replicas">Replicas</label>
+            <input
+              #replicasInput
+              id="create-index-replicas"
+              class="input tabular"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              [placeholder]="countPlaceholders().replicas"
+              [class.is-invalid]="replicasError()"
+              [disabled]="fieldsLocked()"
+              [value]="fieldsLocked() ? (bodyLayout().replicas ?? '') : replicas()"
+              (input)="setReplicas(replicasInput.value)"
+              (keydown.enter)="create()"
+              [attr.aria-invalid]="replicasError() ? true : null"
+              aria-describedby="create-index-replicas-help"
+            />
+            <p id="create-index-replicas-help" [class]="replicasError() ? 'field-error' : 'field-hint'">
+              {{ replicasError() ?? 'Copies of each shard' }}
+            </p>
+          </div>
+        </div>
+
+        @if (fieldsLocked()) {
+          <p class="override-note" [class.is-invalid]="bodyState().kind === 'invalid'">
+            @if (bodyState().kind === 'invalid') {
+              <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+              <span>Fix the JSON body to see its shard layout.</span>
+            } @else {
+              <i class="bi bi-braces" aria-hidden="true"></i>
+              <span>Taken from the JSON body.</span>
+            }
+            <button type="button" class="link-button" (click)="clearBody()">Clear JSON</button>
+          </p>
+        }
+      </div>
+
+      <div class="card-body copy-section">
+        <div class="field">
+          <label class="field-label" for="create-index-source">
+            Copy settings and mappings from <span class="optional">(optional)</span>
+          </label>
+          <select
+            #sourceSelect
+            id="create-index-source"
+            class="select"
+            [disabled]="indices() === undefined || copying()"
+            (change)="copyFrom(sourceSelect)"
+            aria-describedby="create-index-source-help"
+          >
+            @if (indices() === undefined) {
+              <option value="">{{ indicesFailed() ? 'Indices unavailable' : 'Loading indices…' }}</option>
+            } @else {
+              <option value="" [selected]="sourceIndex() === ''">Don't copy</option>
+              @if (indexGroups().regular.length > 0) {
+                <optgroup label="Indices">
+                  @for (index of indexGroups().regular; track index) {
+                    <option [value]="index" [selected]="index === sourceIndex()">{{ index }}</option>
+                  }
+                </optgroup>
+              }
+              @if (indexGroups().special.length > 0) {
+                <optgroup label="Hidden and system">
+                  @for (index of indexGroups().special; track index) {
+                    <option [value]="index" [selected]="index === sourceIndex()">{{ index }}</option>
+                  }
+                </optgroup>
+              }
+            }
+          </select>
+          <div id="create-index-source-help" aria-live="polite">
+            @if (copying()) {
+              <p class="field-hint copy-status"><span class="spinner" aria-hidden="true"></span> Loading {{ sourceIndex() }}…</p>
+            } @else if (indicesFailed() && indices() === undefined) {
+              <p class="field-error copy-status">
+                Could not load the indices.
+                <button type="button" class="link-button" (click)="loadIndices()">Try again</button>
+              </p>
+            } @else if (copyInfo(); as info) {
+              <div class="copy-result">
+                <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <p class="copy-result__title">Copied from <span class="mono">{{ info.index }}</span></p>
+                  @if (info.removedSettings.length > 0 || info.unwrappedType) {
+                    <p class="copy-result__meta">
+                      @if (info.removedSettings.length > 0) {
+                        Dropped {{ info.removedSettings.length }} internal
+                        {{ info.removedSettings.length === 1 ? 'setting' : 'settings' }}
+                        ({{ info.removedSettings.join(', ') }}).
+                      }
+                      @if (info.unwrappedType) {
+                        Removed the <span class="mono">{{ info.unwrappedType }}</span> mapping type.
+                      }
+                    </p>
+                  }
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-icon btn-sm"
+                  aria-label="Discard the copied settings and mappings"
+                  title="Discard copy"
+                  (click)="clearCopy()"
+                >
+                  <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+              </div>
+            } @else {
+              <p class="field-hint">Loads the source index into the JSON body, ready to adjust.</p>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card editor-card">
+      <div class="card-header editor-card__header">
+        <div class="min-w-0">
+          <h2 class="card-title"><i class="bi bi-braces" aria-hidden="true"></i> Settings and mappings</h2>
+          <p class="card-subtitle">Optional JSON body of the create index request</p>
+        </div>
+        <div class="row editor-actions">
+          <button type="button" class="btn btn-sm btn-ghost" (click)="format()" [disabled]="!body().trim()" title="Format JSON (Ctrl+Shift+F)">
+            <i class="bi bi-text-indent-left" aria-hidden="true"></i> Format
+          </button>
+          <button type="button" class="btn btn-sm" (click)="preview()" [disabled]="bodyState().kind === 'invalid'">
+            <i class="bi bi-eye" aria-hidden="true"></i> Preview JSON
+          </button>
+          <cerebro-menu label="More editor actions" align="end">
+            <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+            <button type="button" class="menu-item" (click)="insertExample()" [disabled]="!!body().trim()">
+              <i class="bi bi-file-earmark-code" aria-hidden="true"></i> Insert example body
+            </button>
+            <div class="menu-separator"></div>
+            <button type="button" class="menu-item menu-item--danger" (click)="clearBody()" [disabled]="!body().trim()">
+              <i class="bi bi-eraser" aria-hidden="true"></i> Clear editor
+            </button>
+          </cerebro-menu>
+        </div>
+      </div>
+
+      <div class="card-body stack">
+        <div class="callout callout-info">
+          <i class="bi bi-info-circle" aria-hidden="true"></i>
+          <p>
+            A non-empty body is sent <strong>as is</strong> and takes precedence over the shard and
+            replica fields. Leave it empty to create the index from the Basics card alone.
+          </p>
+        </div>
+
+        <div class="editor-wrap" [class.is-busy]="copying()">
+          <cerebro-code-editor
+            [value]="body()"
+            (valueChange)="onBodyChange($event)"
+            [minLines]="22"
+            [maxLines]="60"
+            [readOnly]="copying()"
+            placeholder='{ "settings": { … }, "mappings": { "properties": { … } } }'
+            ariaLabel="Settings and mappings JSON"
+            (submit)="create()"
+          />
+          @if (copying()) {
+            <div class="editor-overlay" role="status">
+              <span class="spinner" aria-hidden="true"></span> Loading {{ sourceIndex() }}…
+            </div>
+          }
+        </div>
+
+        <div class="editor-status" aria-live="polite">
+          @if (bodyError(); as error) {
+            <span class="status-pill status-pill--danger">
+              <i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid JSON
+            </span>
+            <span class="editor-status__message text-danger">{{ error }}</span>
+          } @else if (usesBody()) {
+            <span class="status-pill status-pill--ok">
+              <i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON
+            </span>
+            <span class="editor-status__message">Sent as the request body · {{ bodyLinesLabel() }}</span>
+          } @else if (bodyState().kind === 'object') {
+            <span class="status-pill"><i class="bi bi-dash-circle" aria-hidden="true"></i> Empty object</span>
+            <span class="editor-status__message">The shard and replica fields are used.</span>
+          } @else {
+            <span class="status-pill"><i class="bi bi-circle" aria-hidden="true"></i> Empty</span>
+            <span class="editor-status__message">
+              The shard and replica fields are used.
+              <button type="button" class="link-button" (click)="insertExample()">Insert an example</button>
+            </span>
+          }
+          <span class="spacer"></span>
+          <span class="editor-status__keys text-muted">
+            <kbd>Ctrl</kbd><kbd>Enter</kbd> to create
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="create-actions" role="region" aria-label="Create index">
+    <div class="create-actions__summary min-w-0">
+      <span class="method method-PUT">PUT</span>
+      <span class="create-actions__target mono truncate" [class.is-placeholder]="!name()">/{{ name() || 'index-name' }}</span>
+      <span class="create-actions__meta truncate">{{ summary() }}{{ usesBody() ? ' · from the JSON body' : '' }}</span>
+    </div>
+    <div class="create-actions__buttons">
+      <a class="btn" routerLink="/overview" [queryParams]="connection.hostQuery()">Cancel</a>
+      <button
+        type="button"
+        class="btn btn-primary"
+        [class.is-loading]="creating()"
+        [disabled]="!canCreate()"
+        [attr.title]="blocker()"
+        [attr.aria-busy]="creating() ? true : null"
+        (click)="create()"
+      >
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> Create index
+      </button>
+    </div>
+  </div>
+</section>

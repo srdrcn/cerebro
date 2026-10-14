@@ -1,0 +1,114 @@
+.restore-dialog {
+  width: min(900px, calc(100vw - 32px));
+}
+
+.restore-form {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.restore-heading {
+  flex: 1;
+}
+
+.restore-heading .mono {
+  font-weight: 600;
+}
+
+.restore-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.restore-failure {
+  grid-column: 1 / -1;
+  font-size: var(--text-sm);
+}
+
+.restore-failure__reason {
+  display: block;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.restore-side {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+}
+
+.restore-section {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.restore-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.restore-section__title {
+  color: var(--text-3);
+  font-size: var(--text-xs);
+  font-weight: 620;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.restore-options {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.restore-option {
+  align-items: flex-start;
+}
+
+.restore-option input {
+  margin-top: 1px;
+}
+
+/* The design system has no disabled switch style yet. */
+.restore-option input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.restore-callout {
+  font-size: var(--text-sm);
+}
+
+.restore-callout .link-button {
+  margin-top: 4px;
+}
+
+.field-hint code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
+
+.restore-footer-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+}
+
+@media (max-width: 760px) {
+  .restore-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .restore-footer-count {
+    display: none;
+  }
+}

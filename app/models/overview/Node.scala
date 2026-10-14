@@ -40,13 +40,18 @@ object Node extends NodeInfo {
     )
   }
 
+  // Usage is derived from the space available to Elasticsearch (what the disk
+  // allocation deciders and the nodes view use), falling back to free space
+  // for versions that do not report it.
   def disk(stats: JsValue): JsObject = {
     val totalInBytes = (stats \ "fs" \ "total" \ "total_in_bytes").asOpt[Long].getOrElse(0L)
     val freeInBytes = (stats \ "fs" \ "total" \ "free_in_bytes").asOpt[Long].getOrElse(0L)
-    val usedPercent = 100 - (100 * (freeInBytes.toFloat / totalInBytes.toFloat)).toInt
+    val availableInBytes = (stats \ "fs" \ "total" \ "available_in_bytes").asOpt[Long].getOrElse(freeInBytes)
+    val usedPercent = 100 - (100 * (availableInBytes.toFloat / totalInBytes.toFloat)).toInt
     Json.obj(
       "total" -> JsNumber(totalInBytes),
       "free" -> JsNumber(freeInBytes),
+      "available" -> JsNumber(availableInBytes),
       "used_percent" -> JsNumber(usedPercent)
     )
   }

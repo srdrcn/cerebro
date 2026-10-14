@@ -12,6 +12,7 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/connect/connect.component').then((m) => m.ConnectComponent),
   },
+  { path: '', pathMatch: 'full', redirectTo: 'connect' },
   {
     path: '',
     canActivateChild: [requireConnection],
@@ -83,7 +84,6 @@ export const routes: Routes = [
         path: 'cat',
         loadComponent: () => import('./features/cat/cat.component').then((m) => m.CatComponent),
       },
-      { path: '', pathMatch: 'full', redirectTo: 'connect' },
     ],
   },
   { path: '**', redirectTo: 'connect' },

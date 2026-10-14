@@ -43,6 +43,7 @@ object NodeSpec extends Specification {
         |  "disk": {
         |    "total": 249804886016,
         |    "free": 41567444992,
+        |    "available": 41305300992,
         |    "used_percent": 84
         |  },
         |  "attributes": {
@@ -83,6 +84,7 @@ object NodeSpec extends Specification {
         |  "disk": {
         |    "total": 249804886016,
         |    "free": 41567444992,
+        |    "available": 41305300992,
         |    "used_percent": 84
         |  },
         |  "attributes": {
@@ -123,6 +125,7 @@ object NodeSpec extends Specification {
         |  "disk": {
         |    "total": 249804886016,
         |    "free": 41567444992,
+        |    "available": 41305300992,
         |    "used_percent": 84
         |  },
         |  "attributes": {
@@ -163,6 +166,7 @@ object NodeSpec extends Specification {
         |  "disk": {
         |    "total": 249804886016,
         |    "free": 41567444992,
+        |    "available": 41305300992,
         |    "used_percent": 84
         |  },
         |  "attributes": {

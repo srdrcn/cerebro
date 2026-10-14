@@ -259,10 +259,8 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
     val path = s"/_snapshot/${encoded(repository)}/${encoded(snapshot)}"
     val data = JsObject(
       Seq(
-        ("repository", JsString(repository)),
-        ("snapshot", JsString(snapshot)),
-        ("ignoreUnavailable", JsBoolean(ignoreUnavailable)),
-        ("includeGlobalState", JsBoolean(includeGlobalState))
+        ("ignore_unavailable", JsBoolean(ignoreUnavailable)),
+        ("include_global_state", JsBoolean(includeGlobalState))
       ) ++ indices.map { i => Seq(("indices", JsString(i))) }.getOrElse(Nil)
     ).toString
     execute(path, "PUT", Some(data), target, Seq(JsonContentType))

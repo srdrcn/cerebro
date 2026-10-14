@@ -1,0 +1,194 @@
+<section class="page" aria-labelledby="index-settings-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      @if (index()) {
+        <p class="page-header__eyebrow"><i class="bi bi-gear" aria-hidden="true"></i> Index settings</p>
+        <h1 id="index-settings-title" class="page-title index-title">
+          <span class="truncate">{{ resolvedIndex() || index() }}</span>
+          @if (metadata(); as meta) {
+            @if (meta.closed) {
+              <span class="badge badge-lg badge-yellow"><i class="bi bi-lock" aria-hidden="true"></i> Closed</span>
+            } @else {
+              <span class="badge badge-lg badge-green">Open</span>
+            }
+          }
+        </h1>
+        @if (metadata(); as meta) {
+          <div class="index-meta">
+            @if (resolvedIndex() && resolvedIndex() !== index()) {
+              <span class="tag" [title]="index() + ' resolves to ' + resolvedIndex()">
+                <span class="tag-key">via</span><span class="mono">{{ index() }}</span>
+              </span>
+            }
+            @if (meta.uuid) {
+              <span class="tag" [title]="'UUID ' + meta.uuid">
+                <span class="tag-key">uuid</span><span class="mono">{{ meta.uuid }}</span>
+              </span>
+            }
+            @if (meta.createdAt) {
+              <span class="tag" [title]="meta.createdAt.toISOString()">
+                <span class="tag-key">created</span><span>{{ meta.createdAt | date: 'medium' }}</span>
+              </span>
+            }
+            <span class="tag">
+              <span class="tag-key">overridden</span><span>{{ overridden() }}</span>
+            </span>
+          </div>
+        }
+      } @else {
+        <h1 id="index-settings-title" class="page-title">Index settings</h1>
+        <p class="page-subtitle">View and change the settings of a single index.</p>
+      }
+    </div>
+    <div class="page-header__actions">
+      <div class="index-picker">
+        <label class="visually-hidden" for="index-settings-picker">Index</label>
+        <i class="bi bi-database index-picker__icon" aria-hidden="true"></i>
+        <select
+          #picker
+          id="index-settings-picker"
+          class="select"
+          [disabled]="indices() === undefined && !index()"
+          (change)="pick(picker)"
+        >
+          <option value="" [selected]="!index()">
+            {{ indicesFailed() ? 'Indices unavailable' : indices() === undefined ? 'Loading indices…' : 'Choose an index…' }}
+          </option>
+          @if (options().extra) {
+            <option [value]="options().extra" [selected]="true">{{ options().extra }}</option>
+          }
+          @if (options().regular.length > 0) {
+            <optgroup label="Indices">
+              @for (name of options().regular; track name) {
+                <option [value]="name" [selected]="name === index()">{{ name }}</option>
+              }
+            </optgroup>
+          }
+          @if (options().system.length > 0) {
+            <optgroup label="System and hidden indices">
+              @for (name of options().system; track name) {
+                <option [value]="name" [selected]="name === index()">{{ name }}</option>
+              }
+            </optgroup>
+          }
+        </select>
+      </div>
+    </div>
+  </header>
+
+  @switch (state()) {
+    @case ('idle') {
+      <div class="card">
+        @if (indicesFailed()) {
+          <cerebro-empty
+            icon="bi-exclamation-triangle"
+            heading="Could not load indices"
+            text="The cluster did not answer the request for its index list."
+          >
+            <button type="button" class="btn btn-sm" (click)="retryIndices()">
+              <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+            </button>
+          </cerebro-empty>
+        } @else if (indices(); as all) {
+          @if (all.length === 0) {
+            <cerebro-empty
+              icon="bi-database"
+              heading="No indices yet"
+              text="This cluster does not have any index whose settings could be edited."
+            >
+              <a class="btn btn-sm btn-primary" routerLink="/create" [queryParams]="connection.hostQuery()">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Create index
+              </a>
+            </cerebro-empty>
+          } @else {
+            <cerebro-empty
+              icon="bi-sliders"
+              heading="Choose an index"
+              text="Pick an index in the list above to view and edit its settings, or jump straight to one of these."
+            >
+              <div class="quick-picks">
+                @for (name of quickPicks(); track name) {
+                  <button type="button" class="chip-toggle mono" (click)="navigate(name)">{{ name }}</button>
+                }
+              </div>
+            </cerebro-empty>
+          }
+        } @else {
+          <div class="loading-block" role="status"><span class="spinner"></span> Loading indices…</div>
+        }
+      </div>
+    }
+    @case ('loading') {
+      <cerebro-settings-skeleton [label]="'Loading the settings of ' + index()" />
+    }
+    @case ('missing') {
+      <div class="card">
+        <cerebro-empty
+          icon="bi-question-circle"
+          heading="Index not found"
+          [text]="'No index or alias named “' + index() + '” exists on this cluster.'"
+        >
+          <button type="button" class="btn btn-sm" (click)="focusPicker()">Choose another index</button>
+          <button type="button" class="btn btn-sm btn-ghost" (click)="retry()">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+          </button>
+        </cerebro-empty>
+      </div>
+    }
+    @case ('multiple') {
+      <div class="card">
+        <cerebro-empty
+          icon="bi-diagram-3"
+          [heading]="'“' + index() + '” matches ' + candidates().length + ' indices'"
+          text="Settings are edited one index at a time. Choose the index to open."
+        >
+          <div class="quick-picks">
+            @for (name of candidates(); track name) {
+              <button type="button" class="chip-toggle mono" (click)="navigate(name)">{{ name }}</button>
+            }
+          </div>
+        </cerebro-empty>
+      </div>
+    }
+    @case ('error') {
+      <div class="card">
+        <cerebro-empty
+          icon="bi-exclamation-triangle"
+          heading="Could not load index settings"
+          [text]="'The cluster did not answer the settings request for “' + index() + '”.'"
+        >
+          <button type="button" class="btn btn-sm" (click)="retry()">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+          </button>
+        </cerebro-empty>
+      </div>
+    }
+    @case ('ready') {
+      @if (rows(); as all) {
+        @if (metadata()?.closed) {
+          <div class="callout callout-info closed-callout" role="note">
+            <i class="bi bi-info-circle" aria-hidden="true"></i>
+            <div>
+              <strong>This index is closed.</strong>
+              Static settings, such as analysis or codec settings, can be changed while it is closed and apply
+              when it is reopened.
+            </div>
+          </div>
+        }
+        <cerebro-settings-editor
+          [label]="'Settings of ' + resolvedIndex()"
+          preferenceKey="cerebro.index-settings"
+          noOverridesText="This index does not override any setting: every value is a default."
+          [rows]="all"
+          [(drafts)]="drafts"
+          [grouping]="grouping"
+          [addSuggestions]="addSuggestions"
+          [errors]="errors()"
+          [saving]="saving()"
+          (review)="review($event)"
+          (save)="save($event)"
+        />
+      }
+    }
+  }
+</section>

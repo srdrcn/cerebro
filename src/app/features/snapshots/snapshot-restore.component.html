@@ -1,0 +1,222 @@
+<dialog
+  #dialog
+  class="dialog restore-dialog"
+  aria-labelledby="restore-title"
+  aria-describedby="restore-subtitle"
+  (cancel)="onCancel($event)"
+  (click)="onBackdropClick($event)"
+>
+  <form class="restore-form" novalidate (ngSubmit)="restore()" (keydown.enter)="preventImplicitSubmit($event)">
+    <header class="dialog__header">
+      <span class="dialog__icon" aria-hidden="true"><i class="bi bi-clock-history"></i></span>
+      <div class="min-w-0 restore-heading">
+        <h2 id="restore-title" class="dialog__title truncate">
+          Restore <span class="mono">{{ snapshot().snapshot }}</span>
+        </h2>
+        <p id="restore-subtitle" class="dialog__subtitle truncate">{{ subtitle() }}</p>
+      </div>
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon btn-sm"
+        aria-label="Close restore dialog"
+        title="Close"
+        [disabled]="restoring()"
+        (click)="close()"
+      >
+        <i class="bi bi-x-lg" aria-hidden="true"></i>
+      </button>
+    </header>
+
+    <div class="dialog__body restore-body">
+      @if (failure(); as reason) {
+        <div class="callout callout-danger restore-failure" role="alert">
+          <i class="bi bi-x-octagon" aria-hidden="true"></i>
+          <div>
+            <strong>The restore was rejected.</strong>
+            <span class="restore-failure__reason">{{ reason }}</span>
+          </div>
+        </div>
+      }
+      <section class="restore-section restore-indices" aria-labelledby="restore-indices-title">
+        <div class="restore-section__head">
+          <h3 id="restore-indices-title" class="restore-section__title">Indices</h3>
+          <span class="text-muted text-sm">{{ pluralize(indexNames().length, 'index', 'indices') }} in this snapshot</span>
+        </div>
+        <cerebro-index-checklist
+          [options]="options()"
+          [(selected)]="selected"
+          label="Indices to restore"
+          emptyText="This snapshot does not contain any index."
+          [maxHeight]="300"
+        />
+        @if (submitted() && selectionError(); as error) {
+          <p class="field-error" role="alert">{{ error }}</p>
+        }
+        @if (conflicts().length > 0) {
+          <div class="callout callout-warning restore-callout" role="status">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+            <div>
+              <strong>{{ pluralize(conflicts().length, 'index', 'indices') }} already
+              {{ conflicts().length === 1 ? 'exists' : 'exist' }} as an open index.</strong>
+              Restoring over an open index fails. Close or delete it first, or rename the restored indices.
+              @if (!renaming()) {
+                <button type="button" class="link-button" (click)="usePrefix()">Restore as restored-*</button>
+              }
+            </div>
+          </div>
+        }
+        @if (replacements().length > 0) {
+          <div class="callout callout-info restore-callout" role="status">
+            <i class="bi bi-info-circle" aria-hidden="true"></i>
+            <div>
+              {{ pluralize(replacements().length, 'closed index', 'closed indices') }} with the same name
+              {{ replacements().length === 1 ? 'is' : 'are' }} replaced by the restored
+              {{ replacements().length === 1 ? 'copy' : 'copies' }}.
+            </div>
+          </div>
+        }
+      </section>
+
+      <div class="restore-side">
+        <section class="restore-section" aria-labelledby="restore-rename-title">
+          <div class="restore-section__head">
+            <h3 id="restore-rename-title" class="restore-section__title">Rename</h3>
+            @if (renamePattern() || renameReplacement()) {
+              <button type="button" class="link-button text-sm" (click)="clearRename()">Clear</button>
+            } @else {
+              <button type="button" class="link-button text-sm" (click)="usePrefix()">
+                <i class="bi bi-magic" aria-hidden="true"></i> Prefix with restored-
+              </button>
+            }
+          </div>
+          <div class="field">
+            <label class="field-label" for="restore-rename-pattern">
+              Pattern <span class="optional">optional</span>
+            </label>
+            <input
+              id="restore-rename-pattern"
+              name="renamePattern"
+              class="input input-mono"
+              placeholder="index_(.+)"
+              autocomplete="off"
+              spellcheck="false"
+              [class.is-invalid]="!!patternError()"
+              [attr.aria-invalid]="!!patternError()"
+              [attr.aria-describedby]="patternError() ? 'restore-pattern-error' : 'restore-pattern-hint'"
+              [ngModel]="renamePattern()"
+              (ngModelChange)="renamePattern.set($event)"
+            />
+            @if (patternError(); as error) {
+              <p id="restore-pattern-error" class="field-error">{{ error }}</p>
+            } @else {
+              <p id="restore-pattern-hint" class="field-hint">Regular expression matched against each index name.</p>
+            }
+          </div>
+          <div class="field">
+            <label class="field-label" for="restore-rename-replacement">
+              Replacement
+              @if (!renamePattern().trim()) {
+                <span class="optional">optional</span>
+              }
+            </label>
+            <input
+              id="restore-rename-replacement"
+              name="renameReplacement"
+              class="input input-mono"
+              placeholder="restored_index_$1"
+              autocomplete="off"
+              spellcheck="false"
+              [class.is-invalid]="showReplacementError()"
+              [attr.aria-invalid]="showReplacementError()"
+              [attr.aria-describedby]="showReplacementError() ? 'restore-replacement-error' : 'restore-replacement-hint'"
+              [ngModel]="renameReplacement()"
+              (ngModelChange)="renameReplacement.set($event)"
+            />
+            @if (showReplacementError()) {
+              <p id="restore-replacement-error" class="field-error">{{ replacementError() }}</p>
+            } @else if (replacementError()) {
+              <p id="restore-replacement-hint" class="field-hint">Required with a pattern: Elasticsearch only renames when both are set.</p>
+            } @else {
+              <p id="restore-replacement-hint" class="field-hint">Use <code>$1</code>, <code>$2</code>… to reference capture groups.</p>
+            }
+          </div>
+        </section>
+
+        <section class="restore-section" aria-labelledby="restore-options-title">
+          <h3 id="restore-options-title" class="restore-section__title">Options</h3>
+          <div class="restore-options">
+            <label class="switch restore-option">
+              <input
+                type="checkbox"
+                name="includeAliases"
+                [ngModel]="includeAliases()"
+                (ngModelChange)="includeAliases.set($event)"
+              />
+              <span>
+                Restore aliases
+                <span class="check-description">Re-create the aliases of the restored indices.</span>
+              </span>
+            </label>
+            <label class="switch restore-option">
+              <input
+                type="checkbox"
+                name="includeGlobalState"
+                [disabled]="!hasGlobalState()"
+                [ngModel]="hasGlobalState() && includeGlobalState()"
+                (ngModelChange)="includeGlobalState.set($event)"
+              />
+              <span>
+                Restore global state
+                <span class="check-description">
+                  @if (hasGlobalState()) {
+                    Replaces persistent settings, templates and pipelines.
+                  } @else {
+                    This snapshot was taken without the global state.
+                  }
+                </span>
+              </span>
+            </label>
+            <label class="switch restore-option">
+              <input
+                type="checkbox"
+                name="ignoreUnavailable"
+                [ngModel]="ignoreUnavailable()"
+                (ngModelChange)="ignoreUnavailable.set($event)"
+              />
+              <span>
+                Ignore unavailable indices
+                <span class="check-description">Skip selected indices missing from the snapshot.</span>
+              </span>
+            </label>
+          </div>
+          @if (hasGlobalState() && includeGlobalState()) {
+            <div class="callout callout-warning restore-callout">
+              <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+              <div>The cluster-wide settings, index templates and ingest pipelines of the cluster will be overwritten.</div>
+            </div>
+          }
+        </section>
+      </div>
+    </div>
+
+    <footer class="dialog__footer">
+      <span class="count-label restore-footer-count">
+        @if (renaming()) {
+          <i class="bi bi-arrow-left-right" aria-hidden="true"></i> Restored under new names
+        } @else {
+          <i class="bi bi-info-circle" aria-hidden="true"></i> Restored under their original names
+        }
+      </span>
+      <button type="button" class="btn" [disabled]="restoring()" (click)="close()">Cancel</button>
+      <button
+        type="submit"
+        class="btn btn-primary"
+        [class.is-loading]="restoring()"
+        [disabled]="restoring() || (submitted() && !valid())"
+      >
+        <i class="bi bi-clock-history" aria-hidden="true"></i>
+        {{ submitLabel() }}
+      </button>
+    </footer>
+  </form>
+</dialog>

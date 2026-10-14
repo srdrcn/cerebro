@@ -1,0 +1,248 @@
+<section class="card analysis-panel" [attr.aria-labelledby]="id + '-title'">
+  <div class="card-header analysis-panel__header">
+    <div class="analysis-panel__heading">
+      <span class="analysis-panel__icon" aria-hidden="true">
+        <i class="bi" [class]="'bi ' + config().icon"></i>
+      </span>
+      <div class="min-w-0">
+        <h2 class="card-title" [id]="id + '-title'">{{ config().title }}</h2>
+        <p class="card-subtitle">{{ config().subtitle }}</p>
+      </div>
+    </div>
+  </div>
+
+  <form class="card-body analysis-form" novalidate (ngSubmit)="analyze()">
+    <div class="analysis-form__selects">
+      <div class="field">
+        <label class="field-label" [for]="id + '-index'">Index</label>
+        <select
+          class="select"
+          name="index"
+          [id]="id + '-index'"
+          [ngModel]="index()"
+          (ngModelChange)="selectIndex($event)"
+          [disabled]="indicesLoading() && indices().length === 0"
+          [class.is-invalid]="submitted() && !!errors().index"
+          [attr.aria-invalid]="submitted() && !!errors().index"
+          [attr.aria-describedby]="submitted() && errors().index ? id + '-index-error' : null"
+        >
+          <option value="">{{ indicesLoading() && indices().length === 0 ? 'Loading indices…' : 'Select an index' }}</option>
+          @for (name of indexGroups().regular; track name) {
+            <option [value]="name">{{ name }}</option>
+          }
+          @if (indexGroups().hidden.length > 0) {
+            <optgroup label="Hidden and system">
+              @for (name of indexGroups().hidden; track name) {
+                <option [value]="name">{{ name }}</option>
+              }
+            </optgroup>
+          }
+        </select>
+        @if (submitted() && errors().index; as message) {
+          <p class="field-error" [id]="id + '-index-error'">{{ message }}</p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field-label" [for]="id + '-target'">
+          {{ config().targetLabel }}
+          @if (optionsLoading()) {
+            <span class="spinner analysis-form__spinner" aria-hidden="true"></span>
+          }
+        </label>
+        <select
+          class="select"
+          name="target"
+          [id]="id + '-target'"
+          [ngModel]="target()"
+          (ngModelChange)="selectTarget($event)"
+          [disabled]="targetDisabled()"
+          [attr.aria-busy]="optionsLoading()"
+          [class.is-invalid]="submitted() && !targetDisabled() && !!errors().target"
+          [attr.aria-invalid]="submitted() && !targetDisabled() && !!errors().target"
+          [attr.aria-describedby]="id + '-target-note'"
+        >
+          <option value="">{{ targetPlaceholder() }}</option>
+          @for (group of targetGroups(); track group.label) {
+            @if (group.label) {
+              <optgroup [label]="group.label">
+                @for (name of group.options; track name) {
+                  <option [value]="name">{{ name }}</option>
+                }
+              </optgroup>
+            } @else {
+              @for (name of group.options; track name) {
+                <option [value]="name">{{ name }}</option>
+              }
+            }
+          }
+        </select>
+        <div class="analysis-form__note" [id]="id + '-target-note'">
+          @if (optionsFailed()) {
+            <p class="field-error">
+              Could not load the {{ config().targetNoun }} of this index.
+              <button type="button" class="link-button" (click)="retryOptions()">Try again</button>
+            </p>
+          } @else if (index() && !optionsLoading() && mode() === 'field' && options().length === 0) {
+            <p class="field-hint">This index has no analyzed text fields.</p>
+          } @else if (submitted() && index() && errors().target; as message) {
+            <p class="field-error">{{ message }}</p>
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label" [for]="id + '-text'">Text</label>
+      <textarea
+        class="textarea analysis-form__text"
+        name="text"
+        rows="3"
+        spellcheck="false"
+        placeholder="The quick brown fox jumps over the lazy dog"
+        [id]="id + '-text'"
+        [ngModel]="text()"
+        (ngModelChange)="text.set($event)"
+        (keydown)="onTextKeydown($event)"
+        [class.is-invalid]="submitted() && !!errors().text"
+        [attr.aria-invalid]="submitted() && !!errors().text"
+        [attr.aria-describedby]="submitted() && errors().text ? id + '-text-error' : id + '-text-hint'"
+      ></textarea>
+      @if (submitted() && errors().text; as message) {
+        <p class="field-error" [id]="id + '-text-error'">{{ message }}</p>
+      }
+    </div>
+
+    <div class="analysis-form__actions">
+      <span class="field-hint analysis-form__shortcut" [id]="id + '-text-hint'">
+        <kbd>{{ shortcut }}</kbd> <kbd>Enter</kbd> to analyze
+      </span>
+      <button type="submit" class="btn btn-primary" [class.is-loading]="running()" [disabled]="running()">
+        <i class="bi bi-lightning-charge" aria-hidden="true"></i> Analyze
+      </button>
+    </div>
+  </form>
+
+  <p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{{ announcement() }}</p>
+
+  <div class="analysis-results" [attr.aria-busy]="running()">
+    @if (runError(); as reason) {
+      <cerebro-empty icon="bi-exclamation-triangle" heading="Analysis failed" [text]="reason" [compact]="true">
+        <button type="button" class="btn btn-sm" (click)="analyze()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
+    } @else if (run(); as result) {
+      <div class="analysis-results__body" [class.is-stale]="running()">
+        <div class="analysis-results__header">
+          <div class="min-w-0">
+            <h3 class="section-title">
+              Tokens <span class="badge badge-accent">{{ summary().count }}</span>
+            </h3>
+            <p class="section-subtitle break-all">
+              <span class="mono">{{ result.index }}</span>
+              <span aria-hidden="true"> › </span>
+              <span class="mono">{{ result.target }}</span>
+              @if (summary().count > 0) {
+                · {{ summary().unique }} unique · {{ summary().positions }}
+                {{ summary().positions === 1 ? 'position' : 'positions' }}
+              }
+            </p>
+          </div>
+          <button
+            type="button"
+            class="btn btn-ghost btn-icon btn-sm"
+            aria-label="View raw tokens as JSON"
+            title="View raw tokens as JSON"
+            (click)="showRaw()"
+          >
+            <i class="bi bi-braces" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        @if (result.tokens.length === 0) {
+          <cerebro-empty
+            icon="bi-slash-circle"
+            heading="No tokens"
+            text="The analysis produced no tokens — for example because the text only contains stop words or punctuation."
+            [compact]="true"
+          />
+        } @else {
+          <div class="analysis-block">
+            <div class="analysis-label">Source text</div>
+            <p class="token-source">
+              @for (segment of segments(); track segment.start) {
+                @if (segment.tokens.length > 0) {
+                  <mark [class.is-active]="segmentActive(segment)" [title]="segmentTitle(segment)">{{ segment.text }}</mark>
+                } @else {
+                  <span class="token-source__gap">{{ segment.text }}</span>
+                }
+              }
+            </p>
+          </div>
+
+          <div class="analysis-block">
+            <div class="analysis-label" [id]="id + '-tokens-label'">
+              Token stream <span class="analysis-label__hint">select a token to highlight it</span>
+            </div>
+            <ol class="token-flow" [attr.aria-labelledby]="id + '-tokens-label'">
+              @for (token of result.tokens; track $index) {
+                <li>
+                  <button
+                    type="button"
+                    class="token-chip"
+                    [class.is-active]="active() === $index"
+                    [attr.aria-pressed]="pinned() === $index"
+                    [attr.aria-label]="token.token + ', position ' + token.position + ', characters ' + token.start_offset + ' to ' + token.end_offset"
+                    (mouseenter)="hovered.set($index)"
+                    (mouseleave)="hovered.set(null)"
+                    (focus)="hovered.set($index)"
+                    (blur)="hovered.set(null)"
+                    (click)="togglePin($index)"
+                  >
+                    <span class="token-chip__text">{{ token.token }}</span>
+                    <span class="token-chip__pos" aria-hidden="true">{{ token.position }}</span>
+                  </button>
+                </li>
+              }
+            </ol>
+          </div>
+
+          <div class="table-wrap token-table-wrap">
+            <table class="data-table data-table--compact token-table">
+              <caption class="visually-hidden">Tokens produced for {{ result.index }} › {{ result.target }}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Token</th>
+                  <th scope="col" class="num">Position</th>
+                  <th scope="col" class="num">Start</th>
+                  <th scope="col" class="num">End</th>
+                  <th scope="col">Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (token of result.tokens; track $index) {
+                  <tr
+                    [class.is-selected]="active() === $index"
+                    (mouseenter)="hovered.set($index)"
+                    (mouseleave)="hovered.set(null)"
+                  >
+                    <th scope="row" class="token-table__token">{{ token.token }}</th>
+                    <td class="num">{{ token.position }}</td>
+                    <td class="num">{{ token.start_offset }}</td>
+                    <td class="num">{{ token.end_offset }}</td>
+                    <td class="token-table__type">{{ token.type ?? '–' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    } @else if (running()) {
+      <div class="loading-block" role="status"><span class="spinner"></span> Analyzing…</div>
+    } @else {
+      <cerebro-empty icon="bi-text-paragraph" heading="Nothing analyzed yet" [text]="config().idleText" [compact]="true" />
+    }
+  </div>
+</section>

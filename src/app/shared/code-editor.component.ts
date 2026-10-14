@@ -143,6 +143,7 @@ export class CodeEditorComponent {
 
   private createEditor(): void {
     const editor = ace.edit(this.hostRef().nativeElement, {
+      useWorker: false,
       mode: `ace/mode/${this.mode()}`,
       value: this.value(),
       readOnly: this.readOnly(),

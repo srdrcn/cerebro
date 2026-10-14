@@ -1,0 +1,392 @@
+<section class="page" aria-labelledby="repositories-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="repositories-title" class="page-title">Repositories</h1>
+      <p class="page-subtitle">Storage locations that snapshots are written to and restored from.</p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn btn-ghost" routerLink="/snapshot" [queryParams]="connection.hostQuery()">
+        <i class="bi bi-camera" aria-hidden="true"></i> Snapshots
+      </a>
+      <button type="button" class="btn" (click)="newRepository()">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> New repository
+      </button>
+    </div>
+  </header>
+
+  <div class="layout-sidebar-start">
+    <!-- Registered repositories -->
+    <div class="card repo-list-card">
+      <div class="card-header">
+        <h2 class="card-title"><i class="bi bi-database" aria-hidden="true"></i> Registered</h2>
+        @if (repositories(); as all) {
+          <span class="count-label">
+            @if (query() && all.length > filterThreshold) {
+              <strong>{{ views().length }}</strong> of {{ all.length }}
+            } @else {
+              <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'repository' : 'repositories' }}
+            }
+          </span>
+        }
+      </div>
+
+      @if (repositories(); as all) {
+        @if (all.length > filterThreshold) {
+          <div class="repo-filter">
+            <cerebro-search [(value)]="query" [small]="true" placeholder="Filter repositories" ariaLabel="Filter repositories by name" />
+          </div>
+        }
+        @if (all.length === 0) {
+          <cerebro-empty
+            icon="bi-database-add"
+            heading="No repositories yet"
+            text="Register a repository with the form to start taking snapshots."
+            [compact]="true"
+          />
+        } @else {
+          <ul class="list" aria-label="Snapshot repositories">
+            @for (item of views(); track item.record.name) {
+              <li
+                class="list-item repo-item"
+                [class.is-selected]="editing() === item.record.name"
+                [class.is-busy]="deleting().has(item.record.name)"
+              >
+                <button
+                  type="button"
+                  class="repo-item__select"
+                  [attr.aria-current]="editing() === item.record.name ? 'true' : null"
+                  [attr.aria-label]="'Edit repository ' + item.record.name"
+                  (click)="edit(item.record)"
+                >
+                  <span class="list-item__icon" aria-hidden="true"><i [class]="'bi ' + item.icon"></i></span>
+                  <span class="list-item__body">
+                    <span class="repo-item__title">
+                      <span class="list-item__title">{{ item.record.name }}</span>
+                      <span class="badge badge-outline mono">{{ item.record.type }}</span>
+                    </span>
+                    <span class="list-item__meta mono" [title]="item.summary">{{ item.summary || 'default settings' }}</span>
+                  </span>
+                </button>
+                @if (deleting().has(item.record.name)) {
+                  <span class="spinner repo-item__spinner" role="status" [attr.aria-label]="'Deleting ' + item.record.name"></span>
+                } @else {
+                  <cerebro-menu [label]="'Actions for ' + item.record.name" align="end">
+                    <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+                    <div class="menu-label">{{ item.record.name }}</div>
+                    <button type="button" class="menu-item" (click)="edit(item.record)">
+                      <i class="bi bi-pencil" aria-hidden="true"></i> Edit settings
+                    </button>
+                    <a
+                      class="menu-item"
+                      routerLink="/snapshot"
+                      [queryParams]="item.snapshotsQuery"
+                    >
+                      <i class="bi bi-camera" aria-hidden="true"></i> Browse snapshots
+                    </a>
+                    <button type="button" class="menu-item" (click)="showJson(item.record)">
+                      <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                    </button>
+                    <div class="menu-separator" role="separator"></div>
+                    <button type="button" class="menu-item menu-item--danger" (click)="remove(item.record)">
+                      <i class="bi bi-trash" aria-hidden="true"></i> Delete…
+                    </button>
+                  </cerebro-menu>
+                }
+              </li>
+            } @empty {
+              <li>
+                <cerebro-empty icon="bi-funnel" heading="No matching repositories" [compact]="true">
+                  <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+                </cerebro-empty>
+              </li>
+            }
+          </ul>
+        }
+      } @else if (failed()) {
+        <cerebro-empty
+          icon="bi-exclamation-triangle"
+          heading="Could not load repositories"
+          text="The cluster did not answer the repositories request."
+          [compact]="true"
+        >
+          <button type="button" class="btn btn-sm" (click)="load()">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+          </button>
+        </cerebro-empty>
+      } @else {
+        <ul class="list" aria-hidden="true">
+          @for (placeholder of [1, 2, 3]; track placeholder) {
+            <li class="list-item">
+              <span class="skeleton" style="width: 32px; height: 32px"></span>
+              <span class="list-item__body stack-sm">
+                <span class="skeleton" style="width: 60%; height: 12px"></span>
+                <span class="skeleton" style="width: 40%; height: 10px"></span>
+              </span>
+            </li>
+          }
+        </ul>
+        <span class="visually-hidden" role="status">Loading repositories…</span>
+      }
+    </div>
+
+    <!-- Create / update form -->
+    <div class="card repo-form-card">
+      <div class="card-header">
+        <div class="min-w-0">
+          <h2 class="card-title">
+            @if (updateMode()) {
+              <i class="bi bi-pencil-square" aria-hidden="true"></i>
+              <span class="truncate">Edit <span class="mono">{{ name().trim() }}</span></span>
+            } @else {
+              <i class="bi bi-plus-circle" aria-hidden="true"></i> Register repository
+            }
+          </h2>
+          <p class="card-subtitle">
+            @if (updateMode()) {
+              Saving re-registers the repository with the settings below.
+            } @else {
+              Elasticsearch verifies that every node can reach the location.
+            }
+          </p>
+        </div>
+        @if (updateMode()) {
+          <span class="badge badge-blue">Existing</span>
+        } @else {
+          <span class="badge badge-accent">New</span>
+        }
+      </div>
+
+      <form novalidate (ngSubmit)="save()">
+        <div class="card-body stack-lg">
+          <div class="field repo-name-field">
+            <label class="field-label" for="repository-name">Name</label>
+            <input
+              id="repository-name"
+              name="name"
+              class="input"
+              placeholder="nightly-backups"
+              autocomplete="off"
+              spellcheck="false"
+              [class.is-invalid]="(submitted() || name() !== '') && !!nameError()"
+              [attr.aria-invalid]="(submitted() || name() !== '') && !!nameError()"
+              aria-describedby="repository-name-help"
+              [ngModel]="name()"
+              (ngModelChange)="setName($event)"
+            />
+            <p id="repository-name-help" [class]="(submitted() || name() !== '') && nameError() ? 'field-error' : 'field-hint'">
+              @if ((submitted() || name() !== '') && nameError(); as error) {
+                {{ error }}
+              } @else if (updateMode()) {
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                A repository with this name exists; saving updates it. Change the name to register a copy.
+              } @else {
+                Used in API paths such as <code>_snapshot/{{ name().trim() || 'name' }}</code>.
+              }
+            </p>
+          </div>
+
+          <fieldset class="type-fieldset">
+            <legend class="field-label">Type</legend>
+            <div class="type-grid">
+              @for (option of typeOptions(); track option.type) {
+                <label class="type-card" [class.is-active]="type() === option.type">
+                  <input
+                    type="radio"
+                    class="type-card__input"
+                    name="repository-type"
+                    [value]="option.type"
+                    [checked]="type() === option.type"
+                    (change)="setType(option.type)"
+                  />
+                  <span class="type-card__icon" aria-hidden="true"><i [class]="'bi ' + option.icon"></i></span>
+                  <span class="type-card__text">
+                    <span class="type-card__label">{{ option.label }}</span>
+                    <span class="type-card__description">{{ option.description }}</span>
+                  </span>
+                  <i class="bi bi-check-circle-fill type-card__check" aria-hidden="true"></i>
+                </label>
+              }
+            </div>
+            @if (submitted() && typeError(); as error) {
+              <p class="field-error">{{ error }}</p>
+            }
+          </fieldset>
+
+          @if (type()) {
+            <section class="stack" aria-labelledby="repository-settings-title">
+              <div>
+                <h3 id="repository-settings-title" class="section-title">
+                  {{ typeInfo()?.label ?? type() }} settings
+                </h3>
+                <p class="section-subtitle">Empty fields use the Elasticsearch default.</p>
+              </div>
+              @if (typeInfo()?.note; as note) {
+                <div class="callout callout-info repo-note">
+                  <i class="bi bi-info-circle" aria-hidden="true"></i>
+                  <div>{{ note }}</div>
+                </div>
+              }
+              @if (fields().length > 0) {
+                <div class="grid-2 repo-fields">
+                  @for (field of fields(); track field.key) {
+                    <div class="field" [class.col-span-all]="field.wide">
+                      <label class="field-label" [for]="fieldId(field)">
+                        {{ field.label }}
+                        @if (showsSettingKey(field)) {
+                          <span class="field-key mono">{{ field.key }}</span>
+                        }
+                      </label>
+                      @if (field.boolean) {
+                        <select
+                          class="select"
+                          [id]="fieldId(field)"
+                          [name]="field.key"
+                          [ngModel]="booleanValue(field.key)"
+                          (ngModelChange)="setBoolean(field.key, $event)"
+                        >
+                          <option value="">Default</option>
+                          <option value="true">true</option>
+                          <option value="false">false</option>
+                        </select>
+                      } @else if (field.secret) {
+                        <div class="secret-input">
+                          <input
+                            class="input input-mono"
+                            [id]="fieldId(field)"
+                            [name]="field.key"
+                            [type]="revealed().has(field.key) ? 'text' : 'password'"
+                            autocomplete="new-password"
+                            spellcheck="false"
+                            [placeholder]="field.placeholder"
+                            [ngModel]="textValue(field.key)"
+                            (ngModelChange)="setText(field.key, $event)"
+                          />
+                          <button
+                            type="button"
+                            class="btn btn-icon"
+                            [attr.aria-label]="(revealed().has(field.key) ? 'Hide ' : 'Show ') + field.label"
+                            [title]="revealed().has(field.key) ? 'Hide' : 'Show'"
+                            [attr.aria-pressed]="revealed().has(field.key)"
+                            (click)="toggleReveal(field.key)"
+                          >
+                            <i class="bi" [class.bi-eye]="!revealed().has(field.key)" [class.bi-eye-slash]="revealed().has(field.key)" aria-hidden="true"></i>
+                          </button>
+                        </div>
+                      } @else {
+                        <input
+                          class="input input-mono"
+                          [id]="fieldId(field)"
+                          [name]="field.key"
+                          autocomplete="off"
+                          spellcheck="false"
+                          [placeholder]="field.placeholder"
+                          [ngModel]="textValue(field.key)"
+                          (ngModelChange)="setText(field.key, $event)"
+                        />
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+
+            <section class="stack-sm" aria-labelledby="repository-extra-title">
+              <div class="extra-head">
+                <div>
+                  <h3 id="repository-extra-title" class="section-title">Additional settings</h3>
+                  <p class="section-subtitle">Any other setting, for example <code>max_number_of_snapshots</code>.</p>
+                </div>
+                <button type="button" class="btn btn-sm" (click)="addExtra()">
+                  <i class="bi bi-plus-lg" aria-hidden="true"></i> Add setting
+                </button>
+              </div>
+              @for (extra of extras(); track extra.id; let index = $index) {
+                <div class="extra-row">
+                  <input
+                    class="input input-sm input-mono"
+                    [id]="'repository-extra-key-' + extra.id"
+                    [name]="'extra-key-' + extra.id"
+                    placeholder="setting_name"
+                    autocomplete="off"
+                    spellcheck="false"
+                    [attr.aria-label]="'Name of additional setting ' + (index + 1)"
+                    [ngModel]="extra.key"
+                    (ngModelChange)="updateExtra(extra.id, { key: $event })"
+                  />
+                  <input
+                    class="input input-sm input-mono"
+                    [id]="'repository-extra-value-' + extra.id"
+                    [name]="'extra-value-' + extra.id"
+                    placeholder="value"
+                    autocomplete="off"
+                    spellcheck="false"
+                    [attr.aria-label]="'Value of ' + (extra.key || 'additional setting ' + (index + 1))"
+                    [ngModel]="extra.value"
+                    (ngModelChange)="updateExtra(extra.id, { value: $event })"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-icon btn-sm"
+                    [attr.aria-label]="'Remove ' + (extra.key || 'setting')"
+                    title="Remove"
+                    (click)="removeExtra(extra.id)"
+                  >
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                  </button>
+                </div>
+              }
+              @if (extrasError(); as error) {
+                <p class="field-error">{{ error }}</p>
+              }
+            </section>
+
+            @if (preview()) {
+              <details class="request-preview">
+                <summary><i class="bi bi-code-slash" aria-hidden="true"></i> Request preview</summary>
+                <pre class="mono">{{ preview() }}</pre>
+              </details>
+            }
+          } @else {
+            <div class="type-placeholder">
+              <i class="bi bi-hand-index" aria-hidden="true"></i>
+              Choose a type to see its settings.
+            </div>
+          }
+        </div>
+
+        @if (saveError(); as reason) {
+          <div class="save-error">
+            <div class="callout callout-danger" role="alert">
+              <i class="bi bi-x-octagon" aria-hidden="true"></i>
+              <div>
+                <strong>{{ updateMode() ? 'The update was rejected.' : 'The repository could not be registered.' }}</strong>
+                <span class="save-error__reason">{{ reason }}</span>
+              </div>
+            </div>
+          </div>
+        }
+        <div class="card-footer card-footer--between">
+          <button type="button" class="btn btn-ghost" [disabled]="saving()" (click)="reset()">
+            @if (editing()) {
+              <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Discard changes
+            } @else {
+              <i class="bi bi-eraser" aria-hidden="true"></i> Clear form
+            }
+          </button>
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [class.is-loading]="saving()"
+            [disabled]="saving() || (submitted() && !valid())"
+          >
+            @if (updateMode()) {
+              <i class="bi bi-check2" aria-hidden="true"></i> Update repository
+            } @else {
+              <i class="bi bi-plus-lg" aria-hidden="true"></i> Register repository
+            }
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>

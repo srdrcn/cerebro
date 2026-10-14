@@ -1,3 +1,5 @@
+import { ClusterApiError } from '../../core/api-envelope';
+
 export const CAT_APIS = [
   'aliases',
   'allocation',
@@ -20,9 +22,153 @@ export const CAT_APIS = [
 export type CatApi = (typeof CAT_APIS)[number];
 export type SortDirection = 'asc' | 'desc';
 export type CatRow = Readonly<Record<string, unknown>>;
+export type CatTone = 'green' | 'yellow' | 'red' | 'gray';
+
+export interface CatApiInfo {
+  /** Sentence case display name. */
+  readonly label: string;
+  readonly icon: string;
+  readonly description: string;
+  /** Text of the empty state when the API returns no rows. */
+  readonly emptyText: string;
+  /**
+   * Always answers with exactly one row (cluster health, document count,
+   * elected master); shown as label/value pairs instead of a table.
+   */
+  readonly singleRow?: true;
+}
+
+/** Icon, one-line description and empty-state copy of every CAT API. */
+export const CAT_API_INFO: Readonly<Record<CatApi, CatApiInfo>> = {
+  aliases: {
+    label: 'Aliases',
+    icon: 'bi-tags',
+    description: 'Aliases and the indices they point to',
+    emptyText: 'No aliases are defined in this cluster.',
+  },
+  allocation: {
+    label: 'Allocation',
+    icon: 'bi-pie-chart',
+    description: 'Shard count and disk usage per node',
+    emptyText: 'No data nodes reported shard allocation.',
+  },
+  count: {
+    label: 'Count',
+    icon: 'bi-123',
+    description: 'Document count of the whole cluster',
+    emptyText: 'The cluster did not report a document count.',
+    singleRow: true,
+  },
+  fielddata: {
+    label: 'Fielddata',
+    icon: 'bi-memory',
+    description: 'Heap used by fielddata per node and field',
+    emptyText: 'No fielddata is currently loaded in memory.',
+  },
+  health: {
+    label: 'Health',
+    icon: 'bi-heart-pulse',
+    description: 'Cluster health in a single row',
+    emptyText: 'The cluster did not report its health.',
+    singleRow: true,
+  },
+  indices: {
+    label: 'Indices',
+    icon: 'bi-collection',
+    description: 'Health, documents and size of every index',
+    emptyText: 'This cluster has no indices yet.',
+  },
+  master: {
+    label: 'Master',
+    icon: 'bi-star',
+    description: 'The currently elected master node',
+    emptyText: 'No master node is currently elected.',
+    singleRow: true,
+  },
+  nodeattrs: {
+    label: 'Node attributes',
+    icon: 'bi-tag',
+    description: 'Custom attributes of every node',
+    emptyText: 'No node attributes are defined.',
+  },
+  nodes: {
+    label: 'Nodes',
+    icon: 'bi-hdd-stack',
+    description: 'Roles and resource usage per node',
+    emptyText: 'No nodes reported their statistics.',
+  },
+  'pending tasks': {
+    label: 'Pending tasks',
+    icon: 'bi-hourglass-split',
+    description: 'Cluster state updates waiting to run',
+    emptyText: 'No cluster-level changes are waiting to run.',
+  },
+  plugins: {
+    label: 'Plugins',
+    icon: 'bi-plug',
+    description: 'Plugins installed on each node',
+    emptyText: 'No plugins are installed on any node.',
+  },
+  recovery: {
+    label: 'Recovery',
+    icon: 'bi-arrow-repeat',
+    description: 'Ongoing and completed shard recoveries',
+    emptyText: 'No shard recoveries have been recorded.',
+  },
+  repositories: {
+    label: 'Repositories',
+    icon: 'bi-database',
+    description: 'Registered snapshot repositories',
+    emptyText: 'No snapshot repositories are registered.',
+  },
+  'thread pool': {
+    label: 'Thread pool',
+    icon: 'bi-cpu',
+    description: 'Active, queued and rejected tasks per pool',
+    emptyText: 'No thread pool statistics were reported.',
+  },
+  shards: {
+    label: 'Shards',
+    icon: 'bi-grid-3x3-gap',
+    description: 'Where every shard lives and its state',
+    emptyText: 'This cluster has no shards yet.',
+  },
+  segments: {
+    label: 'Segments',
+    icon: 'bi-layers',
+    description: 'Lucene segments of every shard',
+    emptyText: 'No Lucene segments were reported.',
+  },
+};
 
 export function catApiValue(api: CatApi): string {
   return api.replaceAll(' ', '_');
+}
+
+/** Resolves a deep-link value ("thread_pool", "Thread pool") to a CAT API. */
+export function catApiFromParam(value: string | null | undefined): CatApi | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase().replaceAll('_', ' ');
+  return CAT_APIS.find((api) => api === normalized) ?? null;
+}
+
+/**
+ * Whether a response is shown as label/value pairs: only for the APIs that
+ * are single-row by nature, so other APIs never flip between a record and a
+ * table as their row count changes on refresh.
+ */
+export function isCatRecord(api: CatApi, rows: readonly CatRow[]): boolean {
+  return CAT_API_INFO[api].singleRow === true && rows.length === 1;
+}
+
+/**
+ * Splits a column name after each `_`, `.` and `-` so long names
+ * ("active_shards_percent") wrap between words, never inside one.
+ */
+export function catKeyParts(column: string): readonly string[] {
+  return column.match(/[^_.-]+[_.-]*|[_.-]+/g) ?? [column];
 }
 
 export function catColumns(rows: readonly CatRow[]): readonly string[] {
@@ -37,21 +183,57 @@ export function catColumns(rows: readonly CatRow[]): readonly string[] {
   return [...columns];
 }
 
-function isEmpty(value: unknown): value is null | undefined {
-  return value === null || value === undefined;
+/** `null`, `undefined` and the placeholders CAT uses for "no value". */
+function isMissing(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return true;
+  }
+  if (typeof value === 'string') {
+    const text = value.trim();
+    return text === '' || text === '-' || text.toLowerCase() === 'n/a';
+  }
+  return false;
 }
 
-function numericValue(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
+const UNIT_FACTORS: Readonly<Record<string, number>> = {
+  b: 1,
+  kb: 1024,
+  mb: 1024 ** 2,
+  gb: 1024 ** 3,
+  tb: 1024 ** 4,
+  pb: 1024 ** 5,
+  nanos: 1e-6,
+  micros: 1e-3,
+  ms: 1,
+  s: 1_000,
+  m: 60_000,
+  h: 3_600_000,
+  d: 86_400_000,
+  '%': 1,
+};
+
+const QUANTITY_PATTERN =
+  /^(-?(?:\d+\.?\d*|\.\d+))(b|kb|mb|gb|tb|pb|nanos|micros|ms|s|m|h|d|%)?$/i;
+
+/**
+ * Numeric value of a CAT cell: plain numbers plus the human readable sizes
+ * ("45.1kb"), durations ("28ms", "1.2m") and percentages ("97.1%") CAT
+ * returns, so those columns sort by magnitude instead of alphabetically.
+ */
+export function quantityValue(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
   }
-  if (
-    typeof value === 'string' &&
-    /^-?(?:\d+\.?\d*|\.\d+)$/.test(value.trim())
-  ) {
-    return Number(value);
+  if (typeof value !== 'string') {
+    return null;
   }
-  return null;
+  const match = QUANTITY_PATTERN.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  const amount = Number(match[1]);
+  const unit = match[2]?.toLowerCase();
+  return unit ? amount * (UNIT_FACTORS[unit] ?? 1) : amount;
 }
 
 const collator = new Intl.Collator(undefined, {
@@ -63,19 +245,12 @@ function compareValues(left: unknown, right: unknown): number {
   if (Object.is(left, right)) {
     return 0;
   }
-  if (isEmpty(left)) {
-    return 1;
-  }
-  if (isEmpty(right)) {
-    return -1;
-  }
-
-  const leftNumber = numericValue(left);
-  const rightNumber = numericValue(right);
+  const leftNumber = quantityValue(left);
+  const rightNumber = quantityValue(right);
   if (leftNumber !== null && rightNumber !== null) {
     return leftNumber - rightNumber;
   }
-  return collator.compare(String(left), String(right));
+  return collator.compare(catCellText(left), catCellText(right));
 }
 
 /** Immutable and stable table sorting; missing values remain at the end. */
@@ -93,11 +268,14 @@ export function sortCatRows(
     .sort((left, right) => {
       const leftValue = left.row[column];
       const rightValue = right.row[column];
-      const missingComparison = isEmpty(leftValue)
-        ? isEmpty(rightValue) ? 0 : 1
-        : isEmpty(rightValue) ? -1 : 0;
-      if (missingComparison !== 0) {
-        return missingComparison;
+      const leftMissing = isMissing(leftValue);
+      const rightMissing = isMissing(rightValue);
+      if (leftMissing || rightMissing) {
+        return leftMissing === rightMissing
+          ? left.index - right.index
+          : leftMissing
+            ? 1
+            : -1;
       }
 
       const comparison = compareValues(leftValue, rightValue);
@@ -105,6 +283,64 @@ export function sortCatRows(
       return directed || left.index - right.index;
     })
     .map(({ row }) => row);
+}
+
+/**
+ * Columns whose values are all numbers or quantities (ignoring missing
+ * values); they are right aligned and sort descending first.
+ */
+export function numericColumns(
+  rows: readonly CatRow[],
+  columns: readonly string[],
+): ReadonlySet<string> {
+  const numeric = new Set<string>();
+  for (const column of columns) {
+    let seen = false;
+    let allNumeric = true;
+    for (const row of rows) {
+      const value = row[column];
+      if (isMissing(value)) {
+        continue;
+      }
+      seen = true;
+      if (quantityValue(value) === null) {
+        allNumeric = false;
+        break;
+      }
+    }
+    if (seen && allNumeric) {
+      numeric.add(column);
+    }
+  }
+  return numeric;
+}
+
+/** Same semantics as the other filters: a regular expression or plain text. */
+export function textMatcher(query: string): (value: string) => boolean {
+  const expression = query.trim();
+  if (!expression) {
+    return () => true;
+  }
+  try {
+    const pattern = new RegExp(expression, 'i');
+    return (value) => pattern.test(value);
+  } catch {
+    const needle = expression.toLocaleLowerCase();
+    return (value) => value.toLocaleLowerCase().includes(needle);
+  }
+}
+
+/** Keeps the rows where any column matches the query. */
+export function filterCatRows(
+  rows: readonly CatRow[],
+  columns: readonly string[],
+  query: string,
+): readonly CatRow[] {
+  if (!query.trim()) {
+    return rows;
+  }
+  const matches = textMatcher(query);
+  return rows.filter((row) => columns.some((column) => matches(catCellText(row[column]))));
 }
 
 export function asCatRows(value: unknown): readonly CatRow[] {
@@ -129,4 +365,68 @@ export function catCellText(value: unknown): string {
     }
   }
   return String(value);
+}
+
+/** Tab separated values (header row first), ready to paste in a spreadsheet. */
+export function catRowsToTsv(columns: readonly string[], rows: readonly CatRow[]): string {
+  const clean = (text: string) => text.replace(/[\t\r\n]+/g, ' ');
+  const lines = [columns.map(clean).join('\t')];
+  for (const row of rows) {
+    lines.push(columns.map((column) => clean(catCellText(row[column]))).join('\t'));
+  }
+  return lines.join('\n');
+}
+
+const HEALTH_TONES: Readonly<Record<string, CatTone>> = {
+  green: 'green',
+  yellow: 'yellow',
+  red: 'red',
+  close: 'gray',
+};
+
+const SHARD_STATE_TONES: Readonly<Record<string, CatTone>> = {
+  STARTED: 'green',
+  INITIALIZING: 'yellow',
+  RELOCATING: 'yellow',
+  UNASSIGNED: 'red',
+};
+
+/** Status colour of health and shard-state cells, `null` for other cells. */
+export function catCellTone(column: string, value: unknown): CatTone | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const name = column.toLowerCase();
+  if (name === 'health' || name === 'status') {
+    return HEALTH_TONES[value.toLowerCase()] ?? null;
+  }
+  if (name === 'state') {
+    return SHARD_STATE_TONES[value.toUpperCase()] ?? null;
+  }
+  return null;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Best human readable reason of a failed request (Elasticsearch error body). */
+export function catErrorReason(error: unknown): string | null {
+  if (error instanceof ClusterApiError) {
+    const body: unknown = error.body;
+    if (typeof body === 'string') {
+      return body || null;
+    }
+    if (isRecord(body)) {
+      const inner = body['error'];
+      if (typeof inner === 'string') {
+        return inner;
+      }
+      if (isRecord(inner) && typeof inner['reason'] === 'string') {
+        return inner['reason'];
+      }
+    }
+    return `The cluster answered with status ${error.status}.`;
+  }
+  return error instanceof Error ? error.message : null;
 }
