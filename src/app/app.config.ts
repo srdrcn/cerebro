@@ -8,6 +8,7 @@ import {
   provideRouter,
   withHashLocation,
   withInMemoryScrolling,
+  withRouterConfig,
 } from '@angular/router';
 import { routes } from './app.routes';
 import { csrfInterceptor } from './core/csrf.interceptor';
@@ -21,6 +22,9 @@ export const appConfig: ApplicationConfig = {
       routes,
       withHashLocation(),
       withInMemoryScrolling({ scrollPositionRestoration: 'top' }),
+      // A cancelled Back/Forward (e.g. "Keep editing") returns to the entry
+      // the user came from instead of rewriting the history.
+      withRouterConfig({ canceledNavigationResolution: 'computed' }),
     ),
   ],
 };
