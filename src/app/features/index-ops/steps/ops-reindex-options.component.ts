@@ -5,7 +5,7 @@ import { ConnectionService } from '../../../core/connection.service';
 import { CodeEditorComponent } from '../../../shared/code-editor.component';
 import { CheckFix, ConflictsMode, ReindexOptions, SlicesMode } from '../index-ops.models';
 import { IndexOpsStore } from '../index-ops.store';
-import { ReindexField, sourceExpressions } from '../index-ops.utils';
+import { ReindexField, copySourceIndex, sourceExpressions } from '../index-ops.utils';
 import { OpsChecksComponent } from './ops-checks.component';
 
 /** Step 3 of a reindex: destination, query, conflicts, limits and script. */
@@ -32,10 +32,10 @@ export class OpsReindexOptionsComponent {
     const names = [...(this.store.indices() ?? []).filter((name) => !name.startsWith('.')), ...this.store.taken().dataStreams];
     return [...new Set(names)].sort((left, right) => left.localeCompare(right));
   });
-  readonly firstSource = computed(() => {
-    const lookup = this.store.sourcesLookup();
-    return lookup.state === 'ready' ? (lookup.indices[0]?.name ?? null) : (sourceExpressions(this.options().sources)[0] ?? null);
-  });
+  /** The source Create index copies the settings and mappings from. */
+  readonly firstSource = computed(() =>
+    copySourceIndex(this.store.sourcesLookup(), sourceExpressions(this.options().sources), this.store.taken().dataStreams),
+  );
 
   showError(field: ReindexField): string | undefined {
     const error = this.store.reindexFieldErrors()[field];
@@ -59,8 +59,8 @@ export class OpsReindexOptionsComponent {
   }
 
   /**
-   * Query params of Create index for the destination. Create index does not
-   * read `name` and `from` yet (shared change request); they are harmless until then.
+   * Query params of Create index for the destination: `name` prefills the
+   * index name and `from` copies the settings and mappings of a regular source index.
    */
   readonly createParams = computed(() => {
     const params: Record<string, string | null> = { ...this.connection.hostQuery(), name: this.options().dest.trim() || null };

@@ -2,6 +2,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -9,7 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
@@ -30,6 +32,7 @@ import {
   bodyOverridesFields,
   buildIndexMetadata,
   cloneIndexMetadata,
+  linkPrefill,
   shardLayout,
   sortIndexNames,
   validateCount,
@@ -40,6 +43,7 @@ interface CopyInfo {
   readonly index: string;
   readonly removedSettings: readonly string[];
   readonly unwrappedType: string | null;
+  readonly removedMappings: readonly string[];
 }
 
 /** "2 shards"; a value the JSON body sets to something else is shown as written. */
@@ -61,6 +65,8 @@ export class CreateIndexComponent implements PendingChangesAware {
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly injector = inject(Injector);
   private readonly refreshService = inject(RefreshService);
   readonly connection = inject(ConnectionService);
 
@@ -177,6 +183,38 @@ export class CreateIndexComponent implements PendingChangesAware {
         void this.loadAliases();
       }
     });
+    this.applyLinkParams();
+  }
+
+  /**
+   * `?name=` prefills the index name and `?from=` copies the settings and
+   * mappings of an index (Index operations links here so a reindex
+   * destination can be created first). Applied once on load; the parameters
+   * then leave the URL, so a reload or a shared link does not copy again.
+   */
+  private applyLinkParams(): void {
+    const params = this.route.snapshot.queryParamMap;
+    const prefill = linkPrefill(params.get('name'), params.get('from'));
+    if (!prefill) {
+      return;
+    }
+    if (prefill.name) {
+      this.name.set(prefill.name);
+    }
+    if (prefill.from) {
+      void this.copyIndex(prefill.from);
+    }
+    // After the navigation that created the page has ended.
+    afterNextRender(
+      () =>
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: { name: null, from: null },
+          queryParamsHandling: 'merge',
+          replaceUrl: true,
+        }),
+      { injector: this.injector },
+    );
   }
 
   async loadIndices(): Promise<void> {
@@ -267,7 +305,18 @@ export class CreateIndexComponent implements PendingChangesAware {
       }
       return;
     }
+    if (!(await this.copyIndex(index))) {
+      select.value = this.sourceIndex();
+    }
+  }
 
+  /**
+   * Puts the settings and mappings of `index` into the JSON body, after
+   * asking when that replaces JSON the user wrote. Resolves to false when the
+   * user kept the body or the index could not be read.
+   */
+  async copyIndex(index: string): Promise<boolean> {
+    const previous = this.sourceIndex();
     const current = this.body();
     if (current.trim() && current !== this.copiedBody) {
       const replace = await this.dialogs.confirm({
@@ -277,8 +326,7 @@ export class CreateIndexComponent implements PendingChangesAware {
         tone: 'danger',
       });
       if (!replace) {
-        select.value = previous;
-        return;
+        return false;
       }
     }
 
@@ -290,7 +338,7 @@ export class CreateIndexComponent implements PendingChangesAware {
         index,
       });
       if (sequence !== this.copySequence) {
-        return;
+        return true;
       }
       const cloned = cloneIndexMetadata(metadata);
       const text = JSON.stringify(cloned.metadata, null, 2);
@@ -300,13 +348,16 @@ export class CreateIndexComponent implements PendingChangesAware {
         index,
         removedSettings: cloned.removedSettings,
         unwrappedType: cloned.unwrappedType,
+        removedMappings: cloned.removedMappings,
       });
+      return true;
     } catch (error: unknown) {
-      if (sequence === this.copySequence) {
-        this.sourceIndex.set(previous);
-        select.value = previous;
-        this.alerts.error(failureMessage(`Could not load the settings and mappings of ${index}`, error), error);
+      if (sequence !== this.copySequence) {
+        return true;
       }
+      this.sourceIndex.set(previous);
+      this.alerts.error(failureMessage(`Could not load the settings and mappings of ${index}`, error), error);
+      return false;
     } finally {
       if (sequence === this.copySequence) {
         this.copying.set(false);

@@ -9,11 +9,11 @@ import { failureMessage, readableReason } from '../../core/errors';
 import { formatBytes, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import {
-  CatIndexRow,
   Check,
   DataStreamsResponse,
   DiskWatermarks,
   IndexDetailResponse,
+  LookupIndexRow,
   OperationKind,
   PlannedRequest,
   RawAliasRow,
@@ -61,9 +61,9 @@ import {
   nextRolloverName,
   nodeOptions,
   parseAliasList,
-  parseCatIndices,
   parseCount,
   parseIndices,
+  parseLookupRows,
   prepareShrinkRequest,
   recordChanges,
   refreshSource,
@@ -74,7 +74,7 @@ import {
   releaseSourceRequest,
   resizeChecks,
   rolloverChecks,
-  searchableSources,
+  readableSources,
   rolloverTargets,
   shardCopies,
   shardCountCompatibility,
@@ -86,6 +86,7 @@ import {
   suggestedShrinkNode,
   summarizeChecks,
   targetRecovery,
+  withBlocks,
   writeBlockRequest,
   writeIndexFacts,
 } from './index-ops.utils';
@@ -97,8 +98,6 @@ const TARGET_POLL = 2_000;
 const TASK_POLL = 1_500;
 const TASK_POLL_SLOW = 5_000;
 const TASK_POLL_SLOW_AFTER = 60_000;
-/** The full task list (slices of a sliced reindex) is read at most this often. */
-const TASK_LIST_INTERVAL = 5_000;
 const LOOKUP_DELAY = 400;
 const DRY_RUN_DELAY = 500;
 /** Polls with an unassigned primary before the run step calls it stuck. */
@@ -293,7 +292,13 @@ export class IndexOpsStore {
   readonly nodeOptions = computed(() => {
     const nodes = this.nodes();
     const source = this.sourceIndex();
-    return nodes ? nodeOptions(nodes, source?.shards ?? [], { watermarks: this.watermarks(), allocation: source?.allocation ?? {} }) : null;
+    return nodes
+      ? nodeOptions(nodes, source?.shards ?? [], {
+          watermarks: this.watermarks(),
+          allocation: source?.allocation ?? {},
+          tierPreference: source?.tierPreference ?? [],
+        })
+      : null;
   });
 
   /** The node a shrink preparation uses: the user's pick, else the suggestion. */
@@ -492,8 +497,6 @@ export class IndexOpsStore {
   private readonly sourcePoller = new Poller(SOURCE_POLL);
   private readonly targetPoller = new Poller(TARGET_POLL);
   private readonly taskPoller = new Poller((elapsed) => (elapsed > TASK_POLL_SLOW_AFTER ? TASK_POLL_SLOW : TASK_POLL));
-  /** The running slices of a sliced reindex, read from the task list at most every TASK_LIST_INTERVAL. */
-  private sliceChildren: { readonly at: number; readonly tasks: TaskListResponse['tasks'] } = { at: 0, tasks: [] };
   /** Whether the checks of the options step passed at the last look (for the announcement). */
   private checksPassed: boolean | null = null;
   private catalogSequence = 0;
@@ -822,32 +825,38 @@ export class IndexOpsStore {
       this.sourcesLookup.set({ state: 'loading' });
     }
     try {
-      // _cat/indices: states, documents and sizes without settings and mappings, even for `*`.
-      const rows = await this.api.post<readonly CatIndexRow[]>('cat', { api: `indices/${expression}` });
+      // _cat/indices of the expression: states, documents and sizes without settings and mappings, even for `*`.
+      const rows = await this.api.post<readonly LookupIndexRow[]>('commons/indices/lookup', { expression });
       if (sequence === this.sourcesSequence) {
-        const indices = parseCatIndices(rows, this.membership());
-        this.sourcesLookup.set({ state: 'ready', indices: searchableSources(indices, sourceExpressions(expression), this.aliasRows()) });
+        const { read, skipped } = readableSources(parseLookupRows(rows, this.membership()), sourceExpressions(expression), this.aliasRows());
+        this.sourcesLookup.set({ state: 'ready', indices: read, skipped });
       }
     } catch (error: unknown) {
       if (sequence === this.sourcesSequence) {
-        this.sourcesLookup.set(
-          error instanceof ClusterApiError && error.status === 404
-            ? { state: 'error', reason: readableReason(error) ?? 'No index matches the sources.' }
-            : { state: 'error', reason: readableReason(error) ?? 'The cluster did not answer the request for the sources.' },
-        );
+        this.sourcesLookup.set({
+          state: 'error',
+          reason:
+            readableReason(error) ??
+            (error instanceof ClusterApiError && error.status === 404 ? 'No index matches the sources.' : 'The cluster did not answer the request for the sources.'),
+        });
       }
     }
   }
 
+  /** The destination's indices (an index, the indices of an alias or a data stream) with their blocks. */
   private async lookupDest(dest: string): Promise<void> {
     const sequence = ++this.destSequence;
     if (this.destLookup().state !== 'ready' && this.destLookup().state !== 'missing') {
       this.destLookup.set({ state: 'loading' });
     }
     try {
-      const response = await this.api.post<IndexDetailResponse>('index_detail', { index: dest });
+      const [rows, settings] = await Promise.all([
+        this.api.post<readonly LookupIndexRow[]>('commons/indices/lookup', { expression: dest }),
+        // Blocks are settings: read them, but a refusal only leaves them unknown.
+        this.api.post<unknown>('commons/get_index_settings', { index: dest }).catch(() => null),
+      ]);
       if (sequence === this.destSequence) {
-        const indices = parseIndices(response, this.membership());
+        const indices = withBlocks(parseLookupRows(rows, this.membership()), settings);
         this.destLookup.set(indices.length > 0 ? { state: 'ready', indices } : { state: 'missing' });
       }
     } catch (error: unknown) {
@@ -1513,11 +1522,10 @@ export class IndexOpsStore {
   }
 
   watchTask(taskId: string): void {
-    this.sliceChildren = { at: 0, tasks: [] };
     this.taskPoller.start(async () => {
       try {
         const response = await this.api.post<TaskGetResponse>('tasks/get', { task_id: taskId });
-        const children = needsSliceChildren(response) ? await this.runningSlices() : [];
+        const children = needsSliceChildren(response) ? await this.runningSlices(taskId) : [];
         const run = this.run();
         if (run.kind !== 'reindex' || run.taskId !== taskId) {
           return false;
@@ -1556,18 +1564,16 @@ export class IndexOpsStore {
     });
   }
 
-  /** The running slices from the task list, read at most every TASK_LIST_INTERVAL. */
-  private async runningSlices(): Promise<NonNullable<TaskListResponse['tasks']>> {
-    const now = Date.now();
-    if (now - this.sliceChildren.at < TASK_LIST_INTERVAL) {
-      return this.sliceChildren.tasks ?? [];
-    }
+  /**
+   * The running slices of a sliced reindex (its sub-tasks, by parent task id).
+   * A failed read gives none: the progress then counts the finished slices
+   * only, and `steadyProgress` keeps it from going back.
+   */
+  private async runningSlices(taskId: string): Promise<NonNullable<TaskListResponse['tasks']>> {
     try {
-      const tasks = (await this.api.post<TaskListResponse>('tasks')).tasks ?? [];
-      this.sliceChildren = { at: now, tasks };
-      return tasks;
+      return (await this.api.post<TaskListResponse>('tasks', { parent_task_id: taskId })).tasks ?? [];
     } catch {
-      return this.sliceChildren.tasks ?? [];
+      return [];
     }
   }
 

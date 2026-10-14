@@ -5,6 +5,7 @@ import {
   bodyOverridesFields,
   buildIndexMetadata,
   cloneIndexMetadata,
+  linkPrefill,
   shardLayout,
   sortIndexNames,
   validateCount,
@@ -183,6 +184,55 @@ describe('cloning index metadata', () => {
   it('defaults missing settings and mappings to empty objects', () => {
     expect(cloneIndexMetadata({}).metadata).toEqual({ settings: {}, mappings: {} });
   });
+
+  it('turns a data stream backing index into a regular index', () => {
+    // create_index/get_index_metadata of .ds-app-events-web-2026.10.14-000001 (8.15), trimmed.
+    const backing = {
+      mappings: {
+        _doc: {
+          _data_stream_timestamp: { enabled: true },
+          properties: { '@timestamp': { type: 'date' }, level: { type: 'keyword' } },
+        },
+      },
+      settings: {
+        index: {
+          lifecycle: { name: 'app-events-policy', indexing_complete: 'true' },
+          routing: { allocation: { include: { _tier_preference: 'data_hot' } } },
+          hidden: 'true',
+          number_of_shards: '1',
+          provided_name: '.ds-app-events-web-2026.10.14-000001',
+          creation_date: '1791994121486',
+          priority: '100',
+          number_of_replicas: '1',
+          uuid: 'oCcsEaP_SA2FaVURCEsC_g',
+          version: { created: '8512000' },
+        },
+      },
+    };
+    const cloned = cloneIndexMetadata(backing);
+    expect(cloned.metadata).toEqual({
+      settings: {
+        index: {
+          lifecycle: { name: 'app-events-policy' },
+          routing: { allocation: { include: { _tier_preference: 'data_hot' } } },
+          number_of_shards: '1',
+          priority: '100',
+          number_of_replicas: '1',
+        },
+      },
+      mappings: { properties: { '@timestamp': { type: 'date' }, level: { type: 'keyword' } } },
+    });
+    expect(cloned.removedSettings).toContain('index.hidden');
+    expect(cloned.removedSettings).toContain('index.lifecycle.indexing_complete');
+    expect(cloned.removedMappings).toEqual(['_data_stream_timestamp']);
+    expect(backing.mappings._doc._data_stream_timestamp).toEqual({ enabled: true });
+  });
+
+  it('keeps index.hidden of a regular hidden index', () => {
+    const cloned = cloneIndexMetadata({ settings: { index: { hidden: 'true' } }, mappings: { properties: {} } });
+    expect(cloned.metadata['settings']).toEqual({ index: { hidden: 'true' } });
+    expect(cloned.removedMappings).toEqual([]);
+  });
 });
 
 describe('index name sorting', () => {
@@ -213,5 +263,18 @@ describe('alias name conflicts', () => {
       ]),
     ).toEqual(['logs', 'catalog']);
     expect(aliasNames({ error: 'forbidden' })).toEqual([]);
+  });
+});
+
+describe('link prefill', () => {
+  it('reads the name and the index to copy from a link', () => {
+    expect(linkPrefill('tmp-index-ops-dst', 'logs-2026.10.13')).toEqual({ name: 'tmp-index-ops-dst', from: 'logs-2026.10.13' });
+    expect(linkPrefill(' logs-copy ', null)).toEqual({ name: 'logs-copy', from: '' });
+    expect(linkPrefill(undefined, 'products')).toEqual({ name: '', from: 'products' });
+  });
+
+  it('ignores links that ask for nothing', () => {
+    expect(linkPrefill(null, null)).toBeNull();
+    expect(linkPrefill('  ', '')).toBeNull();
   });
 });

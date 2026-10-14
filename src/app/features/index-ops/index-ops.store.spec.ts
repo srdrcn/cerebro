@@ -11,10 +11,11 @@ import { RefreshService } from '../../core/refresh.service';
 import { ClusterApiError } from '../../core/api-envelope';
 import {
   ALIAS_ROWS,
-  CAT_INDICES,
   DATA_STREAMS,
   DETAIL_PREPARED,
+  DETAIL_SHRUNK_TWO,
   DETAIL_TARGET_INITIALIZING,
+  LOOKUP_INDICES,
   NODES,
   REINDEX_STARTED,
   RESIZE_RESPONSE,
@@ -22,9 +23,10 @@ import {
   TASK_DONE,
   TASK_LOST_ERROR,
   TASK_RUNNING,
-  TASK_SLICED_RUNNING,
+  TASK_SIX_SLICES,
+  TASK_SIX_SLICES_CHILDREN,
 } from './index-ops.fixtures';
-import { CatShardRow, IndexDetailResponse } from './index-ops.models';
+import { CatShardRow, IndexDetailResponse, RawNode } from './index-ops.models';
 import { IndexOpsStore } from './index-ops.store';
 
 type Responder = (payload: Record<string, unknown>) => unknown;
@@ -259,25 +261,91 @@ describe('IndexOpsStore', () => {
     expect(target.announcement()).toMatch(/^Dry run: /);
   });
 
-  it('resolves reindex sources with _cat/indices, not on every refresh', async () => {
-    routes.set('cat', () => CAT_INDICES);
+  it('resolves reindex sources with the index lookup, not on every refresh', async () => {
+    routes.set('commons/indices/lookup', () => LOOKUP_INDICES);
     const target = await store();
-    target.applyParams('reindex', 'logs-*');
+    target.applyParams('reindex', 'logs-*,archive*');
     TestBed.tick();
     await vi.advanceTimersByTimeAsync(400);
-    expect(calls('cat')).toEqual([{ api: 'indices/logs-*' }]);
+    expect(calls('commons/indices/lookup')).toEqual([{ expression: 'logs-*,archive*' }]);
     const lookup = target.sourcesLookup();
-    // The closed archive and the dot-hidden index only matched the wildcard of `_cat/indices`.
+    // The closed archive only matched a pattern: the reindex skips it.
     expect(lookup.state === 'ready' && lookup.indices.map((index) => index.name)).toEqual([
+      '.ds-app-events-web-2026.10.14-000001',
       '.ds-app-events-web-2026.10.14-000002',
+      '.kibana-demo',
       'logs-2026.10.13',
       'metrics-app',
     ]);
+    expect(lookup.state === 'ready' && lookup.skipped?.map((index) => index.name)).toEqual(['archive-2025']);
+    expect(lookup.state === 'ready' && lookup.indices.find((index) => index.name === 'logs-2026.10.13')?.primarySize).toBe(1_649_378);
     TestBed.inject(RefreshService).refresh();
     TestBed.tick();
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(calls('cat')).toHaveLength(1);
+    expect(calls('commons/indices/lookup')).toHaveLength(1);
     expect(calls('index_detail')).toEqual([]);
+    expect(calls('cat')).toEqual([]);
+  });
+
+  it('looks the destination up with its blocks, and treats a 404 as a new index', async () => {
+    routes.set('commons/indices/lookup', (payload) =>
+      payload['expression'] === 'tmp-index-ops-dst'
+        ? [{ index: 'tmp-index-ops-dst', status: 'open', health: 'green', pri: '1', rep: '0', 'docs.count': '3', 'pri.store.size': '6000', 'store.size': '6000' }]
+        : Promise.reject(new ClusterApiError(404, { error: { type: 'index_not_found_exception', reason: 'no such index [tmp-index-ops-new]' } })),
+    );
+    routes.set('commons/get_index_settings', (payload) =>
+      payload['index'] === 'tmp-index-ops-dst'
+        ? { 'tmp-index-ops-dst': { settings: { index: { blocks: { write: 'true' } } } } }
+        : Promise.reject(new ClusterApiError(404, {})),
+    );
+    const target = await store();
+    target.applyParams('reindex', 'logs-*');
+    target.reindex.update((options) => ({ ...options, dest: 'tmp-index-ops-dst' }));
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(calls('commons/get_index_settings')).toEqual([{ index: 'tmp-index-ops-dst' }]);
+    const dest = target.destLookup();
+    expect(dest.state === 'ready' && dest.indices[0]).toMatchObject({ docs: 3, writeBlocked: true, blockSettings: ['index.blocks.write'] });
+    expect(target.checks().find((check) => check.id === 'dest-writable')?.status).toBe('fail');
+
+    target.reindex.update((options) => ({ ...options, dest: 'tmp-index-ops-new' }));
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(target.destLookup()).toEqual({ state: 'missing' });
+    expect(calls('index_detail')).toEqual([]);
+  });
+
+  it('offers the exact split choices of the cluster state', async () => {
+    routes.set('index_detail', () => DETAIL_SHRUNK_TWO);
+    const target = await store();
+    target.applyParams('split', 'tmp-index-ops-two');
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(target.sourceIndex()?.routingShards).toEqual({ value: 768, origin: 'metadata' });
+    expect(target.shardOptions().slice(0, 5)).toEqual([4, 6, 8, 12, 16]);
+    expect(target.shards()).toBe(4);
+    target.shards.set(6);
+    expect(target.fieldErrors()['shards']).toBeUndefined();
+    target.shards.set(10);
+    expect(target.fieldErrors()['shards']).toMatch(/^10 does not divide the 768 routing shards/);
+  });
+
+  it('only offers shrink nodes of the preferred tier', async () => {
+    const tiers: Record<string, string[]> = { 'es-node-1': ['data_hot'], 'es-node-2': ['data_warm'], 'es-node-3': ['data_warm'] };
+    routes.set('nodes', () => NODES.map((node): RawNode => ({ ...node, roles: [...(tiers[node.name] ?? []), 'master'] })));
+    routes.set('index_detail', () => ({
+      ...DETAIL_SHRUNK_TWO,
+      // Spread over the three nodes, as before a preparation.
+      shards: (DETAIL_SHRUNK_TWO.shards ?? []).map((row, position) => ({ ...row, node: position === 0 ? 'es-node-1' : 'es-node-3' })),
+    }));
+    const target = await store();
+    target.applyParams('shrink', 'tmp-index-ops-two');
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(target.nodeOptions()?.map((option) => option.excluded === null)).toEqual([false, true, true]);
+    // es-node-1 holds a shard but is in the hot tier: the warm node with a shard is suggested.
+    expect(target.shrinkNode()).toBe('es-node-3');
+    expect(target.checks().find((check) => check.id === 'nodes')).toMatchObject({ status: 'pass', title: '2 of 3 data nodes can gather the copies' });
   });
 
   it('follows a reindex again after a reload and stops once the task is lost', async () => {
@@ -300,19 +368,30 @@ describe('IndexOpsStore', () => {
     expect(calls('tasks/get')).toHaveLength(polls);
   });
 
-  it('reads the task list of a sliced reindex at most every 5 seconds', async () => {
-    routes.set('index_ops/reindex', () => REINDEX_STARTED);
-    routes.set('tasks/get', () => TASK_SLICED_RUNNING);
-    routes.set('tasks', () => ({ tasks: [] }));
+  it('reads the slices of a sliced reindex by parent task on each poll', async () => {
+    const taskId = 'I7MELLk0RvSiAPhRW6211Q:511584';
+    routes.set('index_ops/reindex', () => ({ task: taskId }));
+    routes.set('tasks/get', () => TASK_SIX_SLICES);
+    routes.set('tasks', () => TASK_SIX_SLICES_CHILDREN);
     const target = await store();
-    target.applyParams('reindex', 'tmp-index-ops-src');
-    target.reindex.update((options) => ({ ...options, dest: 'tmp-index-ops-dst2', slicesMode: 'auto' }));
+    target.applyParams('reindex', 'tmp-index-ops-six');
+    target.reindex.update((options) => ({ ...options, dest: 'tmp-index-ops-sliced', slicesMode: 'auto' }));
     TestBed.tick();
     await target.execute();
-    await vi.advanceTimersByTimeAsync(6_100);
-    // Polls at 0, 1.5, 3, 4.5 and 6 s: the task list at 0 and 6 s only.
-    expect(calls('tasks/get')).toHaveLength(5);
-    expect(calls('tasks')).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(3_100);
+    // Polls at 0, 1.5 and 3 s, each with the sub-tasks of this task only.
+    expect(calls('tasks/get')).toHaveLength(3);
+    expect(calls('tasks')).toEqual([{ parent_task_id: taskId }, { parent_task_id: taskId }, { parent_task_id: taskId }]);
+    const run = target.run();
+    expect(run.kind === 'reindex' && run.progress).toMatchObject({ total: 600, processed: 60, slices: 6, pendingSlices: 0 });
+
+    // A failed read of the slices keeps the progress (it never goes back).
+    routes.set('tasks', () => Promise.reject(new Error('boom')));
+    await vi.advanceTimersByTimeAsync(1_500);
+    const kept = target.run();
+    expect(kept.kind === 'reindex' && kept.progress).toMatchObject({ processed: 60, pendingSlices: 6 });
+    expect(kept.kind === 'reindex' && kept.stale).toBeNull();
+
     // After a minute the polls slow down to every 5 s.
     await vi.advanceTimersByTimeAsync(60_000);
     const polls = calls('tasks/get').length;

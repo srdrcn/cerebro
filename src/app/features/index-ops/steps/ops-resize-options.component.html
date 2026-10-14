@@ -86,6 +86,24 @@
             (<span class="mono">index.routing.allocation.require._name</span>). Pick the node that already holds the most
             shards and has room for a second copy.
           </p>
+          @if (tierNote(); as note) {
+            <p class="ops-section__hint">
+              <i class="bi bi-layers" aria-hidden="true"></i>
+              Only nodes in
+              @if (note.tierName) {
+                {{ note.tierName }} (<span class="mono">{{ note.tier }}</span>)
+              } @else {
+                <span class="mono">{{ note.tier }}</span>
+              }
+              are offered:
+              @if (note.preference) {
+                the first tier of <span class="mono">index.routing.allocation.include._tier_preference</span>
+                (<span class="mono">{{ note.preference }}</span>) that has nodes.
+              } @else {
+                <span class="mono">index.routing.allocation.include._tier_preference</span> asks for it.
+              }
+            </p>
+          }
           @if (store.nodeOptions(); as nodes) {
             <fieldset class="ops-nodes">
               <legend class="visually-hidden">Node that gathers the shards</legend>
@@ -119,7 +137,7 @@
                     }
                     @if (node.excluded) {
                       <span [id]="'ops-node-note-' + node.id" class="ops-node__note text-danger">
-                        <i class="bi bi-slash-circle" aria-hidden="true"></i> Excluded by {{ node.excluded }}
+                        <i class="bi bi-slash-circle" aria-hidden="true"></i> {{ node.excluded }}
                       </span>
                     } @else if (diskLevelLabel(node.diskLevel); as label) {
                       <span [id]="'ops-node-note-' + node.id" class="ops-node__note text-warning">

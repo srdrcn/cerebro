@@ -161,7 +161,7 @@
                 <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
                 <div class="min-w-0">
                   <p class="copy-result__title">Copied from <span class="mono">{{ info.index }}</span></p>
-                  @if (info.removedSettings.length > 0 || info.unwrappedType) {
+                  @if (info.removedSettings.length > 0 || info.unwrappedType || info.removedMappings.length > 0) {
                     <p class="copy-result__meta">
                       @if (info.removedSettings.length > 0) {
                         Dropped {{ pluralize(info.removedSettings.length, 'internal setting') }}
@@ -169,6 +169,9 @@
                       }
                       @if (info.unwrappedType) {
                         Removed the <span class="mono">{{ info.unwrappedType }}</span> mapping type.
+                      }
+                      @if (info.removedMappings.length > 0) {
+                        Removed the data stream mapping (<span class="mono">{{ info.removedMappings.join(', ') }}</span>): the copy is a regular index.
                       }
                     </p>
                   }

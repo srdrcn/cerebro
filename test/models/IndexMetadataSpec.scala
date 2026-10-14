@@ -10,6 +10,8 @@ object IndexMetadataSpec extends Specification {
     s2"""
     IndexMetadata should
         should extract mappings and settings from metadata          $parse
+        pick the requested index among sibling backing indices      $siblings
+        fall back to the first index for an alias                   $alias
 
       """
 
@@ -45,10 +47,27 @@ object IndexMetadataSpec extends Specification {
         |}
       """.stripMargin
     )
-    IndexMetadata(data) mustEqual Json.obj(
+    IndexMetadata("index_name", data) mustEqual Json.obj(
       "mappings" -> Json.obj("some_mappings" -> Json.obj()),
       "settings" -> Json.obj("some_settings" -> Json.obj())
     )
   }
+
+  private val siblingsMetadata = Json.obj("metadata" -> Json.obj("indices" -> Json.obj(
+    ".ds-logs-000001" -> Json.obj("settings" -> Json.obj("generation" -> 1), "mappings" -> Json.obj("first" -> true)),
+    ".ds-logs-000002" -> Json.obj("settings" -> Json.obj("generation" -> 2), "mappings" -> Json.obj("second" -> true))
+  )))
+
+  def siblings =
+    IndexMetadata(".ds-logs-000002", siblingsMetadata) mustEqual Json.obj(
+      "mappings" -> Json.obj("second" -> true),
+      "settings" -> Json.obj("generation" -> 2)
+    )
+
+  def alias =
+    IndexMetadata("logs", siblingsMetadata) mustEqual Json.obj(
+      "mappings" -> Json.obj("first" -> true),
+      "settings" -> Json.obj("generation" -> 1)
+    )
 
 }

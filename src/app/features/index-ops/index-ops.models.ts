@@ -71,6 +71,11 @@ export interface IndexDetailResponse {
   readonly stats: { readonly indices?: Readonly<Record<string, IndexStatsEntry>> } | null;
   readonly aliases: Readonly<Record<string, { readonly aliases?: Readonly<Record<string, JsonObject>> }>> | null;
   readonly shards: readonly CatShardRow[] | null;
+  /**
+   * `index.routing_num_shards` from the cluster state metadata of the index
+   * that was asked for (`null` for an alias, or when Elasticsearch refused it).
+   */
+  readonly routing_num_shards?: number | null;
 }
 
 /** One node of the `nodes` endpoint (the parts the wizard reads). */
@@ -85,17 +90,21 @@ export interface RawNode {
   readonly attributes?: Readonly<Record<string, string>> | null;
   /** Elasticsearch version of the node ("8.15.0"). */
   readonly version?: string | null;
+  /** Raw roles (`data`, `data_hot`, `data_warm`, …); empty on clusters that do not report them. */
+  readonly roles?: readonly string[] | null;
 }
 
-/** One row of `_cat/indices` (the `cat` endpoint, human sizes). */
-export interface CatIndexRow {
+/**
+ * One row of `commons/indices/lookup`: `_cat/indices/<expression>` of open
+ * and closed indices, sizes in bytes (numbers as strings, `null` when closed).
+ */
+export interface LookupIndexRow {
   readonly health?: string | null;
   readonly status?: string | null;
   readonly index: string;
   readonly pri?: string | null;
   readonly rep?: string | null;
   readonly 'docs.count'?: string | null;
-  readonly 'docs.deleted'?: string | null;
   readonly 'store.size'?: string | null;
   readonly 'pri.store.size'?: string | null;
 }
@@ -193,8 +202,13 @@ export interface ShardCopy {
 
 export type HealthColor = 'green' | 'yellow' | 'red' | 'gray';
 
-/** Where `index.number_of_routing_shards` came from. */
-export type RoutingShardsOrigin = 'setting' | 'default' | 'single-shard' | 'resized';
+/**
+ * Where the routing shards came from: the cluster state (`metadata`, exact),
+ * the explicit setting, or an estimate (`default`, `resized`) when the
+ * cluster state was not available. A one-shard index can be split into any
+ * count whatever its routing shards (`single-shard`).
+ */
+export type RoutingShardsOrigin = 'metadata' | 'setting' | 'default' | 'single-shard' | 'resized';
 
 export interface RoutingShards {
   readonly value: number;
@@ -221,6 +235,8 @@ export interface SourceIndex {
   readonly blockSettings: readonly string[];
   /** `index.routing.allocation.require._name`. */
   readonly requiredNode: string | null;
+  /** `index.routing.allocation.include._tier_preference`, in order (`data_warm`, `data_hot`). */
+  readonly tierPreference: readonly string[];
   readonly routingShards: RoutingShards | null;
   readonly codec: string | null;
   readonly aliases: readonly string[];
@@ -282,7 +298,10 @@ export interface NodeOption {
   readonly shardsHere: number;
   /** Against the disk watermarks, `null` when unknown or the watermarks are off. */
   readonly diskLevel: DiskLevel | null;
-  /** Why the source's allocation filters keep its shards off this node, or `null`. */
+  /**
+   * Why the source's allocation filters or tier preference keep its shards
+   * off this node (a sentence without final period), or `null`.
+   */
   readonly excluded: string | null;
 }
 

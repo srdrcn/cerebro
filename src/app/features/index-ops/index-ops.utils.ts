@@ -4,7 +4,6 @@ import { healthTone } from '../../core/health';
 import { isRecord } from '../../core/json';
 import { INVALID_INDEX_NAME_CHARACTERS, invalidCharacters } from '../../core/names';
 import {
-  CatIndexRow,
   CatShardRow,
   Check,
   CheckSummary,
@@ -18,6 +17,7 @@ import {
   HealthColor,
   IndexDetailResponse,
   JsonObject,
+  LookupIndexRow,
   NodeOption,
   OperationInfo,
   OperationKind,
@@ -263,21 +263,27 @@ export function defaultRoutingShards(primaries: number): number {
 }
 
 /**
- * The routing shards of an index. The index settings only carry the value
- * when it was set explicitly; otherwise it is Elasticsearch's default for the
- * shard count (an index resized from another index inherits the routing
- * shards of its source, which the settings do not show).
+ * The routing shards of an index. `metadata` is `index.routing_num_shards`
+ * from the cluster state, which is exact. Without it, the index settings only
+ * carry the value when it was set explicitly; otherwise it is estimated as
+ * Elasticsearch's default for the shard count (an index resized from another
+ * index inherits the routing shards of its source, which the settings do not
+ * show).
  */
-export function routingShardsOf(settings: unknown, primaries: number | null): RoutingShards | null {
+export function routingShardsOf(settings: unknown, primaries: number | null, metadata: number | null = null): RoutingShards | null {
   if (primaries === null || primaries < 1) {
     return null;
   }
   const explicit = toNumber(settingValue(settings, 'index.number_of_routing_shards'));
-  if (explicit !== null && explicit > 0) {
+  if (primaries === 1) {
+    // Elasticsearch splits a one-shard index into any count, whatever its routing shards.
+    return { value: metadata ?? explicit ?? defaultRoutingShards(1), origin: 'single-shard' };
+  }
+  if (explicit !== null && explicit > 0 && (metadata === null || metadata === explicit)) {
     return { value: explicit, origin: 'setting' };
   }
-  if (primaries === 1) {
-    return { value: defaultRoutingShards(1), origin: 'single-shard' };
+  if (metadata !== null && metadata > 0) {
+    return { value: metadata, origin: 'metadata' };
   }
   if (settingString(settings, 'index.resize.source.name')) {
     // A resized index keeps the routing shards of its source, which its settings do not show.
@@ -290,7 +296,21 @@ export function routingShardsOf(settings: unknown, primaries: number | null): Ro
   return { value: defaultRoutingShards(primaries), origin: 'default' };
 }
 
+/** The routing shards as an exact, positive whole number of shards, else `null`. */
+function routingNumShards(value: unknown): number | null {
+  const number = toNumber(value);
+  return number !== null && Number.isInteger(number) && number > 0 ? number : null;
+}
+
 /* ---- Index details ------------------------------------------------------------------- */
+
+/** Block settings that refuse writes. */
+const BLOCK_KEYS = ['index.blocks.write', 'index.blocks.read_only', 'index.blocks.read_only_allow_delete'] as const;
+
+/** A comma separated list of tiers (`data_warm,data_hot`), blanks left out. */
+function tierList(value: string | null): string[] {
+  return (value ?? '').split(',').map((tier) => tier.trim()).filter(Boolean);
+}
 
 /** Settings as flat `key: value` strings (nested, flat or mixed input; nulls left out). */
 export function flattenSettings(settings: unknown, prefix = ''): Record<string, string> {
@@ -362,20 +382,25 @@ export function parseIndices(
   if (!response || !isRecord(response.settings)) {
     return [];
   }
-  return Object.keys(response.settings)
-    .sort((left, right) => left.localeCompare(right))
-    .map((name) => parseIndex(response, name, membership.get(name) ?? null));
+  const names = Object.keys(response.settings).sort((left, right) => left.localeCompare(right));
+  // The cluster state value belongs to the name that was asked for: an alias gets none.
+  const routing = names.length === 1 ? routingNumShards(response.routing_num_shards) : null;
+  return names.map((name) => parseIndex(response, name, membership.get(name) ?? null, routing));
 }
 
-function parseIndex(response: IndexDetailResponse, name: string, member: DataStreamMembership | null): SourceIndex {
+function parseIndex(
+  response: IndexDetailResponse,
+  name: string,
+  member: DataStreamMembership | null,
+  routing: number | null = null,
+): SourceIndex {
   const settings = response.settings[name]?.settings ?? {};
   const stats = response.stats?.indices?.[name] ?? null;
   const copies = shardCopies(response.shards?.filter((row) => row.index === name) ?? null);
   const primaries = toNumber(settingValue(settings, 'index.number_of_shards'));
   const replicas = toNumber(settingValue(settings, 'index.number_of_replicas'));
   const aliasEntries = Object.entries(response.aliases?.[name]?.aliases ?? {});
-  const blockKeys = ['index.blocks.write', 'index.blocks.read_only', 'index.blocks.read_only_allow_delete'];
-  const blockSettings = blockKeys.filter((key) => settingTrue(settings, key));
+  const blockSettings = BLOCK_KEYS.filter((key) => settingTrue(settings, key));
   const status = stats?.status;
   const open =
     status === 'open' ? true : status === 'close' || settingTrue(settings, 'index.verified_before_close') ? false : stats ? true : null;
@@ -399,7 +424,8 @@ function parseIndex(response: IndexDetailResponse, name: string, member: DataStr
     writeBlocked: blockSettings.length > 0,
     blockSettings,
     requiredNode: settingString(settings, 'index.routing.allocation.require._name') || null,
-    routingShards: routingShardsOf(settings, primaries),
+    tierPreference: tierList(settingString(settings, 'index.routing.allocation.include._tier_preference')),
+    routingShards: routingShardsOf(settings, primaries, routing),
     codec: settingString(settings, 'index.codec'),
     aliases: aliasEntries.map(([alias]) => alias).sort((left, right) => left.localeCompare(right)),
     writeAliases: aliasEntries
@@ -435,6 +461,7 @@ export function blankSource(name: string): SourceIndex {
     writeBlocked: false,
     blockSettings: [],
     requiredNode: null,
+    tierPreference: [],
     routingShards: null,
     codec: null,
     aliases: [],
@@ -470,11 +497,12 @@ export function parseByteSize(value: unknown): number | null {
 }
 
 /**
- * Indices of a `_cat/indices` answer: enough for the reindex sources (state,
- * health, documents and sizes) without reading settings and mappings.
+ * Indices of a `commons/indices/lookup` answer (`_cat/indices` of open and
+ * closed indices, sizes in bytes): enough for the reindex sources and the
+ * destination (state, health, documents and sizes) without reading mappings.
  */
-export function parseCatIndices(
-  rows: readonly CatIndexRow[] | null | undefined,
+export function parseLookupRows(
+  rows: readonly LookupIndexRow[] | null | undefined,
   membership: ReadonlyMap<string, DataStreamMembership> = new Map(),
 ): SourceIndex[] {
   return (Array.isArray(rows) ? rows : [])
@@ -487,9 +515,8 @@ export function parseCatIndices(
         primaries: toNumber(row.pri),
         replicas: toNumber(row.rep),
         docs: toNumber(row['docs.count']),
-        deletedDocs: toNumber(row['docs.deleted']),
-        primarySize: parseByteSize(row['pri.store.size']),
-        totalSize: parseByteSize(row['store.size']),
+        primarySize: toNumber(row['pri.store.size']),
+        totalSize: toNumber(row['store.size']),
         health: healthTone(row.health ?? undefined),
         open,
         dataStream: member?.dataStream ?? null,
@@ -499,27 +526,44 @@ export function parseCatIndices(
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+/** The indices a reindex reads, and the closed ones a pattern matched that it skips. */
+export interface ReadableSources {
+  readonly read: SourceIndex[];
+  readonly skipped: SourceIndex[];
+}
+
 /**
- * The indices of a `_cat/indices` answer a reindex reads. `_cat/indices`
- * expands wildcards to hidden and closed indices, a search does not: indices
- * that only a wildcard matched are left out when they are closed, or hidden
- * by a leading dot (data stream backing indices stay, and a pattern that
- * starts with a dot keeps them).
+ * Splits the lookup of the sources. The lookup lists closed indices too, a
+ * search does not: a closed index that only a pattern reached is skipped,
+ * one that is named (directly, through an alias or its data stream) makes
+ * Elasticsearch refuse the reindex, so it stays to be reported.
  */
-export function searchableSources(
+export function readableSources(
   indices: readonly SourceIndex[],
   expressions: readonly string[],
   aliasRows: readonly RawAliasRow[] = [],
-): SourceIndex[] {
-  const literal = new Set(expressions.filter((part) => !part.includes('*') && !part.startsWith('-')));
-  const dotPattern = expressions.some((part) => part.includes('*') && part.startsWith('.'));
-  const viaAlias = new Set(aliasRows.filter((row) => literal.has(row.alias)).map((row) => row.index));
-  return indices.filter((index) => {
-    const named = literal.has(index.name) || viaAlias.has(index.name) || (index.dataStream !== null && literal.has(index.dataStream));
-    if (named) {
-      return true;
+): ReadableSources {
+  const named = new Set(expressions);
+  const viaAlias = new Set(aliasRows.filter((row) => named.has(row.alias)).map((row) => row.index));
+  const read: SourceIndex[] = [];
+  const skipped: SourceIndex[] = [];
+  for (const index of indices) {
+    const explicit = named.has(index.name) || viaAlias.has(index.name) || (index.dataStream !== null && named.has(index.dataStream));
+    (index.open === false && !explicit ? skipped : read).push(index);
+  }
+  return { read, skipped };
+}
+
+/** Index blocks from the settings of `commons/get_index_settings` (by index name). */
+export function withBlocks(indices: readonly SourceIndex[], settings: unknown): SourceIndex[] {
+  return indices.map((index) => {
+    const entry = isRecord(settings) ? settings[index.name] : undefined;
+    const own = isRecord(entry) ? entry['settings'] : undefined;
+    if (!isRecord(own)) {
+      return index;
     }
-    return index.open !== false && (!index.name.startsWith('.') || index.dataStream !== null || dotPattern);
+    const blockSettings = BLOCK_KEYS.filter((key) => settingTrue(own, key));
+    return { ...index, writeBlock: settingTrue(own, 'index.blocks.write'), writeBlocked: blockSettings.length > 0, blockSettings };
   });
 }
 
@@ -564,6 +608,7 @@ export function refreshSource(previous: SourceIndex, rows: readonly CatShardRow[
     writeBlocked: fresh.writeBlocked,
     blockSettings: fresh.blockSettings,
     requiredNode: fresh.requiredNode,
+    tierPreference: fresh.tierPreference,
     allocation: fresh.allocation,
   };
 }
@@ -670,14 +715,113 @@ function nodeAttribute(node: RawNode, attribute: string): string | null | undefi
       return node.name;
     case '_id':
       return node.id;
-    case '_host':
-      return node.host ?? undefined;
     default:
+      // `_host`, `_ip`, `_publish_ip`…: Elasticsearch matches `_host` against the host name and the
+      // address, and the nodes endpoint only carries the name, so these are not judged.
       if (attribute.startsWith('_')) {
         return undefined;
       }
       return node.attributes ? (node.attributes[attribute] ?? null) : undefined;
   }
+}
+
+/** The data tiers of Elasticsearch, hottest first. */
+const DATA_TIERS = ['data_content', 'data_hot', 'data_warm', 'data_cold', 'data_frozen'] as const;
+
+/** Whether the node reports its roles (7.10+ and the nodes endpoint carries them). */
+function rolesKnown(node: RawNode): boolean {
+  return Array.isArray(node.roles) && node.roles.length > 0;
+}
+
+/** A node with the generic `data` role belongs to every tier. */
+function inTier(node: RawNode, tier: string): boolean {
+  const roles = node.roles ?? [];
+  return roles.includes(tier) || roles.includes('data');
+}
+
+/**
+ * The tier `index.routing.allocation.include._tier_preference` places the
+ * shards on: the first tier of the list that has a node, like Elasticsearch.
+ * `null` when no node is in any of them, `undefined` when there is no
+ * preference or the nodes do not report their roles.
+ */
+export function preferredTier(preference: readonly string[], nodes: readonly RawNode[]): string | null | undefined {
+  if (preference.length === 0 || !nodes.some(rolesKnown)) {
+    return undefined;
+  }
+  return preference.find((tier) => nodes.some((node) => rolesKnown(node) && inTier(node, tier))) ?? null;
+}
+
+/** "the warm tier (data_warm)". */
+function tierText(tier: string): string {
+  const name = tier.replace(/^data_/, '');
+  return (DATA_TIERS as readonly string[]).includes(tier) ? `the ${name} tier (${tier})` : tier;
+}
+
+/** "data_warm or data_hot". */
+function orList(values: readonly string[]): string {
+  return values.length <= 1 ? (values[0] ?? '') : `${values.slice(0, -1).join(', ')} or ${values[values.length - 1] ?? ''}`;
+}
+
+/**
+ * Why the tier preference keeps the shards off `node`, or `null`. `tier` is
+ * the result of `preferredTier`.
+ */
+export function tierExclusion(node: RawNode, preference: readonly string[], tier: string | null | undefined): string | null {
+  const key = 'index.routing.allocation.include._tier_preference';
+  if (tier === undefined || !rolesKnown(node)) {
+    return null;
+  }
+  if (tier === null) {
+    return `No node is in ${orList(preference)}, the tiers ${key} asks for`;
+  }
+  if (inTier(node, tier)) {
+    return null;
+  }
+  const first = preference[0] === tier ? '' : ` (no node is in ${orList(preference.slice(0, preference.indexOf(tier)))})`;
+  return `Not in ${tierText(tier)}, where ${key}: ${preference.join(',')} places the shards${first}`;
+}
+
+/** Where the tier preference places the shards, for the node choice. */
+export interface TierNote {
+  /** The tier the shards go to (`data_warm`). */
+  readonly tier: string;
+  /** "the warm tier"; `null` for a tier Elasticsearch does not define. */
+  readonly tierName: string | null;
+  /** The whole preference when it lists more than one tier (`data_cold,data_warm`), else `null`. */
+  readonly preference: string | null;
+}
+
+/**
+ * Where the tier preference places the shards, for the node choice; `null`
+ * when it changes nothing: every data node is in the tier it asks for first
+ * (every 8.x index prefers data_content, which plain `data` nodes are in).
+ */
+export function tierNote(preference: readonly string[], nodes: readonly RawNode[]): TierNote | null {
+  const tier = preferredTier(preference, nodes);
+  if (!tier) {
+    return null;
+  }
+  const leftOut = nodes.some((node) => node.data && rolesKnown(node) && !inTier(node, tier));
+  if (!leftOut && tier === preference[0]) {
+    return null;
+  }
+  return {
+    tier,
+    tierName: (DATA_TIERS as readonly string[]).includes(tier) ? `the ${tier.replace(/^data_/, '')} tier` : null,
+    preference: preference.length > 1 ? preference.join(',') : null,
+  };
+}
+
+/**
+ * `_tier` filters (Elasticsearch 7.x): `require` needs every listed tier,
+ * `include` one of them, `exclude` none. `null` when the node passes.
+ */
+function tierFilterExclusion(node: RawNode, type: string, key: string, value: string): string | null {
+  const tiers = tierList(value);
+  const matches = tiers.filter((tier) => inTier(node, tier));
+  const failed = type === 'require' ? matches.length < tiers.length : type === 'include' ? matches.length === 0 : matches.length > 0;
+  return failed ? `Excluded by ${key}: ${value}` : null;
 }
 
 /**
@@ -686,30 +830,42 @@ function nodeAttribute(node: RawNode, attribute: string): string | null | undefi
  */
 export function allocationExclusion(node: RawNode, allocation: Readonly<Record<string, string>>): string | null {
   const includes: [string, string][] = [];
+  // An include filter this page cannot judge may be the one that matches: then the includes keep every node.
+  let includeUnjudged = false;
   for (const [key, value] of Object.entries(allocation)) {
     const match = /^index\.routing\.allocation\.(require|include|exclude)\.(.+)$/.exec(key);
     if (!match?.[1] || !match[2]) {
       continue;
     }
+    if (match[2] === '_tier') {
+      const excluded = rolesKnown(node) ? tierFilterExclusion(node, match[1], key, value) : null;
+      if (excluded) {
+        return excluded;
+      }
+      continue;
+    }
     const actual = nodeAttribute(node, match[2]);
     if (actual === undefined) {
+      includeUnjudged ||= match[1] === 'include';
       continue;
     }
     const matches = actual !== null && value.split(',').some((pattern) => globMatch(pattern.trim(), actual));
+    // The node name and id are already on the option: only other attributes say what the node has.
+    const has = match[2] === '_name' || match[2] === '_id' ? '' : actual === null ? ` (it has no ${match[2]})` : ` (it has ${actual})`;
     if (match[1] === 'require' && !matches) {
-      return `${key}: ${value}`;
+      return `Excluded by ${key}: ${value}${has}`;
     }
     if (match[1] === 'exclude' && matches) {
-      return `${key}: ${value}`;
+      return `Excluded by ${key}: ${value}`;
     }
     if (match[1] === 'include') {
-      includes.push([key, matches ? '' : value]);
+      includes.push([key, matches ? '' : `${value}${has}`]);
     }
   }
   // Include filters keep a node when any of them matches.
-  if (includes.length > 0 && includes.every(([, failed]) => failed)) {
+  if (!includeUnjudged && includes.length > 0 && includes.every(([, failed]) => failed)) {
     const [key, value] = includes[0] ?? ['', ''];
-    return `${key}: ${value}`;
+    return `Excluded by ${key}: ${value}`;
   }
   return null;
 }
@@ -718,10 +874,18 @@ export interface NodeOptionContext {
   readonly watermarks?: DiskWatermarks | null;
   /** Allocation settings of the source (`SourceIndex.allocation`). */
   readonly allocation?: Readonly<Record<string, string>>;
+  /** Tier preference of the source (`SourceIndex.tierPreference`). */
+  readonly tierPreference?: readonly string[];
 }
 
-/** Data nodes with their free disk and how many shards of the source they already hold. */
+/**
+ * Data nodes with their free disk, how many shards of the source they already
+ * hold and why the source cannot go there. `nodes` is every node of the
+ * cluster: the tier preference looks for the first tier that has one.
+ */
 export function nodeOptions(nodes: readonly RawNode[], copies: readonly ShardCopy[], context: NodeOptionContext = {}): NodeOption[] {
+  const preference = context.tierPreference ?? [];
+  const tier = preferredTier(preference, nodes);
   return nodes
     .filter((node) => node.data)
     .map((node) => ({
@@ -732,25 +896,28 @@ export function nodeOptions(nodes: readonly RawNode[], copies: readonly ShardCop
       diskPercent: node.disk?.percent ?? null,
       shardsHere: shardsOn(copies, node.name).size,
       diskLevel: diskLevel(node.disk?.available ?? null, node.disk?.total ?? null, context.watermarks ?? null),
-      excluded: allocationExclusion(node, context.allocation ?? {}),
+      excluded: tierExclusion(node, preference, tier) ?? allocationExclusion(node, context.allocation ?? {}),
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 /**
  * The node that needs the fewest moves (then has the most free disk); nodes
- * the allocation filters exclude or that are past a disk watermark come last.
+ * past a disk watermark come last. Nodes the allocation filters or the tier
+ * preference exclude are never suggested.
  */
 export function suggestedShrinkNode(options: readonly NodeOption[]): NodeOption | null {
-  const penalty = (option: NodeOption): number => (option.excluded ? 2 : option.diskLevel && option.diskLevel !== 'ok' ? 1 : 0);
+  const penalty = (option: NodeOption): number => (option.diskLevel && option.diskLevel !== 'ok' ? 1 : 0);
   return (
-    [...options].sort(
-      (left, right) =>
-        penalty(left) - penalty(right) ||
-        right.shardsHere - left.shardsHere ||
-        (right.diskAvailable ?? -1) - (left.diskAvailable ?? -1) ||
-        left.name.localeCompare(right.name),
-    )[0] ?? null
+    options
+      .filter((option) => !option.excluded)
+      .sort(
+        (left, right) =>
+          penalty(left) - penalty(right) ||
+          right.shardsHere - left.shardsHere ||
+          (right.diskAvailable ?? -1) - (left.diskAvailable ?? -1) ||
+          left.name.localeCompare(right.name),
+      )[0] ?? null
   );
 }
 
@@ -1109,7 +1276,11 @@ export function resizeChecks(input: ResizeCheckInput): Check[] {
   }
 
   if (kind === 'shrink') {
-    checks.push(colocationCheck(source, primaries));
+    checks.push(colocationCheck(source, primaries, input.nodes));
+    const offered = shrinkNodesCheck(source, primaries, input.nodes);
+    if (offered) {
+      checks.push(offered);
+    }
   }
 
   checks.push(healthCheck(source, kind));
@@ -1139,7 +1310,7 @@ function shrinkNode(source: SourceIndex, primaries: number): string | null {
   return source.requiredNode ?? colocatedNodes(source.shards, primaries)[0] ?? null;
 }
 
-function colocationCheck(source: SourceIndex, primaries: number): Check {
+function colocationCheck(source: SourceIndex, primaries: number, options: readonly NodeOption[] | null): Check {
   const id = 'colocation';
   if (!source.shardsKnown || primaries < 1) {
     return { id, status: 'warn', title: 'Shard locations unknown', detail: 'Elasticsearch did not list the shards of the index.' };
@@ -1162,11 +1333,14 @@ function colocationCheck(source: SourceIndex, primaries: number): Check {
         detail: `${formatNumber(state.covered)} of ${pluralize(primaries, 'shard')} have a copy there; ${pluralize(state.moving, 'copy', 'copies')} on the way.`,
       };
     }
+    const excluded = options?.find((node) => node.name === source.requiredNode)?.excluded ?? null;
     return {
       id,
       status: 'fail',
       title: `Copies cannot reach ${source.requiredNode}`,
-      detail: `Only ${formatNumber(state.covered)} of ${pluralize(primaries, 'shard')} have a copy there and none is moving. Check why in Shard allocation, or prepare the source on another node.`,
+      detail: excluded
+        ? `Only ${formatNumber(state.covered)} of ${pluralize(primaries, 'shard')} have a copy there and none is moving. ${excluded}: undo the preparation and pick another node.`
+        : `Only ${formatNumber(state.covered)} of ${pluralize(primaries, 'shard')} have a copy there and none is moving. Check why in Shard allocation, or prepare the source on another node.`,
       fix: 'prepare',
     };
   }
@@ -1186,6 +1360,42 @@ function colocationCheck(source: SourceIndex, primaries: number): Check {
     title: 'Copies are spread over several nodes',
     detail: `The shards are on ${pluralize(spread, 'node')}. Require one node for the index (Prepare source) and wait until a copy of every shard is there.`,
     fix: 'prepare',
+  };
+}
+
+/**
+ * The nodes the preparation does not offer and why (tier preference,
+ * allocation filters). Only while a node is still to be picked.
+ */
+function shrinkNodesCheck(source: SourceIndex, primaries: number, nodes: readonly NodeOption[] | null): Check | null {
+  if (!nodes || nodes.length === 0 || source.requiredNode || primaries < 2) {
+    return null;
+  }
+  const excluded = nodes.filter((node) => node.excluded);
+  if (excluded.length === 0) {
+    return null;
+  }
+  // Grouped by the rule alone: what each node has is on its option.
+  const reasons = new Map<string, string[]>();
+  for (const node of excluded) {
+    const reason = (node.excluded ?? '').replace(/ \(it has [^)]*\)$/, '');
+    reasons.set(reason, [...(reasons.get(reason) ?? []), node.name]);
+  }
+  const why = [...reasons].map(([reason, names]) => `${names.join(', ')}: ${reason}.`).join(' ');
+  if (excluded.length === nodes.length) {
+    return {
+      id: 'nodes',
+      status: 'fail',
+      title: 'No node can gather the copies',
+      detail: `${why} Change the allocation settings of ${source.name} in Index settings first.`,
+    };
+  }
+  const offered = nodes.length - excluded.length;
+  return {
+    id: 'nodes',
+    status: 'pass',
+    title: `${formatNumber(offered)} of ${pluralize(nodes.length, 'data node')} can gather the copies`,
+    detail: `Not offered: ${why}`,
   };
 }
 
@@ -1364,6 +1574,16 @@ function routingCheck(source: SourceIndex, primaries: number, target: number | n
   }
   if (!routing || routing.origin === 'single-shard') {
     return { id, status: 'pass', title, detail: 'An index with one shard can be split into any number of shards.' };
+  }
+  if (routing.origin === 'metadata') {
+    return {
+      id,
+      status: 'pass',
+      title,
+      detail: `${formatNumber(target)} divides the ${formatNumber(routing.value)} routing shards of ${source.name} (routing_num_shards in the cluster state${
+        source.resizedFrom ? `, kept from ${source.resizedFrom}` : ''
+      }).`,
+    };
   }
   if (routing.origin === 'resized') {
     return {
@@ -1929,6 +2149,20 @@ export function sourceExpressions(value: string): string[] {
   return [...new Set(value.split(',').map((part) => part.trim()).filter(Boolean))];
 }
 
+/**
+ * The index Create index copies the settings and mappings from for a new
+ * destination: the first regular index the sources read. Data stream backing
+ * indices and dot-prefixed indices are passed over (a copy would be hidden
+ * and bound to the data stream's lifecycle). Until the sources are looked
+ * up, the first expression that plainly names an index; `null` when none.
+ */
+export function copySourceIndex(sources: Lookup, expressions: readonly string[], dataStreams: readonly string[]): string | null {
+  if (sources.state === 'ready') {
+    return sources.indices.find((index) => index.dataStream === null && !index.hidden && !index.name.startsWith('.'))?.name ?? null;
+  }
+  return expressions.find((name) => !/[*?]/.test(name) && !/^[.\-_+]/.test(name) && !dataStreams.includes(name)) ?? null;
+}
+
 export type QueryParse =
   | { readonly kind: 'empty' }
   | { readonly kind: 'object'; readonly value: JsonObject }
@@ -2046,7 +2280,12 @@ export function buildReindexRequest(options: ReindexOptions, destIsDataStream: b
 export type Lookup =
   | { readonly state: 'idle' | 'loading' }
   | { readonly state: 'missing' }
-  | { readonly state: 'ready'; readonly indices: readonly SourceIndex[] }
+  | {
+      readonly state: 'ready';
+      readonly indices: readonly SourceIndex[];
+      /** Closed indices only a pattern matched: the reindex skips them (sources only). */
+      readonly skipped?: readonly SourceIndex[];
+    }
   | { readonly state: 'error'; readonly reason: string };
 
 export interface ReindexCheckInput {
@@ -2094,8 +2333,17 @@ export function reindexChecks(input: ReindexCheckInput): Check[] {
       checks.push({ id: 'sources', status: 'fail', title: 'Sources not found', detail: sources.reason });
       break;
     case 'ready': {
+      const skipped = (sources.skipped ?? []).map((index) => index.name);
       if (sources.indices.length === 0) {
-        checks.push({ id: 'sources', status: 'fail', title: 'No source index', detail: 'The patterns match no index.' });
+        checks.push({
+          id: 'sources',
+          status: 'fail',
+          title: 'No source index',
+          detail:
+            skipped.length > 0
+              ? `The patterns only match closed indices (${skipped.join(', ')}), which a reindex skips.`
+              : 'The patterns match no index.',
+        });
         break;
       }
       const docs = totalDocs(sources.indices);
@@ -2112,6 +2360,16 @@ export function reindexChecks(input: ReindexCheckInput): Check[] {
           status: 'fail',
           title: closed.length === 1 ? 'A source is closed' : 'Sources are closed',
           detail: `${closed.join(', ')} ${closed.length === 1 ? 'is' : 'are'} closed and cannot be read.`,
+        });
+      }
+      if (skipped.length > 0) {
+        checks.push({
+          id: 'sources-skipped',
+          status: 'warn',
+          title: skipped.length === 1 ? 'A closed index is skipped' : 'Closed indices are skipped',
+          detail: `${skipped.join(', ')} ${skipped.length === 1 ? 'matches a pattern but is' : 'match a pattern but are'} closed: the reindex does not copy ${
+            skipped.length === 1 ? 'it' : 'them'
+          }. Open ${skipped.length === 1 ? 'it' : 'them'} first to include ${skipped.length === 1 ? 'it' : 'them'}.`,
         });
       }
       const slices = input.slicesMode === 'auto' ? autoSlices(sources.indices) : null;
@@ -2266,8 +2524,8 @@ export function groupFailures(failures: readonly ReindexFailure[], sampleIds = 5
 
 /**
  * Progress of a reindex task from `GET _tasks/{id}`. A sliced reindex only
- * reports finished slices in its own status; the running slices are child
- * tasks (`children`, from the task list) and are added to it.
+ * reports finished slices in its own status; the running slices are its
+ * sub-tasks (`children`, read with POST tasks `{ parent_task_id }`) and are added to it.
  */
 export function reindexProgress(response: TaskGetResponse, children: readonly RawListedTask[] = [], taskId?: string): ReindexProgress {
   const completed = response.completed === true;
@@ -2388,7 +2646,7 @@ export function describedReindex(description: string | null | undefined): { read
   return { sources: match[1].replace(/\s*,\s*/g, ', '), dest: match[2] };
 }
 
-/** Whether the task list must be read to see running slices. */
+/** Whether the running slices must be read (POST tasks `{ parent_task_id }`): some are not finished yet. */
 export function needsSliceChildren(response: TaskGetResponse): boolean {
   if (response.completed === true) {
     return false;

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ConnectionService } from '../../../core/connection.service';
+import { formatNumber } from '../../../core/format';
 import { healthLabel, healthTone } from '../../../core/health';
 import { groupIndexOptions } from '../../../shared/index-picker.component';
 import { BytesPipe, NumberPipe, PluralPipe } from '../../../shared/format.pipes';
@@ -34,6 +35,15 @@ export class OpsSourceStepComponent {
   readonly sourceIndices = computed(() => {
     const lookup = this.store.sourcesLookup();
     return lookup.state === 'ready' ? lookup.indices : [];
+  });
+  /** Closed indices only a pattern matched: the reindex skips them. */
+  readonly skippedIndices = computed(() => {
+    const lookup = this.store.sourcesLookup();
+    return lookup.state === 'ready' ? (lookup.skipped ?? []) : [];
+  });
+  readonly skippedNames = computed(() => {
+    const names = this.skippedIndices().map((index) => index.name);
+    return names.length > 10 ? `${names.slice(0, 10).join(', ')} and ${formatNumber(names.length - 10)} more` : names.join(', ');
   });
   readonly sourceDocs = computed(() => totalDocs(this.sourceIndices()));
   readonly sourceSize = computed(() => this.sourceIndices().reduce((sum, index) => sum + (index.primarySize ?? 0), 0));

@@ -201,7 +201,18 @@ const PRIVATE_INDEX_SETTINGS: readonly string[] = [
   'routing.allocation.initial_recovery',
   'verified_before_close',
   'history.uuid',
+  // ILM bookkeeping of a rolled-over index: a new index would skip its rollover.
+  'lifecycle.indexing_complete',
 ];
+
+/**
+ * Settings of a data stream backing index that do not belong on a regular
+ * index: a copy would be hidden from wildcard listings.
+ */
+const BACKING_INDEX_SETTINGS: readonly string[] = ['hidden'];
+
+/** Mapping a data stream adds to its backing indices. */
+const DATA_STREAM_MAPPING = '_data_stream_timestamp';
 
 export interface ClonedMetadata {
   readonly metadata: Record<string, unknown>;
@@ -209,6 +220,8 @@ export interface ClonedMetadata {
   readonly removedSettings: readonly string[];
   /** Mapping type that was unwrapped (`_doc` on 7.x+ indices), if any. */
   readonly unwrappedType: string | null;
+  /** Mapping entries that were dropped (`_data_stream_timestamp` of a data stream backing index). */
+  readonly removedMappings: readonly string[];
 }
 
 function deepCopy<T>(value: T): T {
@@ -235,13 +248,13 @@ function removePath(target: JsonRecord, path: readonly string[]): boolean {
   return removed;
 }
 
-function stripPrivateSettings(settings: unknown): { settings: unknown; removed: string[] } {
+function stripPrivateSettings(settings: unknown, paths: readonly string[]): { settings: unknown; removed: string[] } {
   if (!isRecord(settings)) {
     return { settings: settings ?? {}, removed: [] };
   }
   const copy = deepCopy(settings);
   const removed: string[] = [];
-  for (const setting of PRIVATE_INDEX_SETTINGS) {
+  for (const setting of paths) {
     const index = copy['index'];
     if (isRecord(index) && removePath(index, setting.split('.'))) {
       removed.push(`index.${setting}`);
@@ -293,15 +306,25 @@ function unwrapMappings(mappings: unknown, version: number | null): { mappings: 
   return { mappings: deepCopy(mappings), type: null };
 }
 
-/** Settings and mappings of an existing index, ready to be sent on creation. */
+/**
+ * Settings and mappings of an existing index, ready to be sent on creation.
+ * A data stream backing index (its mappings enable `_data_stream_timestamp`)
+ * also loses that mapping and `index.hidden`, so the copy is a regular index.
+ */
 export function cloneIndexMetadata(source: IndexMetadata): ClonedMetadata {
   const version = createdVersion(source.settings);
-  const { settings, removed } = stripPrivateSettings(source.settings);
   const { mappings, type } = unwrapMappings(source.mappings, version);
+  const backing = isRecord(mappings) && DATA_STREAM_MAPPING in mappings;
+  if (backing) {
+    delete mappings[DATA_STREAM_MAPPING];
+  }
+  const paths = backing ? [...PRIVATE_INDEX_SETTINGS, ...BACKING_INDEX_SETTINGS] : PRIVATE_INDEX_SETTINGS;
+  const { settings, removed } = stripPrivateSettings(source.settings, paths);
   return {
     metadata: { settings, mappings },
     removedSettings: removed,
     unwrappedType: type,
+    removedMappings: backing ? [DATA_STREAM_MAPPING] : [],
   };
 }
 
@@ -344,4 +367,20 @@ export function aliasNames(rows: unknown): string[] {
     .map((row: unknown) => (isRecord(row) ? row['alias'] : undefined))
     .filter((alias): alias is string => typeof alias === 'string' && alias !== '');
   return [...new Set(names)];
+}
+
+/** What a link to the page asks for: `?name=` prefills the name, `?from=` copies an index. */
+export interface LinkPrefill {
+  readonly name: string;
+  readonly from: string;
+}
+
+/**
+ * The `?name=` and `?from=` parameters of a link (Index operations links to
+ * `/create?name=<destination>&from=<source>`), trimmed; `null` when the link
+ * asks for neither.
+ */
+export function linkPrefill(name: string | null | undefined, from: string | null | undefined): LinkPrefill | null {
+  const prefill = { name: (name ?? '').trim(), from: (from ?? '').trim() };
+  return prefill.name || prefill.from ? prefill : null;
 }

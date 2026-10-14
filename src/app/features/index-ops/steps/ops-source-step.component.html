@@ -277,7 +277,14 @@
           @if (sourceIndices().length === 0) {
             <div class="callout callout-warning" role="status">
               <i class="bi bi-search" aria-hidden="true"></i>
-              <div>No index matches “{{ store.reindex().sources.trim() }}”.</div>
+              <div>
+                @if (skippedIndices().length > 0) {
+                  “{{ store.reindex().sources.trim() }}” only matches closed indices, which a reindex skips:
+                  <span class="mono">{{ skippedNames() }}</span>.
+                } @else {
+                  No index matches “{{ store.reindex().sources.trim() }}”.
+                }
+              </div>
             </div>
           } @else {
             <div class="table-wrap">
@@ -310,6 +317,13 @@
             </div>
             @if (sourceIndices().length > 50) {
               <p class="ops-section__hint">And {{ sourceIndices().length - 50 | num }} more.</p>
+            }
+            @if (skippedIndices().length > 0) {
+              <p class="ops-section__hint">
+                <i class="bi bi-lock" aria-hidden="true"></i>
+                Skipped because {{ skippedIndices().length === 1 ? 'it is' : 'they are' }} closed:
+                <span class="mono">{{ skippedNames() }}</span>.
+              </p>
             }
           }
         }

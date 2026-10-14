@@ -23,8 +23,9 @@ class CreateIndexController @Inject()(val authentication: AuthenticationModule,
   }
 
   def getIndexMetadata = process { request =>
-    client.getIndexMetadata(request.get("index"), request.target).map {
-      case Success(status, metadata) => CerebroResponse(status, IndexMetadata(metadata))
+    val index = request.get("index")
+    client.getIndexMetadata(index, request.target).map {
+      case Success(status, metadata) => CerebroResponse(status, IndexMetadata(index, metadata))
       case Error(status, error) => CerebroResponse(status, error)
     }
   }

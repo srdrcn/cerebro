@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALIAS_ROWS,
-  CAT_INDICES,
   CAT_SHARDS,
   CLUSTER_SETTINGS_DISK,
   DATA_STREAMS,
@@ -10,8 +9,11 @@ import {
   DETAIL_PREPARED,
   DETAIL_RELOCATING,
   DETAIL_ROLLOVER_WRITE_INDEX,
+  DETAIL_SHRUNK_TWO,
   DETAIL_SPREAD,
   DETAIL_TARGET_INITIALIZING,
+  LOOKUP_CLOSED,
+  LOOKUP_INDICES,
   NODES,
   ROLLOVER_DATA_STREAM_DRY_RUN,
   ROLLOVER_DRY_RUN,
@@ -19,12 +21,15 @@ import {
   TASK_CONFLICTS,
   TASK_DONE,
   TASK_RUNNING,
+  TASK_SIX_SLICES,
+  TASK_SIX_SLICES_CHILDREN,
   TASK_SLICED_RUNNING,
 } from './index-ops.fixtures';
 import {
   Check,
   DiskWatermarks,
   NodeOption,
+  RawAliasRow,
   RawListedTask,
   RawNode,
   ReindexOptions,
@@ -52,13 +57,18 @@ import {
   groupFailures,
   minNodeVersion,
   parseByteSize,
-  parseCatIndices,
+  parseLookupRows,
+  copySourceIndex,
   parseVersion,
+  preferredTier,
   parseWatermark,
   refreshSource,
+  readableSources,
   requiredFree,
-  searchableSources,
   steadyProgress,
+  tierExclusion,
+  tierNote,
+  withBlocks,
   buildReindexRequest,
   buildResizeRequest,
   buildRolloverRequest,
@@ -190,6 +200,31 @@ describe('routing shards', () => {
     expect(routingShardsOf({ index: { version: { created: '6080099' } } }, 3)).toEqual({ value: 3, origin: 'default' });
     expect(routingShardsOf({}, null)).toBeNull();
   });
+
+  it('takes the exact value of the cluster state when there is one', () => {
+    const version = { index: { version: { created: '8512000' } } };
+    // A 2-shard index shrunk from 6 shards keeps their 768 routing shards; the estimate says 1,024.
+    expect(routingShardsOf(version, 2, 768)).toEqual({ value: 768, origin: 'metadata' });
+    expect(routingShardsOf({ index: { number_of_routing_shards: '30' } }, 5, 30)).toEqual({ value: 30, origin: 'setting' });
+    expect(routingShardsOf({ index: { number_of_routing_shards: '30' } }, 5, 60)).toEqual({ value: 60, origin: 'metadata' });
+    // A one-shard index splits into anything, whatever the cluster state says.
+    expect(routingShardsOf(version, 1, 1024)).toEqual({ value: 1024, origin: 'single-shard' });
+  });
+
+  it('reads routing_num_shards from index_detail for the index that was asked for', () => {
+    const two = only(DETAIL_SHRUNK_TWO);
+    expect(two).toMatchObject({ name: 'tmp-index-ops-two', primaries: 2, routingShards: { value: 768, origin: 'metadata' }, resizedFrom: null });
+    expect(only(DETAIL_SPREAD).routingShards).toEqual({ value: 1024, origin: 'metadata' });
+    // Without it (older backend, refused cluster state): the estimate.
+    expect(only({ ...DETAIL_SHRUNK_TWO, routing_num_shards: null }).routingShards).toEqual({ value: 1024, origin: 'default' });
+    // An alias of several indices gets none: the value belongs to one name.
+    const both = parseIndices({ ...DETAIL_SPREAD, settings: { ...DETAIL_SPREAD.settings, ...DETAIL_PREPARED.settings }, routing_num_shards: 40 });
+    expect(both.map((index) => index.routingShards)).toEqual([
+      { value: 1024, origin: 'default' },
+      { value: 1024, origin: 'default' },
+    ]);
+    expect(parseIndices({ ...DETAIL_SPREAD, routing_num_shards: 0 })[0]?.routingShards?.origin).toBe('default');
+  });
 });
 
 describe('parseIndices', () => {
@@ -204,7 +239,7 @@ describe('parseIndices', () => {
       writeBlock: false,
       writeBlocked: false,
       requiredNode: null,
-      routingShards: { value: 1024, origin: 'default' },
+      routingShards: { value: 1024, origin: 'metadata' },
       aliases: ['orders'],
       writeAliases: [],
       dataStream: null,
@@ -310,6 +345,17 @@ describe('shard counts', () => {
     expect(splitChoices(5, { value: 30, origin: 'setting' })).toEqual([10, 15, 30]);
     expect(splitChoices(1, { value: 1024, origin: 'single-shard' })).toContain(3);
     expect(splitChoices(0, null)).toEqual([]);
+  });
+
+  it('lists the exact split choices of the cluster state', () => {
+    const two = only(DETAIL_SHRUNK_TWO);
+    // Multiples of 2 that divide 768; the estimate (1,024) would offer 8 but not 6, 12 or 24.
+    expect(splitChoices(2, two.routingShards)).toEqual([4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 768]);
+    expect(shardCountCompatibility('split', 2, 10, two.routingShards).reason).toBe(
+      '10 does not divide the 768 routing shards of the source: choose 4, 6, 8, 12, 16, 24, 32, 48, 64 …',
+    );
+    // A new 2-shard index (the demo cluster's audit-trail): 2 × 2^9.
+    expect(splitChoices(2, { value: 1024, origin: 'metadata' })).toEqual([4, 8, 16, 32, 64, 128, 256, 512, 1024]);
   });
 
   it('explains invalid shrink targets', () => {
@@ -468,6 +514,23 @@ describe('resizeChecks', () => {
     const checks = resizeChecks({ kind: 'split', source: spread, targetShards: 8, nodes });
     expect(checks.find((check) => check.id === 'write-block')?.fix).toBe('write-block');
     expect(checks.map((check) => check.id)).toEqual(['open', 'write-block', 'health', 'routing']);
+  });
+
+  it('checks a split against the routing shards of the cluster state', () => {
+    const two = only(DETAIL_SHRUNK_TWO);
+    const routing = resizeChecks({ kind: 'split', source: two, targetShards: 6, nodes: null }).find((check) => check.id === 'routing');
+    expect(routing).toEqual({
+      id: 'routing',
+      status: 'pass',
+      title: 'Routing shards allow the split',
+      detail: '6 divides the 768 routing shards of tmp-index-ops-two (routing_num_shards in the cluster state).',
+    });
+    const wrong = resizeChecks({ kind: 'split', source: two, targetShards: 10, nodes: null }).find((check) => check.id === 'routing');
+    expect(wrong).toMatchObject({ status: 'fail', title: 'Shard count not possible' });
+    const resized = { ...two, resizedFrom: 'tmp-index-ops-six' };
+    expect(resizeChecks({ kind: 'split', source: resized, targetShards: 6, nodes: null }).find((check) => check.id === 'routing')?.detail).toBe(
+      '6 divides the 768 routing shards of tmp-index-ops-two (routing_num_shards in the cluster state, kept from tmp-index-ops-six).',
+    );
   });
 
   it('checks the routing shards of a split', () => {
@@ -950,6 +1013,39 @@ describe('reindexProgress', () => {
     expect(combined.percent).toBeCloseTo(12.94, 1);
   });
 
+  it('adds the slices listed by parent task (slices=auto over 6 shards)', () => {
+    const parent = 'I7MELLk0RvSiAPhRW6211Q:511584';
+    expect(needsSliceChildren(TASK_SIX_SLICES)).toBe(true);
+    const progress = reindexProgress(TASK_SIX_SLICES, TASK_SIX_SLICES_CHILDREN.tasks, parent);
+    expect(progress).toMatchObject({
+      outcome: 'running',
+      total: 600,
+      created: 60,
+      processed: 60,
+      percent: 10,
+      batches: 6,
+      slices: 6,
+      pendingSlices: 0,
+      // Each slice gets its share of requests_per_second=6.
+      requestsPerSecond: 6,
+    });
+    // A slice that finished between the two reads is counted once (the parent sums the finished slices).
+    const finished = {
+      ...TASK_SIX_SLICES,
+      task: {
+        ...TASK_SIX_SLICES.task,
+        status: {
+          ...TASK_SIX_SLICES.task?.status,
+          total: 97,
+          created: 97,
+          batches: 10,
+          slices: [{ slice_id: 0, total: 97, created: 97, batches: 10 }, null, null, null, null, null],
+        },
+      },
+    };
+    expect(reindexProgress(finished, TASK_SIX_SLICES_CHILDREN.tasks, parent)).toMatchObject({ total: 600, created: 147, pendingSlices: 0 });
+  });
+
   it('reads a cancelled reindex', () => {
     expect(reindexProgress(TASK_CANCELLED)).toMatchObject({
       outcome: 'cancelled',
@@ -1030,38 +1126,102 @@ describe('settings helpers', () => {
 describe('light lookups', () => {
   const membership = dataStreamMembership(DATA_STREAMS);
 
-  it('reads _cat/indices rows', () => {
-    const indices = parseCatIndices(CAT_INDICES, membership);
+  it('reads the rows of the index lookup (sizes in bytes)', () => {
+    const indices = parseLookupRows(LOOKUP_INDICES, membership);
     expect(indices.map((index) => index.name)).toEqual([
+      '.ds-app-events-web-2026.10.14-000001',
       '.ds-app-events-web-2026.10.14-000002',
       '.kibana-demo',
       'archive-2025',
       'logs-2026.10.13',
       'metrics-app',
     ]);
-    expect(indices.find((index) => index.name === 'metrics-app')).toMatchObject({
+    expect(indices.find((index) => index.name === 'logs-2026.10.13')).toMatchObject({
       open: true,
       health: 'green',
-      primaries: 1,
-      replicas: 0,
-      docs: 2500,
-      primarySize: Math.round(194.2 * 1024),
+      primaries: 3,
+      replicas: 1,
+      docs: 9956,
+      deletedDocs: null,
+      primarySize: 1_649_378,
+      totalSize: 3_298_756,
     });
-    expect(indices.find((index) => index.name === 'archive-2025')).toMatchObject({ open: false, docs: null, primarySize: null });
-    expect(indices[0]).toMatchObject({ dataStream: 'app-events-web', dataStreamWriteIndex: true });
-    expect(parseCatIndices(null)).toEqual([]);
+    expect(indices.find((index) => index.name === 'archive-2025')).toMatchObject({ open: false, docs: null, primarySize: null, totalSize: null });
+    expect(indices[1]).toMatchObject({ dataStream: 'app-events-web', dataStreamWriteIndex: true });
+    expect(indices[0]).toMatchObject({ dataStream: 'app-events-web', dataStreamWriteIndex: false });
+    expect(parseLookupRows(null)).toEqual([]);
+    expect(parseLookupRows([{ index: 'x', status: 'weird', 'pri.store.size': 'n/a' }])[0]).toMatchObject({ open: null, primarySize: null });
   });
 
-  it('leaves out what only a wildcard matched and a search would skip', () => {
-    const indices = parseCatIndices(CAT_INDICES, membership);
-    const names = (expressions: string[]): string[] => searchableSources(indices, expressions).map((index) => index.name);
-    // `*`: closed and dot-hidden indices are skipped, data stream backing indices stay.
-    expect(names(['*'])).toEqual(['.ds-app-events-web-2026.10.14-000002', 'logs-2026.10.13', 'metrics-app']);
-    // Named explicitly, a closed index stays (and the closed check reports it).
-    expect(names(['*', 'archive-2025'])).toContain('archive-2025');
-    expect(names(['.*'])).toContain('.kibana-demo');
-    // Through an alias named explicitly.
-    expect(searchableSources(indices, ['old'], [{ alias: 'old', index: 'archive-2025' }]).map((index) => index.name)).toContain('archive-2025');
+  it('keeps the closed indices that are named and sets aside those only a pattern matched', () => {
+    const indices = parseLookupRows(LOOKUP_INDICES, membership);
+    const split = (expressions: string[], aliases: RawAliasRow[] = []): [string[], string[]] => {
+      const { read, skipped } = readableSources(indices, expressions, aliases);
+      return [read.map((index) => index.name), skipped.map((index) => index.name)];
+    };
+    // A search skips closed indices a pattern matches: the reindex does too.
+    const [read, skipped] = split(['logs-*', 'metrics-app', 'archive*', 'app-events-web', '.kibana-demo']);
+    expect(read).toEqual([
+      '.ds-app-events-web-2026.10.14-000001',
+      '.ds-app-events-web-2026.10.14-000002',
+      '.kibana-demo',
+      'logs-2026.10.13',
+      'metrics-app',
+    ]);
+    expect(skipped).toEqual(['archive-2025']);
+    // Named directly or through an alias, Elasticsearch refuses it: it stays for the closed check.
+    expect(split(['*', 'archive-2025'])[1]).toEqual([]);
+    expect(split(['old'], [{ alias: 'old', index: 'archive-2025' }])[0]).toContain('archive-2025');
+    const closed = readableSources(parseLookupRows(LOOKUP_CLOSED), ['archive-2025']);
+    expect(reindexChecks({ sources: { state: 'ready', indices: closed.read, skipped: closed.skipped }, dest: { state: 'idle' }, destName: '', destIsDataStream: false })
+      .map((check) => check.id)).toEqual(['sources', 'sources-open']);
+  });
+
+  it('reports the closed indices a pattern skips', () => {
+    const { read, skipped } = readableSources(parseLookupRows(LOOKUP_INDICES, membership), ['*']);
+    const checks = reindexChecks({ sources: { state: 'ready', indices: read, skipped }, dest: { state: 'idle' }, destName: '', destIsDataStream: false });
+    expect(checks.map((check) => [check.id, check.status])).toEqual([
+      ['sources', 'pass'],
+      ['sources-skipped', 'warn'],
+    ]);
+    expect(checks[0]).toMatchObject({ title: '5 source indices', detail: '12,459 documents to copy.' });
+    expect(checks[1]).toMatchObject({
+      title: 'A closed index is skipped',
+      detail: 'archive-2025 matches a pattern but is closed: the reindex does not copy it. Open it first to include it.',
+    });
+    const only = readableSources(parseLookupRows(LOOKUP_CLOSED), ['archive*']);
+    expect(reindexChecks({ sources: { state: 'ready', indices: only.read, skipped: only.skipped }, dest: { state: 'idle' }, destName: '', destIsDataStream: false })).toEqual([
+      { id: 'sources', status: 'fail', title: 'No source index', detail: 'The patterns only match closed indices (archive-2025), which a reindex skips.' },
+    ]);
+  });
+
+  it('copies the destination from the first regular source index, never a data stream backing index', () => {
+    const indices = parseLookupRows(LOOKUP_INDICES, membership);
+    const ready = (list: typeof indices) => ({ state: 'ready' as const, indices: list });
+    // The dot-prefixed indices sort first; archive-2025 is next (closed, it still has settings and mappings).
+    expect(copySourceIndex(ready(indices), [], [])).toBe('archive-2025');
+    // A data stream resolves to its hidden .ds- indices: they are passed over, as are dot-prefixed indices.
+    const backing = indices.filter((index) => index.dataStream !== null || index.name.startsWith('.'));
+    expect(backing.map((index) => index.name)).toEqual(['.ds-app-events-web-2026.10.14-000001', '.ds-app-events-web-2026.10.14-000002', '.kibana-demo']);
+    expect(copySourceIndex(ready(backing), ['app-events-web'], ['app-events-web'])).toBeNull();
+    const metrics = indices.find((index) => index.name === 'metrics-app') as SourceIndex;
+    expect(copySourceIndex(ready([...backing, metrics]), [], [])).toBe('metrics-app');
+    expect(copySourceIndex(ready([{ ...metrics, hidden: true }]), [], [])).toBeNull();
+    // Before the lookup answers: the first expression that plainly names an index.
+    expect(copySourceIndex({ state: 'loading' }, ['app-events-web', 'logs-*', '.kibana', '-x', 'products', 'orders'], ['app-events-web'])).toBe('products');
+    expect(copySourceIndex({ state: 'error', reason: 'x' }, ['logs-*'], [])).toBeNull();
+  });
+
+  it('adds the blocks of the destination from its settings', () => {
+    const [dest] = parseLookupRows([{ index: 'tmp-index-ops-dst', status: 'open', health: 'green', pri: '1', rep: '0', 'docs.count': '3' }]);
+    const settings = { 'tmp-index-ops-dst': { settings: { index: { blocks: { write: 'true', read_only_allow_delete: 'false' } } } } };
+    expect(withBlocks(dest ? [dest] : [], settings)[0]).toMatchObject({
+      writeBlock: true,
+      writeBlocked: true,
+      blockSettings: ['index.blocks.write'],
+    });
+    // Settings that were refused leave the blocks unknown (none).
+    expect(withBlocks(dest ? [dest] : [], null)[0]).toMatchObject({ writeBlocked: false, blockSettings: [] });
   });
 
   it('reads _cat/shards rows and refreshes the source from them', () => {
@@ -1138,19 +1298,41 @@ describe('node choice', () => {
   it('explains which nodes the allocation filters exclude', () => {
     const node = roomy[0] as RawNode;
     expect(allocationExclusion(node, {})).toBeNull();
-    expect(allocationExclusion(node, { 'index.routing.allocation.exclude._name': 'es-node-1' })).toBe('index.routing.allocation.exclude._name: es-node-1');
-    expect(allocationExclusion(node, { 'index.routing.allocation.require.zone': 'b' })).toBe('index.routing.allocation.require.zone: b');
+    expect(allocationExclusion(node, { 'index.routing.allocation.exclude._name': 'es-node-1' })).toBe(
+      'Excluded by index.routing.allocation.exclude._name: es-node-1',
+    );
+    expect(allocationExclusion(node, { 'index.routing.allocation.require.zone': 'b' })).toBe(
+      'Excluded by index.routing.allocation.require.zone: b (it has a)',
+    );
+    expect(allocationExclusion(node, { 'index.routing.allocation.require.rack': 'r1' })).toBe(
+      'Excluded by index.routing.allocation.require.rack: r1 (it has no rack)',
+    );
     expect(allocationExclusion(node, { 'index.routing.allocation.include._name': 'es-node-2,es-node-*' })).toBeNull();
-    expect(allocationExclusion(node, { 'index.routing.allocation.include._host': '10.0.0.9' })).toBe('index.routing.allocation.include._host: 10.0.0.9');
-    // Filters on data the nodes endpoint does not carry are not judged.
+    // The node name and id are not repeated.
+    expect(allocationExclusion(node, { 'index.routing.allocation.include._name': 'es-node-2' })).toBe(
+      'Excluded by index.routing.allocation.include._name: es-node-2',
+    );
+    expect(allocationExclusion(node, { 'index.routing.allocation.require._id': 'other' })).toBe(
+      'Excluded by index.routing.allocation.require._id: other',
+    );
+    // Filters on data the nodes endpoint does not carry are not judged: Elasticsearch matches _host
+    // against the host address too, which the nodes endpoint does not report.
     expect(allocationExclusion(node, { 'index.routing.allocation.require._ip': '1.2.3.4' })).toBeNull();
+    expect(allocationExclusion(node, { 'index.routing.allocation.include._host': '10.0.0.9' })).toBeNull();
+    expect(allocationExclusion(node, { 'index.routing.allocation.require._host': '10.0.0.9' })).toBeNull();
+    expect(allocationExclusion(node, { 'index.routing.allocation.exclude._host': '10.0.0.1' })).toBeNull();
+    // Include filters match when any of them does: one that cannot be judged may be it.
+    expect(allocationExclusion(node, { 'index.routing.allocation.include.zone': 'b' })).toBe(
+      'Excluded by index.routing.allocation.include.zone: b (it has a)',
+    );
+    expect(allocationExclusion(node, { 'index.routing.allocation.include.zone': 'b', 'index.routing.allocation.include._host': '10.0.0.1' })).toBeNull();
   });
 
   it('marks nodes and suggests one that can take the copies', () => {
     const options = nodeOptions(roomy, spread.shards, { watermarks: marks, allocation: { 'index.routing.allocation.exclude._name': 'es-node-2' } });
     expect(options.map((option) => [option.name, option.diskLevel, option.excluded])).toEqual([
       ['es-node-1', 'ok', null],
-      ['es-node-2', 'ok', 'index.routing.allocation.exclude._name: es-node-2'],
+      ['es-node-2', 'ok', 'Excluded by index.routing.allocation.exclude._name: es-node-2'],
       ['es-node-3', 'ok', null],
     ]);
     // es-node-2 holds as many shards as es-node-3 but is excluded.
@@ -1160,6 +1342,140 @@ describe('node choice', () => {
     expect(full.every((option) => option.diskLevel === 'high')).toBe(true);
     const mixed = [...full.slice(0, 2), { ...(options[2] as NodeOption), shardsHere: 0 }];
     expect(suggestedShrinkNode(mixed)?.name).toBe('es-node-3');
+    // Excluded nodes are never suggested, even as a last resort.
+    expect(suggestedShrinkNode(options.map((option) => ({ ...option, excluded: 'Excluded by x: y' })))).toBeNull();
+  });
+});
+
+describe('tier preference', () => {
+  // The demo nodes are in every tier; these are re-roled copies of them.
+  const roles = (node: RawNode, ...tiers: string[]): RawNode => ({ ...node, roles: [...tiers, 'ingest', 'master'] });
+  const [one, two, three] = NODES as [RawNode, RawNode, RawNode];
+  const hotWarm = [roles(one, 'data_content', 'data_hot'), roles(two, 'data_warm'), roles(three, 'data_warm')];
+
+  it('picks the first tier of the list that has a node, like Elasticsearch', () => {
+    expect(preferredTier(['data_warm', 'data_hot'], hotWarm)).toBe('data_warm');
+    expect(preferredTier(['data_cold', 'data_hot'], hotWarm)).toBe('data_hot');
+    expect(preferredTier(['data_cold', 'data_frozen'], hotWarm)).toBeNull();
+    // The generic data role is in every tier (the demo cluster).
+    expect(preferredTier(['data_cold'], NODES)).toBe('data_cold');
+    expect(preferredTier([], hotWarm)).toBeUndefined();
+    // Clusters that do not report roles (before 7.10) are not judged.
+    expect(preferredTier(['data_warm'], hotWarm.map((node) => ({ ...node, roles: [] })))).toBeUndefined();
+  });
+
+  it('says which tier the nodes on offer are in', () => {
+    expect(tierNote(['data_cold', 'data_warm'], hotWarm)).toEqual({ tier: 'data_warm', tierName: 'the warm tier', preference: 'data_cold,data_warm' });
+    expect(tierNote(['data_hot'], hotWarm)).toEqual({ tier: 'data_hot', tierName: 'the hot tier', preference: null });
+    expect(tierNote(['data_frozen'], hotWarm)).toBeNull();
+    expect(tierNote([], hotWarm)).toBeNull();
+  });
+
+  it('says nothing when the tier preference leaves no data node out', () => {
+    // Every 8.x index prefers data_content; the demo nodes have the generic data role.
+    expect(tierNote(['data_content'], NODES)).toBeNull();
+    expect(tierNote(['data_warm', 'data_hot'], NODES)).toBeNull();
+    // Only nodes that hold data count: a dedicated master outside the tier changes nothing.
+    const master: RawNode = { ...(hotWarm[0] as RawNode), id: 'm1', name: 'master-1', data: false, roles: ['master'] };
+    expect(tierNote(['data_warm'], [hotWarm[1] as RawNode, hotWarm[2] as RawNode, master])).toBeNull();
+    // A fallback to a later tier is worth saying even when every data node is in it.
+    const allHot = hotWarm.map((node) => roles(node, 'data_hot'));
+    expect(tierNote(['data_warm', 'data_hot'], allHot)).toEqual({ tier: 'data_hot', tierName: 'the hot tier', preference: 'data_warm,data_hot' });
+  });
+
+  it('explains why a node is not in the preferred tier', () => {
+    const preference = ['data_cold', 'data_warm', 'data_hot'];
+    expect(tierExclusion(hotWarm[0] as RawNode, preference, 'data_warm')).toBe(
+      'Not in the warm tier (data_warm), where index.routing.allocation.include._tier_preference: data_cold,data_warm,data_hot places the shards (no node is in data_cold)',
+    );
+    expect(tierExclusion(hotWarm[1] as RawNode, preference, 'data_warm')).toBeNull();
+    expect(tierExclusion(hotWarm[0] as RawNode, ['data_frozen'], null)).toBe(
+      'No node is in data_frozen, the tiers index.routing.allocation.include._tier_preference asks for',
+    );
+    expect(tierExclusion(hotWarm[0] as RawNode, ['data_warm'], undefined)).toBeNull();
+  });
+
+  it('only offers the nodes of the preferred tier for a shrink, and says why in the checks', () => {
+    const options = nodeOptions(hotWarm, spread.shards, { tierPreference: ['data_warm', 'data_hot'] });
+    expect(options.map((option) => [option.name, option.excluded])).toEqual([
+      ['es-node-1', 'Not in the warm tier (data_warm), where index.routing.allocation.include._tier_preference: data_warm,data_hot places the shards'],
+      ['es-node-2', null],
+      ['es-node-3', null],
+    ]);
+    // es-node-2 and es-node-3 hold three shards each; es-node-2 sorts first.
+    expect(suggestedShrinkNode(options)?.name).toBe('es-node-2');
+    const source = { ...spread, tierPreference: ['data_warm', 'data_hot'] };
+    const nodesCheck = resizeChecks({ kind: 'shrink', source, targetShards: 2, nodes: options }).find((check) => check.id === 'nodes');
+    expect(nodesCheck).toEqual({
+      id: 'nodes',
+      status: 'pass',
+      title: '2 of 3 data nodes can gather the copies',
+      detail:
+        'Not offered: es-node-1: Not in the warm tier (data_warm), where index.routing.allocation.include._tier_preference: data_warm,data_hot places the shards.',
+    });
+    // The other filters still apply on top of the tier.
+    const zone = nodeOptions(hotWarm, spread.shards, {
+      tierPreference: ['data_warm', 'data_hot'],
+      allocation: { 'index.routing.allocation.require.zone': 'zone-1' },
+    });
+    expect(zone.map((option) => option.excluded === null)).toEqual([false, false, true]);
+    expect(zone[1]?.excluded).toBe('Excluded by index.routing.allocation.require.zone: zone-1 (it has zone-2)');
+  });
+
+  it('groups the nodes a filter excludes under the filter alone', () => {
+    const options = nodeOptions(NODES, spread.shards, { allocation: { 'index.routing.allocation.require.rack': 'r1' } });
+    expect(options.map((option) => option.excluded)).toEqual([
+      null,
+      'Excluded by index.routing.allocation.require.rack: r1 (it has r2)',
+      'Excluded by index.routing.allocation.require.rack: r1 (it has r3)',
+    ]);
+    const nodesCheck = resizeChecks({ kind: 'shrink', source: spread, targetShards: 2, nodes: options }).find((check) => check.id === 'nodes');
+    expect(nodesCheck?.detail).toBe('Not offered: es-node-2, es-node-3: Excluded by index.routing.allocation.require.rack: r1.');
+  });
+
+  it('leaves every node offered under a _host filter it cannot judge', () => {
+    const options = nodeOptions(NODES, spread.shards, { allocation: { 'index.routing.allocation.include._host': '10.0.0.5' } });
+    expect(options.every((option) => option.excluded === null)).toBe(true);
+    expect(suggestedShrinkNode(options)).not.toBeNull();
+    expect(resizeChecks({ kind: 'shrink', source: spread, targetShards: 2, nodes: options }).some((check) => check.id === 'nodes')).toBe(false);
+  });
+
+  it('fails a shrink no node can gather', () => {
+    const options = nodeOptions(hotWarm, spread.shards, { tierPreference: ['data_frozen'] });
+    expect(suggestedShrinkNode(options)).toBeNull();
+    const checks = resizeChecks({ kind: 'shrink', source: { ...spread, tierPreference: ['data_frozen'] }, targetShards: 2, nodes: options });
+    expect(checks.find((check) => check.id === 'nodes')).toEqual({
+      id: 'nodes',
+      status: 'fail',
+      title: 'No node can gather the copies',
+      detail:
+        'es-node-1, es-node-2, es-node-3: No node is in data_frozen, the tiers index.routing.allocation.include._tier_preference asks for. Change the allocation settings of orders-v2 in Index settings first.',
+    });
+    expect(checks.find((check) => check.id === 'disk')).toMatchObject({ status: 'warn', title: 'Disk space not checked' });
+  });
+
+  it('explains copies that cannot reach a node outside the tier', () => {
+    const options = nodeOptions(hotWarm, relocating.shards, { tierPreference: ['data_warm'] });
+    const stuck = { ...relocating, tierPreference: ['data_warm'], shards: relocating.shards.map((copy) => ({ ...copy, state: 'started' as const, relocatingTo: null })) };
+    const check = resizeChecks({ kind: 'shrink', source: stuck, targetShards: 2, nodes: options }).find((entry) => entry.id === 'colocation');
+    expect(check?.status).toBe('fail');
+    expect(check?.detail).toContain('Not in the warm tier (data_warm), where index.routing.allocation.include._tier_preference: data_warm places the shards: undo the preparation');
+    // Once a node is required the choice is over: no node check.
+    expect(resizeChecks({ kind: 'shrink', source: stuck, targetShards: 2, nodes: options }).some((entry) => entry.id === 'nodes')).toBe(false);
+  });
+
+  it('reads the tier preference of the source and the _tier filters of older clusters', () => {
+    expect(only(DETAIL_SHRUNK_TWO).tierPreference).toEqual(['data_warm', 'data_hot']);
+    expect(prepared.tierPreference).toEqual([]);
+    const warm = hotWarm[1] as RawNode;
+    expect(allocationExclusion(warm, { 'index.routing.allocation.require._tier': 'data_hot' })).toBe(
+      'Excluded by index.routing.allocation.require._tier: data_hot',
+    );
+    expect(allocationExclusion(warm, { 'index.routing.allocation.include._tier': 'data_hot,data_warm' })).toBeNull();
+    expect(allocationExclusion(warm, { 'index.routing.allocation.exclude._tier': 'data_warm' })).toBe(
+      'Excluded by index.routing.allocation.exclude._tier: data_warm',
+    );
+    expect(allocationExclusion({ ...warm, roles: [] }, { 'index.routing.allocation.require._tier': 'data_hot' })).toBeNull();
   });
 });
 
@@ -1294,7 +1610,7 @@ describe('reindex after review', () => {
       'Enter at least 5: Elasticsearch needs as many documents as slices',
     );
     expect(reindexErrors({ ...DEFAULT_REINDEX_OPTIONS, sources: 'a', dest: 'b', slicesMode: 'custom', slices: '5', maxDocs: '5' }).maxDocs).toBeUndefined();
-    const indices = parseCatIndices(CAT_INDICES).filter((index) => index.open);
+    const indices = parseLookupRows(LOOKUP_INDICES).filter((index) => index.open);
     expect(autoSlices(indices)).toBe(1);
     expect(autoSlices(indices.filter((index) => index.name.startsWith('logs')))).toBe(3);
     expect(autoSlices([{ ...blankSource('huge'), primaries: 64 }])).toBe(20);

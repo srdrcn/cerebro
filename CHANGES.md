@@ -369,6 +369,7 @@ First cerebro release.
 - Disabling and enabling shard allocation from the overview writes the persistent setting and clears the transient one, so no leftover transient value overrides later persistent changes. Unknown allocation kinds are rejected.
 - Pipelines, ILM policies, templates and other resources whose name contains a space can be updated and deleted (the space was sent as "+").
 - Text responses (for example `GET _cat/health` in the REST console) no longer fail with a JSON parse error.
+- "Copy settings and mappings from" on create index copies the chosen index; for a data stream backing index it could pick a sibling backing index on 8.x.
 - Index lists ask Elasticsearch for names only and the index picker no longer reloads them on every refresh.
 - The `?host=` of the URL now always decides which cluster is shown (Back/Forward, bookmarks, pasted links).
 - Cancelling "Switch cluster" because of unsaved edits keeps the page connected.

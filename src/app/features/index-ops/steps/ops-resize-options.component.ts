@@ -6,7 +6,7 @@ import { BytesPipe, NumberPipe } from '../../../shared/format.pipes';
 import { MeterComponent } from '../../../shared/meter.component';
 import { CheckFix } from '../index-ops.models';
 import { IndexOpsStore } from '../index-ops.store';
-import { MAX_SHARDS_PER_INDEX, colocatedNodes, shrinkDiskNeed, suggestedShrinkNode } from '../index-ops.utils';
+import { MAX_SHARDS_PER_INDEX, colocatedNodes, shrinkDiskNeed, suggestedShrinkNode, tierNote } from '../index-ops.utils';
 import { OpsChecksComponent } from './ops-checks.component';
 
 type ResizeField = 'target' | 'shards' | 'replicas' | 'aliases';
@@ -42,6 +42,12 @@ export class OpsResizeOptionsComponent {
   readonly suggestedNode = computed(() => {
     const options = this.store.nodeOptions();
     return options ? (suggestedShrinkNode(options)?.name ?? null) : null;
+  });
+  /** The tier the preference of the source places the shards on. */
+  readonly tierNote = computed(() => {
+    const source = this.source();
+    const nodes = this.store.nodes();
+    return source && nodes ? tierNote(source.tierPreference, nodes) : null;
   });
   readonly movingCopies = computed(() => {
     const source = this.source();
@@ -88,6 +94,9 @@ export class OpsResizeOptionsComponent {
         const routing = source?.routingShards;
         if (!routing || routing.origin === 'single-shard') {
           return 'An index with one shard can be split into any number of shards (up to 1,024).';
+        }
+        if (routing.origin === 'metadata') {
+          return `Multiples of ${formatNumber(primaries)} that divide the ${formatNumber(routing.value)} routing shards of ${source?.name ?? 'the index'} (from the cluster state).`;
         }
         if (routing.origin === 'resized') {
           return `Multiples of ${formatNumber(primaries)} that divide ${formatNumber(routing.value)}: an estimate, since ${source?.name ?? 'the index'} keeps the routing shards of ${source?.resizedFrom ?? 'the index it was resized from'}.`;

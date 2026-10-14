@@ -3,19 +3,21 @@
  * through the Play endpoints the wizard calls, trimmed to the fields it reads.
  */
 import {
-  CatIndexRow,
   DataStreamsResponse,
   IndexDetailResponse,
+  LookupIndexRow,
   RawAliasRow,
   RawNode,
   ReindexStartResponse,
   ResizeResponse,
   RolloverResponse,
   TaskGetResponse,
+  TaskListResponse,
 } from './index-ops.models';
 
 /** orders-v2: 4 primaries and 4 replicas spread so that no node holds every shard. */
 export const DETAIL_SPREAD: IndexDetailResponse = {
+  "routing_num_shards": 1024,
   "settings": {
     "orders-v2": {
       "settings": {
@@ -701,6 +703,9 @@ export const NODES: readonly RawNode[] = [
   {
     "id": "I7MELLk0RvSiAPhRW6211Q",
     "name": "es-node-1",
+    "host": "127.0.0.1",
+    "attributes": { "rack": "r1", "zone": "zone-1" },
+    "roles": ["data", "data_cold", "data_content", "data_frozen", "data_hot", "data_warm", "ingest", "master", "ml", "remote_cluster_client", "transform"],
     "data": true,
     "disk": {
       "total": 270553174016,
@@ -711,6 +716,9 @@ export const NODES: readonly RawNode[] = [
   {
     "id": "wEqTWTA0T2CktRBr56viXg",
     "name": "es-node-2",
+    "host": "127.0.0.1",
+    "attributes": { "rack": "r2", "zone": "zone-2" },
+    "roles": ["data", "data_cold", "data_content", "data_frozen", "data_hot", "data_warm", "ingest", "master", "ml", "remote_cluster_client", "transform"],
     "data": true,
     "disk": {
       "total": 270553174016,
@@ -721,6 +729,9 @@ export const NODES: readonly RawNode[] = [
   {
     "id": "dmdk_a7-TrKWtlTZ9-ZHzQ",
     "name": "es-node-3",
+    "host": "127.0.0.1",
+    "attributes": { "rack": "r3", "zone": "zone-1" },
+    "roles": ["data", "data_cold", "data_content", "data_frozen", "data_hot", "data_warm", "ingest", "master", "ml", "remote_cluster_client", "transform"],
     "data": true,
     "disk": {
       "total": 270553174016,
@@ -1300,14 +1311,142 @@ export const CLUSTER_SETTINGS_DISK = {
   }
 };
 
-/** `cat` with `indices/logs-*,metrics-app,archive-2025,app-events-web` (human sizes; a closed index has no counts). */
-export const CAT_INDICES: readonly CatIndexRow[] = [
-  { "health": "green", "status": "open", "index": "logs-2026.10.13", "pri": "3", "rep": "1", "docs.count": "9956", "docs.deleted": "0", "store.size": "3.1mb", "pri.store.size": "1.5mb" },
-  { "health": "green", "status": "open", "index": "metrics-app", "pri": "1", "rep": "0", "docs.count": "2500", "docs.deleted": "0", "store.size": "194.2kb", "pri.store.size": "194.2kb" },
-  { "health": "green", "status": "close", "index": "archive-2025", "pri": "1", "rep": "1", "docs.count": null, "docs.deleted": null, "store.size": null, "pri.store.size": null },
-  { "health": "green", "status": "open", "index": ".ds-app-events-web-2026.10.14-000002", "pri": "1", "rep": "1", "docs.count": "0", "docs.deleted": "0", "store.size": "498b", "pri.store.size": "249b" },
-  { "health": "green", "status": "open", "index": ".kibana-demo", "pri": "1", "rep": "1", "docs.count": "0", "docs.deleted": "0", "store.size": "498b", "pri.store.size": "249b" }
+/**
+ * `commons/indices/lookup` with `logs-*,metrics-app,archive-2025,app-events-web,.kibana-demo`
+ * (sizes in bytes; a closed index has no counts).
+ */
+export const LOOKUP_INDICES: readonly LookupIndexRow[] = [
+  { "index": "archive-2025", "status": "close", "health": "green", "pri": "1", "rep": "1", "docs.count": null, "pri.store.size": null, "store.size": null },
+  { "index": "metrics-app", "status": "open", "health": "green", "pri": "1", "rep": "0", "docs.count": "2500", "pri.store.size": "198960", "store.size": "198960" },
+  { "index": ".ds-app-events-web-2026.10.14-000002", "status": "open", "health": "green", "pri": "1", "rep": "1", "docs.count": "0", "pri.store.size": "249", "store.size": "498" },
+  { "index": ".ds-app-events-web-2026.10.14-000001", "status": "open", "health": "green", "pri": "1", "rep": "1", "docs.count": "3", "pri.store.size": "15016", "store.size": "20607" },
+  { "index": "logs-2026.10.13", "status": "open", "health": "green", "pri": "3", "rep": "1", "docs.count": "9956", "pri.store.size": "1649378", "store.size": "3298756" },
+  { "index": ".kibana-demo", "status": "open", "health": "green", "pri": "1", "rep": "1", "docs.count": "0", "pri.store.size": "249", "store.size": "498" }
 ];
+
+/** `commons/indices/lookup` of a closed index named directly (archive-2025). */
+export const LOOKUP_CLOSED: readonly LookupIndexRow[] = [
+  { "index": "archive-2025", "status": "close", "health": "green", "pri": "1", "rep": "1", "docs.count": null, "pri.store.size": null, "store.size": null }
+];
+
+/**
+ * tmp-index-ops-two: shrunk from tmp-index-ops-six (6 shards, so 768 routing
+ * shards) to 2 shards. The settings do not show the resize source
+ * (`index.resize.source.name` is private in 8.x); the cluster state keeps the
+ * routing shards of the source, not the 1,024 of a new 2-shard index.
+ */
+export const DETAIL_SHRUNK_TWO: IndexDetailResponse = {
+  "settings": {
+    "tmp-index-ops-two": {
+      "settings": {
+        "index": {
+          "routing": {
+            "allocation": {
+              "include": {
+                "_tier_preference": "data_warm,data_hot"
+              },
+              "require": {
+                "_name": null
+              }
+            }
+          },
+          "number_of_shards": "2",
+          "routing_partition_size": "1",
+          "blocks": {
+            "write": null
+          },
+          "provided_name": "tmp-index-ops-two",
+          "creation_date": "1792019444530",
+          "number_of_replicas": "0",
+          "uuid": "SyiaRbZbSCS2aZGhCLEzLA",
+          "version": {
+            "created": "8512000"
+          }
+        }
+      }
+    }
+  },
+  "stats": {
+    "indices": {
+      "tmp-index-ops-two": {
+        "health": "green",
+        "status": "open",
+        "primaries": {
+          "docs": { "count": 600, "deleted": 0 },
+          "store": { "size_in_bytes": 60594 }
+        },
+        "total": {
+          "docs": { "count": 600, "deleted": 0 },
+          "store": { "size_in_bytes": 60594 }
+        }
+      }
+    }
+  },
+  "aliases": {
+    "tmp-index-ops-two": {
+      "aliases": {}
+    }
+  },
+  "shards": [
+    { "index": "tmp-index-ops-two", "shard": "0", "prirep": "p", "state": "STARTED", "docs": "291", "store": "0", "ip": "127.0.0.1", "node": "es-node-1", "unassigned.reason": null, "unassigned.for": null },
+    { "index": "tmp-index-ops-two", "shard": "1", "prirep": "p", "state": "STARTED", "docs": "309", "store": "0", "ip": "127.0.0.1", "node": "es-node-1", "unassigned.reason": null, "unassigned.for": null }
+  ],
+  "routing_num_shards": 768
+};
+
+/** `tasks/get` of a reindex of tmp-index-ops-six with slices=auto (6 slices), 4s in: no slice finished yet. */
+export const TASK_SIX_SLICES: TaskGetResponse = {
+  "completed": false,
+  "task": {
+    "node": "I7MELLk0RvSiAPhRW6211Q",
+    "id": 511584,
+    "type": "transport",
+    "action": "indices:data/write/reindex",
+    "status": {
+      "total": 0,
+      "updated": 0,
+      "created": 0,
+      "deleted": 0,
+      "batches": 0,
+      "version_conflicts": 0,
+      "noops": 0,
+      "retries": { "bulk": 0, "search": 0 },
+      "throttled_millis": 0,
+      "requests_per_second": 0,
+      "throttled_until_millis": 0,
+      "slices": [null, null, null, null, null, null]
+    },
+    "description": "reindex from [tmp-index-ops-six] to [tmp-index-ops-sliced]",
+    "start_time_in_millis": 1792019468524,
+    "running_time_in_nanos": 4022782559,
+    "cancellable": true,
+    "cancelled": false,
+    "headers": {}
+  }
+};
+
+/** `tasks` with `parent_task_id` of TASK_SIX_SLICES: its six slices only (throttled to 1 request per second each). */
+export const TASK_SIX_SLICES_CHILDREN: TaskListResponse = {
+  "tasks": [2, 1, 0, 5, 4, 3].map((slice) => ({
+    "node": "I7MELLk0RvSiAPhRW6211Q",
+    "id": 511586 + slice * 2,
+    "action": "indices:data/write/reindex",
+    "parent_task_id": "I7MELLk0RvSiAPhRW6211Q:511584",
+    "status": {
+      "slice_id": slice,
+      "total": [97, 97, 97, 110, 102, 97][slice],
+      "updated": 0,
+      "created": 10,
+      "deleted": 0,
+      "batches": 1,
+      "version_conflicts": 0,
+      "noops": 0,
+      "throttled_millis": 0,
+      "requests_per_second": 1,
+      "throttled_until_millis": 6090
+    }
+  }))
+};
 
 /** `cat` with `shards/orders-v2`, first rows (human store sizes). */
 export const CAT_SHARDS: readonly Record<string, unknown>[] = [
