@@ -78,7 +78,7 @@
                       <span class="badge badge-blue pipeline-item__flag" title="Built-in pipeline managed by Elasticsearch">Managed</span>
                     }
                     @if (selected() === pipeline.id && dirty()) {
-                      <span class="dot dot-yellow" title="Unsaved changes"></span>
+                      <span class="dot dot-yellow dot-sm" title="Unsaved changes"></span>
                       <span class="visually-hidden">(unsaved changes)</span>
                     }
                   </span>
@@ -180,8 +180,8 @@
           </div>
           <div class="row editor-card__actions">
             @if (dirty()) {
-              <span class="badge badge-yellow unsaved-badge" role="status">
-                <span class="dot dot-yellow" aria-hidden="true"></span> Unsaved changes
+              <span class="badge badge-yellow" role="status">
+                <span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Unsaved changes
               </span>
             }
             @if (selectedPipeline()) {
@@ -233,11 +233,11 @@
                 required
                 aria-required="true"
                 [attr.aria-invalid]="idError() ? true : null"
-                aria-describedby="pipeline-id-help"
+                [attr.aria-describedby]="idError() ? 'pipeline-id-error' : 'pipeline-id-help'"
               />
               <div id="pipeline-id-help" aria-live="polite">
                 @if (idError(); as error) {
-                  <p class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+                  <p id="pipeline-id-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
                 } @else {
                   @switch (mode()) {
                     @case ('overwrite') {
@@ -286,7 +286,7 @@
             <section aria-labelledby="processors-title">
               <div class="panel-head">
                 <h3 id="processors-title" class="section-title">Processors</h3>
-                <span class="count-label"><strong>{{ processors().length }}</strong> {{ processors().length === 1 ? 'processor' : 'processors' }} in order</span>
+                <span class="count-label"><strong>{{ processors().length | num }}</strong> {{ processors().length | plural: 'processor' }} in order</span>
               </div>
               @if (processors().length > 0) {
                 <ol class="processor-list">
@@ -382,13 +382,13 @@
               />
               <div class="editor-status" aria-live="polite">
                 @if (bodyError(); as error) {
-                  <span class="status-pill status-pill--danger"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid</span>
+                  <span class="badge badge-red"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid</span>
                   <span class="editor-status__message text-danger">{{ error }}</span>
                 } @else if (bodyWarnings().length > 0) {
-                  <span class="status-pill status-pill--warning"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check</span>
+                  <span class="badge badge-yellow"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check</span>
                   <span class="editor-status__message">{{ bodyWarnings().join(' · ') }}</span>
                 } @else {
-                  <span class="status-pill status-pill--ok"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON</span>
+                  <span class="badge badge-green"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON</span>
                   <span class="editor-status__message text-muted">The JSON is what gets saved</span>
                 }
               </div>
@@ -446,13 +446,11 @@
               ariaLabel="Sample documents JSON"
               (submit)="simulate()"
             />
-            <p class="field-hint" [class.text-danger]="docsError()">
-              @if (docsError(); as error) {
-                <i class="bi bi-x-circle" aria-hidden="true"></i> {{ error }}
-              } @else {
-                A JSON array of <span class="mono">_source</span> objects ({{ pluralize(docsCount(), 'document') }}).
-              }
-            </p>
+            @if (docsError(); as error) {
+              <p id="sample-docs-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+            } @else {
+              <p class="field-hint">A JSON array of <span class="mono">_source</span> objects ({{ pluralize(docsCount(), 'document') }}).</p>
+            }
             <div class="test-actions">
               <label class="switch">
                 <input #verboseToggle type="checkbox" role="switch" [checked]="verbose()" (change)="setVerbose(verboseToggle.checked)" />
@@ -555,7 +553,7 @@
                               @if (step.tag) {
                                 <span class="tag"><span class="tag-key">tag</span><span>{{ step.tag }}</span></span>
                               }
-                              <span class="status-badge" [attr.data-status]="step.status">{{ statusLabel(step.status) }}</span>
+                              <span class="badge" [class]="'badge ' + statusBadge(step.status)">{{ statusLabel(step.status) }}</span>
                               <span class="spacer"></span>
                               @if (step.sourceText) {
                                 <button

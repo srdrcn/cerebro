@@ -66,9 +66,9 @@
         <div class="row">
           <span class="count-label">
             @if (filtered()) {
-              <strong>{{ visibleNodes().length | num }}</strong> of {{ pluralize(all.length, 'node') }}
+              <strong>{{ visibleNodes().length | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'node' }}
             } @else {
-              <strong>{{ all.length | num }}</strong> {{ all.length === 1 ? 'node' : 'nodes' }}
+              <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'node' }}
             }
           </span>
           <cerebro-menu label="Table options" align="end">

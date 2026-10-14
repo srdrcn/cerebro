@@ -10,10 +10,10 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { pluralize } from '../../core/format';
+import { failureMessage } from '../../core/errors';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { BytesPipe, DurationPipe, NumberPipe } from '../../shared/format.pipes';
+import { BytesPipe, DurationPipe, NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { MeterComponent } from '../../shared/meter.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
@@ -51,6 +51,7 @@ const ROLE_FILTERS: readonly RoleFilter[] = [
     MenuComponent,
     MeterComponent,
     NumberPipe,
+    PluralPipe,
     SearchInputComponent,
   ],
   templateUrl: './nodes.component.html',
@@ -129,7 +130,7 @@ export class NodesComponent {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Could not load nodes', error);
+        this.alerts.error(failureMessage('Could not load nodes', error), error);
       }
     } finally {
       if (sequence === this.loadSequence) {
@@ -152,13 +153,12 @@ export class NodesComponent {
       const stats = await this.api.post<unknown>('commons/get_node_stats', { node: node.id });
       this.dialogs.showJson(`${node.name} stats`, stats, node.host ?? node.id);
     } catch (error: unknown) {
-      this.alerts.error(`Could not load stats for ${node.name}`, error);
+      this.alerts.error(failureMessage(`Could not load stats for ${node.name}`, error), error);
     }
   }
 
   readonly roleBadges = nodeRoles;
   readonly bytesString = prettyByteString;
-  readonly pluralize = pluralize;
 
   attributes(node: NodesNode): readonly (readonly [string, string])[] {
     return attributeEntries(node.attributes, this.showInternalAttributes());

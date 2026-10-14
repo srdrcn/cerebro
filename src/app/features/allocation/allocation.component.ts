@@ -12,13 +12,15 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
+import { ClusterApiError } from '../../core/api-envelope';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
 import { formatRelative, formatTimestamp, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { BytesPipe } from '../../shared/format.pipes';
+import { BytesPipe, NumberPipe } from '../../shared/format.pipes';
 import { MeterComponent } from '../../shared/meter.component';
 import { createSort } from '../../shared/sort-state';
 import {
@@ -39,6 +41,8 @@ import {
   describeExplainError,
   explainQueryParams,
   isNoUnassignedShards,
+  nodeDisplayName,
+  nodeNamesById,
   normalizeExplanation,
   ordinal,
   parseExplainParams,
@@ -73,7 +77,7 @@ type ExplainState =
 
 @Component({
   selector: 'cerebro-allocation',
-  imports: [BytesPipe, EmptyStateComponent, FormsModule, MeterComponent, RouterLink],
+  imports: [BytesPipe, EmptyStateComponent, FormsModule, MeterComponent, NumberPipe, RouterLink],
   templateUrl: './allocation.component.html',
   styleUrl: './allocation.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -125,16 +129,26 @@ export class AllocationComponent {
   readonly formError = computed(() => {
     const shard = this.formShard();
     if (!this.formIndex()) {
-      return 'Choose the index of the shard to explain.';
+      return 'Choose the index of the shard to explain';
     }
     if (shard === null || !Number.isInteger(shard) || shard < 0) {
-      return 'The shard number is a whole number starting at 0.';
+      return 'The shard number is a whole number starting at 0';
     }
     const count = this.formShardCount();
     if (count > 0 && shard >= count) {
-      return `${this.formIndex()} has ${pluralize(count, 'shard')} (0–${count - 1}).`;
+      return `${this.formIndex()} has ${pluralize(count, 'shard')} (0–${count - 1})`;
     }
     return null;
+  });
+
+  /** Node names by id, loaded once a request names a node (links from the overview carry ids). */
+  private readonly nodeNames = signal<ReadonlyMap<string, string>>(new Map());
+  private nodeNamesLoaded = false;
+
+  /** The `?node=` of the request by name. */
+  readonly requestNodeName = computed(() => {
+    const node = this.request()?.node;
+    return node ? nodeDisplayName(node, this.view(), this.nodeNames()) : null;
   });
 
   readonly formCopies = computed(() => {
@@ -208,6 +222,9 @@ export class AllocationComponent {
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const request = parseExplainParams((name) => params.get(name));
       this.request.set(request);
+      if (request?.node) {
+        void this.loadNodeNames();
+      }
       if (request) {
         this.formIndex.set(request.index);
         this.formShard.set(request.shard);
@@ -248,7 +265,7 @@ export class AllocationComponent {
       this.indices.set(Array.isArray(indices.value) ? indices.value : []);
     } else if (this.indices() === undefined) {
       this.indices.set([]);
-      this.alerts.error('Could not load the index list', indices.reason);
+      this.alerts.error(failureMessage('Could not load the index list', indices.reason), indices.reason);
     }
     if (shards.status === 'fulfilled') {
       this.copies.set(parseShardCopies(shards.value));
@@ -256,7 +273,7 @@ export class AllocationComponent {
     } else {
       this.copiesFailed.set(true);
       if (this.copies() === undefined) {
-        this.alerts.error('Could not load the shard list', shards.reason);
+        this.alerts.error(failureMessage('Could not load the shard list', shards.reason), shards.reason);
       }
     }
   }
@@ -461,11 +478,12 @@ export class AllocationComponent {
     if (nodes.length <= 2) {
       return `on ${nodes.join(' and ')}`;
     }
-    return `on ${nodes.length} of ${total} nodes`;
+    return `on ${nodes.length} of ${pluralize(total, 'node')}`;
   }
 
   readonly copyLabel = copyLabel;
   readonly ordinal = ordinal;
+  readonly pluralize = pluralize;
   readonly formatRelative = formatRelative;
   readonly formatTimestamp = (milliseconds: number | null) => formatTimestamp(milliseconds, { seconds: true });
 
@@ -487,9 +505,22 @@ export class AllocationComponent {
       : new Set();
   }
 
+  /** Node names for the node chip; cosmetic, so a failure keeps the value of the link. */
+  private async loadNodeNames(): Promise<void> {
+    if (this.nodeNamesLoaded) {
+      return;
+    }
+    this.nodeNamesLoaded = true;
+    try {
+      this.nodeNames.set(nodeNamesById(await this.api.post<unknown>('nodes')));
+    } catch {
+      this.nodeNamesLoaded = false;
+    }
+  }
+
   private errorBody(error: unknown): unknown {
-    return typeof error === 'object' && error !== null && 'body' in error
-      ? (error as { body: unknown }).body
+    return error instanceof ClusterApiError
+      ? error.body
       : error instanceof Error
         ? error.message
         : error;

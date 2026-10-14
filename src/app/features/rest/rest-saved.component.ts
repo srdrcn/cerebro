@@ -13,6 +13,7 @@ import { formatRelative, formatTimestamp, pluralize } from '../../core/format';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import type { SavedRequest, SavedSort } from './rest-saved.models';
@@ -30,7 +31,7 @@ const SORT_KEY = 'cerebro.rest.saved-sort';
 /** The "Saved" tab of the REST console: filter, sort and manage saved requests. */
 @Component({
   selector: 'cerebro-rest-saved',
-  imports: [EmptyStateComponent, MenuComponent, SearchInputComponent],
+  imports: [EmptyStateComponent, MenuComponent, NumberPipe, PluralPipe, SearchInputComponent],
   templateUrl: './rest-saved.component.html',
   styleUrl: './rest-saved.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -39,7 +39,7 @@
           }
         </select>
         @if (submitted() && errors().index; as message) {
-          <p class="field-error" [id]="id + '-index-error'">{{ message }}</p>
+          <p class="field-error" [id]="id + '-index-error'"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ message }}</p>
         }
       </div>
 
@@ -80,13 +80,13 @@
         <div class="analysis-form__note" [id]="id + '-target-note'">
           @if (optionsFailed()) {
             <p class="field-error">
-              Could not load the {{ config().targetNoun }} of this index.
+              <i class="bi bi-exclamation-circle" aria-hidden="true"></i> Could not load the {{ config().targetNoun }} of this index
               <button type="button" class="link-button" (click)="retryOptions()">Try again</button>
             </p>
           } @else if (index() && !optionsLoading() && mode() === 'field' && options().length === 0) {
             <p class="field-hint">This index has no analyzed text fields.</p>
           } @else if (submitted() && index() && errors().target; as message) {
-            <p class="field-error">{{ message }}</p>
+            <p class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ message }}</p>
           }
         </div>
       </div>
@@ -109,7 +109,7 @@
         [attr.aria-describedby]="submitted() && errors().text ? id + '-text-error' : id + '-text-hint'"
       ></textarea>
       @if (submitted() && errors().text; as message) {
-        <p class="field-error" [id]="id + '-text-error'">{{ message }}</p>
+        <p class="field-error" [id]="id + '-text-error'"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ message }}</p>
       }
     </div>
 
@@ -137,7 +137,7 @@
         <div class="analysis-results__header">
           <div class="min-w-0">
             <h3 class="section-title">
-              Tokens <span class="badge badge-accent">{{ summary().count }}</span>
+              Tokens <span class="badge badge-accent">{{ summary().count | num }}</span>
             </h3>
             <p class="section-subtitle break-all">
               <span class="mono">{{ result.index }}</span>

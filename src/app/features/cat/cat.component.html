@@ -119,10 +119,14 @@
                 <div class="cat-record__item">
                   <dt class="section-label cat-record__key">@for (part of keyParts(column); track $index) {{{ part }}<wbr />}</dt>
                   <dd class="cat-record__value" [class.tabular]="data.numeric.has(column)" [attr.title]="cellTitle(record, column)">
-                    @if (cellTone(record, column); as tone) {
-                      <span class="dot" [class]="'dot dot-' + tone" aria-hidden="true"></span>
+                    @if (cellStatus(record, column); as status) {
+                      <span [class]="status.badge + ' badge-lg'">
+                        <span [class]="status.dot" aria-hidden="true"></span>
+                        {{ cellText(record, column) }}
+                      </span>
+                    } @else {
+                      {{ cellText(record, column) || '–' }}
                     }
-                    {{ cellText(record, column) || '–' }}
                   </dd>
                 </div>
               }
@@ -138,11 +142,11 @@
               />
               <span class="count-label" aria-live="polite">
                 @if (filter()) {
-                  <strong>{{ visibleRows().length | num }}</strong> of {{ pluralize(data.rows.length, 'row') }}
+                  <strong>{{ visibleRows().length | num }}</strong> of {{ data.rows.length | num }} {{ data.rows.length | plural: 'row' }}
                 } @else {
-                  <strong>{{ data.rows.length | num }}</strong> {{ data.rows.length === 1 ? 'row' : 'rows' }}
+                  <strong>{{ data.rows.length | num }}</strong> {{ data.rows.length | plural: 'row' }}
                 }
-                · {{ pluralize(data.columns.length, 'column') }}
+                · {{ data.columns.length | num }} {{ data.columns.length | plural: 'column' }}
               </span>
             </div>
 
@@ -174,9 +178,9 @@
                     <tr>
                       @for (column of data.columns; track column) {
                         <td [class.num]="data.numeric.has(column)" [attr.title]="cellTitle(row, column)">
-                          @if (cellTone(row, column); as tone) {
-                            <span class="cat-tone">
-                              <span class="dot" [class]="'dot dot-' + tone" aria-hidden="true"></span>
+                          @if (cellStatus(row, column); as status) {
+                            <span [class]="status.badge">
+                              <span [class]="status.dot" aria-hidden="true"></span>
                               {{ cellText(row, column) }}
                             </span>
                           } @else {

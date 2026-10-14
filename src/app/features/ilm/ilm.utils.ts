@@ -1,5 +1,5 @@
 import { elasticsearchReason } from '../../core/errors';
-import { formatCompact, formatNumber, pluralize, sentence } from '../../core/format';
+import { formatCompact, formatNumber, plural, pluralize, sentence } from '../../core/format';
 import { JsonRecord, isRecord, stringList } from '../../core/json';
 import {
   ActionView,
@@ -19,7 +19,6 @@ import {
   PhaseTone,
   PhaseView,
   PolicyBodyState,
-  SaveMode,
   UsageExplainTarget,
 } from './ilm.models';
 
@@ -118,13 +117,13 @@ const ROLLOVER_MAX: readonly (readonly [string, (value: unknown) => string])[] =
   ['max_age', (value) => String(value)],
   ['max_primary_shard_size', (value) => `${formatSizeValue(value)} primary shard`],
   ['max_size', (value) => `${formatSizeValue(value)} total size`],
-  ['max_docs', (value) => `${formatCount(value)} ${Number(value) === 1 ? 'document' : 'documents'}`],
+  ['max_docs', (value) => `${formatCount(value)} ${plural(Number(value), 'document')}`],
   ['max_primary_shard_docs', (value) => `${formatCount(value)} documents in a primary shard`],
 ];
 
 const ROLLOVER_MIN: readonly (readonly [string, (value: unknown) => string])[] = [
   ['min_age', (value) => `${String(value)} old`],
-  ['min_docs', (value) => `${formatCount(value)} ${Number(value) === 1 ? 'document' : 'documents'}`],
+  ['min_docs', (value) => `${formatCount(value)} ${plural(Number(value), 'document')}`],
   ['min_size', (value) => `${formatSizeValue(value)} in total`],
   ['min_primary_shard_size', (value) => `${formatSizeValue(value)} in a primary shard`],
   ['min_primary_shard_docs', (value) => `${formatCount(value)} documents in a primary shard`],
@@ -291,13 +290,21 @@ export function usageLabel(usage: IlmUsage): string {
   return parts.length > 0 ? parts.join(' · ') : 'Not in use';
 }
 
+function parseModifiedDate(value: unknown): number | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const milliseconds = Date.parse(value);
+  return Number.isNaN(milliseconds) ? null : milliseconds;
+}
+
 export function normalizePolicy(name: string, entry: IlmPolicyEntry): IlmPolicySummary {
   const policy: IlmPolicyBody = isRecord(entry.policy) ? entry.policy : {};
   const description = policy._meta?.['description'];
   return {
     name,
     version: typeof entry.version === 'number' ? entry.version : null,
-    modifiedDate: typeof entry.modified_date === 'string' ? entry.modified_date : null,
+    modifiedAt: parseModifiedDate(entry.modified_date),
     description: typeof description === 'string' && description.trim() ? description : null,
     managed: isManagedPolicy(name, policy),
     deprecated: policy.deprecated === true,
@@ -408,7 +415,7 @@ export function policyWarnings(policy: IlmPolicyBody): string[] {
   }
   const unknown = names.filter((name) => !PHASE_ORDER.includes(name as never));
   if (unknown.length > 0) {
-    warnings.push(`Unknown ${unknown.length === 1 ? 'phase' : 'phases'} ${unknown.map((name) => `"${name}"`).join(', ')}`);
+    warnings.push(`Unknown ${plural(unknown.length, 'phase')} ${unknown.map((name) => `"${name}"`).join(', ')}`);
   }
   let previousName: string | null = null;
   let previousAge = 0;
@@ -441,21 +448,6 @@ export function validatePolicyName(name: string): string | null {
     return 'Policy names cannot start with "_"';
   }
   return null;
-}
-
-/**
- * What saving does: create a new policy, update the one being edited,
- * overwrite another existing policy with the typed name, or copy the edited
- * policy under a new name.
- */
-export function saveMode(name: string, selected: string | null, existing: readonly string[]): SaveMode {
-  if (selected !== null && name === selected) {
-    return 'update';
-  }
-  if (existing.includes(name)) {
-    return 'overwrite';
-  }
-  return selected === null ? 'create' : 'copy';
 }
 
 // ---------------------------------------------------------------------------

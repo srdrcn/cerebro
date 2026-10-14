@@ -16,10 +16,11 @@ import { FormsModule } from '@angular/forms';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { DialogService } from '../../core/dialog.service';
-import { elasticsearchReason } from '../../core/errors';
+import { elasticsearchReason, failureMessage } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { readJsonPreference, writeJsonPreference } from '../../core/preferences';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe } from '../../shared/format.pipes';
 import { AnalysisMode, AnalysisRun, OptionGroup, TextSegment } from './analysis.models';
 import {
   analysisAnnouncement,
@@ -79,7 +80,7 @@ let nextPanelId = 0;
 
 @Component({
   selector: 'cerebro-analysis-panel',
-  imports: [EmptyStateComponent, FormsModule],
+  imports: [EmptyStateComponent, FormsModule, NumberPipe],
   templateUrl: './analysis-panel.component.html',
   styleUrl: './analysis-panel.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -153,9 +154,9 @@ export class AnalysisPanelComponent {
   });
 
   readonly errors = computed(() => ({
-    index: this.index() ? null : 'Choose an index.',
-    target: this.target() ? null : `Choose ${this.mode() === 'field' ? 'a field' : 'an analyzer'}.`,
-    text: this.text() ? null : 'Enter some text to analyze.',
+    index: this.index() ? null : 'Choose an index',
+    target: this.target() ? null : `Choose ${this.mode() === 'field' ? 'a field' : 'an analyzer'}`,
+    text: this.text() ? null : 'Enter some text to analyze',
   }));
 
   readonly invalid = computed(() => {
@@ -254,7 +255,7 @@ export class AnalysisPanelComponent {
         // Built-in analyzers still work without the index's own list.
         this.target.set(defaultTarget('analyzer', [], preferredTarget));
       }
-      this.alerts.error(`Could not load the ${config.targetNoun} of ${index}`, error);
+      this.alerts.error(failureMessage(`Could not load the ${config.targetNoun} of ${index}`, error), error);
     } finally {
       if (sequence === this.optionsSequence) {
         this.optionsLoading.set(false);
@@ -309,7 +310,7 @@ export class AnalysisPanelComponent {
       }
       this.run.set(null);
       this.runError.set(elasticsearchReason(error) ?? 'The cluster could not analyze the text.');
-      this.alerts.error(`Could not analyze the text with ${request.target}`, error);
+      this.alerts.error(failureMessage(`Could not analyze the text with ${request.target}`, error), error);
     } finally {
       if (sequence === this.analyzeSequence) {
         this.running.set(false);

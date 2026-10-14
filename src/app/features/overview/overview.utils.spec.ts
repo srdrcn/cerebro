@@ -14,8 +14,6 @@ import {
   filterOverviewIndices,
   hasShardActivity,
   shardActivityLabel,
-  healthLabel,
-  healthTone,
   escapeRegExp,
   indexBreakdown,
   indexSummary,
@@ -342,12 +340,7 @@ describe('overview helpers', () => {
     expect(loadPercent(node({ available_processors: 0 }))).toBe(0);
   });
 
-  it('summarizes health and sizes', () => {
-    expect(healthTone('YELLOW')).toBe('yellow');
-    expect(healthTone(undefined)).toBe('gray');
-    expect(healthLabel('yellow')).toBe('Yellow');
-    expect(healthLabel('GREEN')).toBe('Green');
-    expect(healthLabel(undefined)).toBe('Unknown');
+  it('summarizes sizes and shard activity', () => {
     expect(
       primaryStoreSize([index('a', { size_in_bytes: 10 }), index('b', { size_in_bytes: 5, closed: true })]),
     ).toBe(10);

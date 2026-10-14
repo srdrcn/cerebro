@@ -1,3 +1,5 @@
+import type { HealthTone } from '../../core/health';
+
 /** Shapes of `GET _data_stream` and `GET _data_stream/_stats` as wrapped by Cerebro. */
 
 export interface BackingIndex {
@@ -60,8 +62,6 @@ export interface RolloverResponse {
   readonly new_index?: string;
   readonly rolled_over?: boolean;
 }
-
-export type HealthTone = 'green' | 'yellow' | 'red' | 'gray';
 
 export type LifecycleInfo =
   | { readonly kind: 'ilm'; readonly policy: string }

@@ -19,10 +19,11 @@ import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage } from '../../core/errors';
 import { formatBytes, pluralize } from '../../core/format';
+import { healthLabel, healthTone } from '../../core/health';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { BytesPipe, CompactNumberPipe, NumberPipe } from '../../shared/format.pipes';
+import { BytesPipe, CompactNumberPipe, NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { MeterComponent } from '../../shared/meter.component';
 import { PagerComponent } from '../../shared/pager.component';
@@ -48,8 +49,6 @@ import {
   describeShard,
   filterOverviewIndices,
   hasShardActivity,
-  healthLabel,
-  healthTone,
   indexBreakdown,
   indexSummary,
   indicesPayload,
@@ -154,6 +153,7 @@ const BULK_OPERATIONS: readonly IndexOperation[] = ['open', 'close', 'merge', 'r
     MeterComponent,
     NumberPipe,
     PagerComponent,
+    PluralPipe,
     RouterLink,
     SearchInputComponent,
   ],

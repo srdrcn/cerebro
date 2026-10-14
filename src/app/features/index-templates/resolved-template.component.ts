@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { Origin, ResolvedView } from './index-templates.models';
 
@@ -64,7 +65,7 @@ type Section = 'settings' | 'mappings' | 'aliases';
  */
 @Component({
   selector: 'cerebro-resolved-template',
-  imports: [SearchInputComponent, TemplateOriginComponent],
+  imports: [NumberPipe, PluralPipe, SearchInputComponent, TemplateOriginComponent],
   template: `
     @let data = view();
     @if (data.overlapping.length > 0) {
@@ -72,7 +73,7 @@ type Section = 'settings' | 'mappings' | 'aliases';
         <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
         <div>
           <p>
-            <strong>Overlaps with {{ data.overlapping.length === 1 ? 'another template' : data.overlapping.length + ' other templates' }}.</strong>
+            <strong>Overlaps with {{ data.overlapping.length | num }} other {{ data.overlapping.length | plural: 'template' }}.</strong>
             Only the matching template with the highest priority is applied to a new index; the others are ignored.
           </p>
           <ul class="overlap-list">
@@ -91,16 +92,16 @@ type Section = 'settings' | 'mappings' | 'aliases';
 
     <div class="resolved-facts">
       <div class="resolved-fact">
-        <span class="resolved-fact__value tabular">{{ data.settings.length }}</span>
-        <span class="resolved-fact__label">{{ data.settings.length === 1 ? 'setting' : 'settings' }}</span>
+        <span class="resolved-fact__value tabular">{{ data.settings.length | num }}</span>
+        <span class="resolved-fact__label">{{ data.settings.length | plural: 'setting' }}</span>
       </div>
       <div class="resolved-fact">
-        <span class="resolved-fact__value tabular">{{ fieldCount() }}</span>
-        <span class="resolved-fact__label">{{ fieldCount() === 1 ? 'mapped field' : 'mapped fields' }}</span>
+        <span class="resolved-fact__value tabular">{{ fieldCount() | num }}</span>
+        <span class="resolved-fact__label">{{ fieldCount() | plural: 'mapped field' }}</span>
       </div>
       <div class="resolved-fact">
-        <span class="resolved-fact__value tabular">{{ data.aliases.length }}</span>
-        <span class="resolved-fact__label">{{ data.aliases.length === 1 ? 'alias' : 'aliases' }}</span>
+        <span class="resolved-fact__value tabular">{{ data.aliases.length | num }}</span>
+        <span class="resolved-fact__label">{{ data.aliases.length | plural: 'alias' : 'aliases' }}</span>
       </div>
       <div class="resolved-fact resolved-fact--wide">
         <span class="resolved-fact__value resolved-fact__value--text mono truncate" [title]="data.lifecycle ?? ''">{{ data.lifecycle ?? 'None' }}</span>

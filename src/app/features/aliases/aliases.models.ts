@@ -209,26 +209,26 @@ export interface AliasDraftErrors {
 export function aliasNameError(name: string): string | undefined {
   const value = normalizeAliasName(name);
   if (!value) {
-    return 'Enter an alias name.';
+    return 'Enter an alias name';
   }
   if (value.startsWith('<') && value.endsWith('>') && value.length > 2) {
     return undefined;
   }
   if (value === '.' || value === '..') {
-    return 'An alias cannot be named "." or "..".';
+    return 'An alias cannot be named "." or ".."';
   }
   if (/^[_\-+]/.test(value)) {
-    return 'An alias cannot start with _, - or +.';
+    return 'An alias cannot start with _, - or +';
   }
   const invalid = [
     ...(value.includes(' ') ? ['spaces'] : []),
     ...invalidCharacters(value, INVALID_INDEX_NAME_CHARACTERS).map((character) => `"${character}"`),
   ];
   if (invalid.length > 0) {
-    return `An alias cannot contain ${invalid.join(', ')}.`;
+    return `An alias cannot contain ${invalid.join(', ')}`;
   }
   if (new TextEncoder().encode(value).length > 255) {
-    return 'An alias name cannot be longer than 255 bytes.';
+    return 'An alias name cannot be longer than 255 bytes';
   }
   return undefined;
 }
@@ -241,7 +241,7 @@ export function aliasFilterError(source: string): string | undefined {
     if (error instanceof SyntaxError) {
       return `Invalid JSON: ${error.message}`;
     }
-    return error instanceof Error ? `${error.message}.` : 'Invalid filter.';
+    return error instanceof Error ? error.message : 'Invalid filter';
   }
 }
 
@@ -254,13 +254,13 @@ export function validateAliasDraft(
   if (aliasError) {
     errors.alias = aliasError;
   } else if (indices.includes(normalizeAliasName(draft.alias))) {
-    errors.alias = 'An index with this name already exists.';
+    errors.alias = 'An index with this name already exists';
   }
   if (!draft.index.trim()) {
-    errors.index = 'Select the index the alias points to.';
+    errors.index = 'Select the index the alias points to';
   }
   if (draft.indexRouting.includes(',')) {
-    errors.indexRouting = 'Index routing accepts a single value.';
+    errors.indexRouting = 'Index routing accepts a single value';
   }
   const filterError = aliasFilterError(draft.filterText);
   if (filterError) {

@@ -173,7 +173,7 @@
                     >{{ group.index }}</a>
                     <span class="badge" [class.badge-accent]="group.active > 0">
                       @if (group.active > 0) {
-                        <span class="dot dot-green dot-pulse rec-badge-dot" aria-hidden="true"></span>
+                        <span class="dot dot-green dot-sm dot-pulse" aria-hidden="true"></span>
                       } @else {
                         <i class="bi bi-check2" aria-hidden="true"></i>
                       }
@@ -257,13 +257,13 @@
             }
           </div>
           <div class="card-footer card-footer--between">
-            <span class="text-xs text-muted">
+            <span class="count-label">
               @if (loading()) {
                 <span class="spinner rec-inline-spinner" aria-hidden="true"></span> Updating…
               } @else if (filtersActive()) {
-                {{ filtered().length | num }} of {{ pluralize(all.length, 'recovery', 'recoveries') }}
+                <strong>{{ filtered().length | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'recovery' : 'recoveries' }}
               } @else {
-                {{ pluralize(all.length, 'recovery', 'recoveries') }}
+                <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'recovery' : 'recoveries' }}
               }
             </span>
             <cerebro-pager [page]="currentPage()" [pageSize]="pageSize" [total]="groups().length" noun="indices" (pageChange)="page.set($event)" />

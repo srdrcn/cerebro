@@ -43,11 +43,6 @@
   font-size: var(--text-sm);
 }
 
-/* The design system's .is-invalid covers .input and .textarea only. */
-.select.is-invalid {
-  border-color: var(--red);
-}
-
 .analysis-form__actions {
   display: flex;
   flex-wrap: wrap;

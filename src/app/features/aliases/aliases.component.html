@@ -32,10 +32,10 @@
         @if (aliases()) {
           <span class="count-label">
             @if (filtering()) {
-              <strong>{{ visibleRows().length }}</strong> of {{ pluralize(rows().length, 'assignment') }}
+              <strong>{{ visibleRows().length | num }}</strong> of {{ rows().length | num }} {{ rows().length | plural: 'assignment' }}
             } @else {
-              <strong>{{ aliasCount() }}</strong> {{ aliasCount() === 1 ? 'alias' : 'aliases' }} ·
-              <strong>{{ rows().length }}</strong> {{ rows().length === 1 ? 'assignment' : 'assignments' }}
+              <strong>{{ aliasCount() | num }}</strong> {{ aliasCount() | plural: 'alias' : 'aliases' }} ·
+              <strong>{{ rows().length | num }}</strong> {{ rows().length | plural: 'assignment' }}
             }
           </span>
         }
@@ -104,7 +104,7 @@
                           [title]="'Open the settings of ' + row.record.index"
                         >{{ row.record.index }}</a>
                         @if (row.record.is_write_index === true) {
-                          <span class="write-badge" title="Write index: writes sent to the alias go to this index">
+                          <span class="badge badge-purple" title="Write index: writes sent to the alias go to this index">
                             <i class="bi bi-pencil-fill" aria-hidden="true"></i> write
                           </span>
                         }
@@ -305,7 +305,7 @@
               spellcheck="false"
               placeholder="e.g. logs-current"
               [class.is-invalid]="showError('alias')"
-              [attr.aria-invalid]="showError('alias')"
+              [attr.aria-invalid]="showError('alias') ? true : null"
               [attr.aria-describedby]="showError('alias') ? 'alias-name-error' : editing() ? null : 'alias-name-hint'"
               [ngModel]="draftAlias()"
               (ngModelChange)="draftAlias.set($event)"
@@ -317,7 +317,7 @@
               }
             </datalist>
             @if (showError('alias')) {
-              <p id="alias-name-error" class="field-error">{{ errors().alias }}</p>
+              <p id="alias-name-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errors().alias }}</p>
             } @else if (!editing()) {
               <p id="alias-name-hint" class="field-hint">Reuse an existing name to add another index to it.</p>
             }
@@ -331,7 +331,7 @@
               name="index"
               class="select"
               [class.is-invalid]="showError('index')"
-              [attr.aria-invalid]="showError('index')"
+              [attr.aria-invalid]="showError('index') ? true : null"
               [attr.aria-describedby]="showError('index') ? 'alias-index-error' : null"
               [disabled]="!indices()"
               [ngModel]="draftIndex()"
@@ -344,7 +344,7 @@
               }
             </select>
             @if (showError('index')) {
-              <p id="alias-index-error" class="field-error">{{ errors().index }}</p>
+              <p id="alias-index-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errors().index }}</p>
             }
           </div>
 
@@ -464,14 +464,14 @@
                       autocomplete="off"
                       spellcheck="false"
                       [class.is-invalid]="showError('indexRouting')"
-                      [attr.aria-invalid]="showError('indexRouting')"
+                      [attr.aria-invalid]="showError('indexRouting') ? true : null"
                       [attr.aria-describedby]="showError('indexRouting') ? 'alias-index-routing-error' : 'alias-index-routing-hint'"
                       [ngModel]="draftIndexRouting()"
                       (ngModelChange)="draftIndexRouting.set($event)"
                       (blur)="touch('indexRouting')"
                     />
                     @if (showError('indexRouting')) {
-                      <p id="alias-index-routing-error" class="field-error">{{ errors().indexRouting }}</p>
+                      <p id="alias-index-routing-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errors().indexRouting }}</p>
                     } @else {
                       <p id="alias-index-routing-hint" class="field-hint">Single value, used for writes.</p>
                     }
@@ -519,9 +519,9 @@
                     (submit)="stage()"
                   />
                   @if (showError('filter')) {
-                    <p class="field-error" role="alert">{{ errors().filter }}</p>
+                    <p id="alias-filter-error" class="field-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errors().filter }}</p>
                   } @else {
-                    <p class="field-hint">A query that limits the documents visible through the alias.</p>
+                    <p id="alias-filter-hint" class="field-hint">A query that limits the documents visible through the alias.</p>
                   }
                 </div>
               </div>
@@ -583,7 +583,7 @@
                     @if (item.record.is_write_index === true || item.writeCleared || item.record.is_hidden || itemTags.length > 0 || item.record.filter !== undefined) {
                       <div class="pending-meta">
                         @if (item.record.is_write_index === true) {
-                          <span class="write-badge" title="Write index">
+                          <span class="badge badge-purple" title="Write index">
                             <i class="bi bi-pencil-fill" aria-hidden="true"></i> write
                           </span>
                         } @else if (item.writeCleared) {
@@ -639,7 +639,7 @@
               <div #problemNote class="callout callout-warning" tabindex="-1">
                 <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
                 <span>
-                  {{ problemCount() === 1 ? 'One change' : problemCount() + ' changes' }} cannot be applied as staged.
+                  {{ pluralize(problemCount(), 'change') }} cannot be applied as staged.
                   Revert or edit {{ problemCount() === 1 ? 'it' : 'them' }} to continue.
                 </span>
               </div>

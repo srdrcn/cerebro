@@ -57,19 +57,19 @@
         </div>
       </div>
       <button type="submit" class="btn btn-primary alloc-query__submit">
-        <i class="bi bi-search" aria-hidden="true"></i> Explain
+        <i class="bi bi-search" aria-hidden="true"></i> Explain shard
       </button>
     </div>
 
     @if (submitted() && formError(); as error) {
-      <p id="alloc-form-error" class="field-error alloc-query__error">{{ error }}</p>
+      <p id="alloc-form-error" class="field-error alloc-query__error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
     }
 
-    @if (request()?.node; as node) {
+    @if (requestNodeName(); as node) {
       <div class="alloc-node-filter">
-        <span class="tag">
+        <span class="tag" [title]="node === request()?.node ? node : node + ' (' + request()?.node + ')'">
           <span class="tag-key">Node</span>
-          <span class="mono">{{ node }}</span>
+          <span>{{ node }}</span>
         </span>
         <span class="text-xs text-muted">Only the copy on this node is explained.</span>
         <button type="button" class="link-button text-sm" (click)="explainWithoutNode()" [attr.aria-label]="'Clear node ' + node + ' and explain again'">
@@ -491,7 +491,7 @@
           </h2>
           @if (copies() !== undefined) {
             <span class="badge" [class.badge-yellow]="unassignedCount() > 0" [class.badge-green]="unassignedCount() === 0">
-              {{ unassignedCount() }}
+              {{ unassignedCount() | num }}
             </span>
           }
         </div>
@@ -533,7 +533,7 @@
           </ul>
           @if (unassigned().length > unassignedLimit) {
             <div class="card-footer text-sm text-muted">
-              and {{ unassigned().length - unassignedLimit }} more indices with unassigned shards
+              and {{ pluralize(unassigned().length - unassignedLimit, 'more index', 'more indices') }} with unassigned shards
             </div>
           }
         }

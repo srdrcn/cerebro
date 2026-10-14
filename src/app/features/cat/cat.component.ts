@@ -14,11 +14,11 @@ import { AlertService } from '../../core/alert.service';
 import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
-import { elasticsearchReason } from '../../core/errors';
+import { elasticsearchReason, failureMessage } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { NumberPipe } from '../../shared/format.pipes';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { PagerComponent, clampPage, pageSlice } from '../../shared/pager.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { createSort } from '../../shared/sort-state';
@@ -28,7 +28,6 @@ import {
   CatApi,
   CatApiInfo,
   CatRow,
-  CatTone,
   asCatRows,
   catApiFromParam,
   catApiValue,
@@ -67,7 +66,7 @@ interface CatFailure {
 
 @Component({
   selector: 'cerebro-cat',
-  imports: [EmptyStateComponent, FormsModule, NumberPipe, PagerComponent, RouterLink, SearchInputComponent],
+  imports: [EmptyStateComponent, FormsModule, NumberPipe, PagerComponent, PluralPipe, RouterLink, SearchInputComponent],
   templateUrl: './cat.component.html',
   styleUrl: './cat.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -211,7 +210,7 @@ export class CatComponent {
         return;
       }
       this.failure.set({ api, reason: elasticsearchReason(error) });
-      this.alerts.error(`Could not load _cat/${catApiValue(api)}`, error);
+      this.alerts.error(failureMessage(`Could not load _cat/${catApiValue(api)}`, error), error);
     } finally {
       if (sequence === this.loadSequence) {
         this.loading.set(false);
@@ -287,7 +286,12 @@ export class CatComponent {
     return text.length > 48 ? text : null;
   }
 
-  cellTone(row: CatRow, column: string): CatTone | null {
-    return catCellTone(column, row[column]);
+  /** Badge and dot classes of health and shard-state cells, `null` for other cells. */
+  cellStatus(row: CatRow, column: string): { readonly badge: string; readonly dot: string } | null {
+    const tone = catCellTone(column, row[column]);
+    if (tone === null) {
+      return null;
+    }
+    return { badge: tone === 'gray' ? 'badge' : `badge badge-${tone}`, dot: `dot dot-sm dot-${tone}` };
   }
 }

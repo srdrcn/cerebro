@@ -18,7 +18,6 @@ import {
   processorSummary,
   processorViews,
   sampleDocsFor,
-  saveMode,
   simulationAnnouncement,
   validatePipelineId,
   withDescription,
@@ -349,15 +348,5 @@ describe('simulation results', () => {
     expect(simulationAnnouncement(results)).toBe('Simulation finished for 4 documents: 2 processed, 1 failed, 1 dropped.');
     expect(simulationAnnouncement(results.slice(0, 1))).toBe('Simulation finished for 1 document: 1 processed.');
     expect(simulationAnnouncement([])).toBe('The simulation returned no documents.');
-  });
-});
-
-describe('saving', () => {
-  it('works out what saving does', () => {
-    expect(saveMode('new', null, ['a'])).toBe('create');
-    expect(saveMode('a', null, ['a'])).toBe('overwrite');
-    expect(saveMode('a', 'a', ['a'])).toBe('update');
-    expect(saveMode('b', 'a', ['a'])).toBe('copy');
-    expect(saveMode('c', 'a', ['a', 'c'])).toBe('overwrite');
   });
 });

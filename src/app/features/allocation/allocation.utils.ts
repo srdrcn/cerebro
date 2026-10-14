@@ -1103,3 +1103,28 @@ export function copyLabel(copy: ShardCopy): string {
     ? `${kind} of shard ${copy.shard}, ${state} on ${copy.node}`
     : `${kind} of shard ${copy.shard}, ${state}`;
 }
+
+/** Node names by id from the `nodes` endpoint (`[{ id, name, … }]`). */
+export function nodeNamesById(value: unknown): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  for (const node of Array.isArray(value) ? value : []) {
+    if (isRecord(node) && typeof node['id'] === 'string' && typeof node['name'] === 'string') {
+      names.set(node['id'], node['name']);
+    }
+  }
+  return names;
+}
+
+/**
+ * Display name of the node a request names (`?node=` takes an id or a name):
+ * looked up among the nodes the explanation mentions, then the cluster's
+ * node list; unknown values are shown as given.
+ */
+export function nodeDisplayName(
+  node: string,
+  view: ExplanationView | undefined,
+  names: ReadonlyMap<string, string> = new Map(),
+): string {
+  const known = view ? [...(view.currentNode ? [view.currentNode] : []), ...view.nodes, ...view.disks] : [];
+  return known.find((candidate) => candidate.id === node)?.name ?? names.get(node) ?? node;
+}

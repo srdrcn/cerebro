@@ -15,9 +15,9 @@
         @if (templates(); as all) {
           <span class="count-label">
             @if (query().trim() && all.length > 0) {
-              <strong>{{ rows().length }}</strong> of {{ pluralize(all.length, 'template') }}
+              <strong>{{ rows().length | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'template' }}
             } @else {
-              <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'template' : 'templates' }}
+              <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'template' }}
             }
           </span>
         }
@@ -60,7 +60,7 @@
                     <span class="list-item__title template-item__name">
                       <span class="truncate min-w-0">{{ row.name }}</span>
                       @if (selected() === row.name && dirty()) {
-                        <span class="dot dot-yellow" title="Unsaved changes"></span>
+                        <span class="dot dot-yellow dot-sm" title="Unsaved changes"></span>
                         <span class="visually-hidden">(unsaved changes)</span>
                       }
                     </span>
@@ -160,8 +160,8 @@
         </div>
         <div class="row editor-card__actions">
           @if (dirty()) {
-            <span class="badge badge-yellow unsaved-badge" role="status">
-              <span class="dot dot-yellow" aria-hidden="true"></span> Unsaved changes
+            <span class="badge badge-yellow" role="status">
+              <span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Unsaved changes
             </span>
           }
           @if (selected() !== null) {
@@ -208,11 +208,11 @@
             required
             aria-required="true"
             [attr.aria-invalid]="nameError() ? true : null"
-            aria-describedby="template-name-help"
+            [attr.aria-describedby]="nameError() ? 'template-name-error' : 'template-name-help'"
           />
           <div id="template-name-help" aria-live="polite">
             @if (nameError(); as error) {
-              <p class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+              <p id="template-name-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
             } @else {
               @switch (mode()) {
                 @case ('overwrite') {

@@ -1812,6 +1812,15 @@ kbd,
   box-shadow: var(--focus-ring);
 }
 
+.code-frame.is-invalid,
+.code-frame.is-invalid:focus-within {
+  border-color: var(--red);
+}
+
+.code-frame.is-invalid:focus-within {
+  box-shadow: 0 0 0 2px var(--red);
+}
+
 .code-frame--flush {
   border: 0;
   border-radius: 0;

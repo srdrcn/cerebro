@@ -17,12 +17,14 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { elasticsearchReason, failureMessage } from '../../core/errors';
-import { formatDuration, pluralize } from '../../core/format';
+import { formatDate, formatDuration, pluralize } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
+import { saveLabel, saveMode } from '../../core/save-mode';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { createSort } from '../../shared/sort-state';
@@ -33,7 +35,6 @@ import {
   IlmExplainResponse,
   IlmPoliciesResponse,
   IlmPolicySummary,
-  SaveMode,
 } from './ilm.models';
 import {
   NEW_POLICY_BODY,
@@ -46,7 +47,6 @@ import {
   phaseViews,
   policySource,
   policyWarnings,
-  saveMode,
   sortExplain,
   summarizeExplain,
   usageExplainTarget,
@@ -61,13 +61,6 @@ interface EditorBaseline {
   readonly body: string;
 }
 
-const SAVE_LABELS: Readonly<Record<SaveMode, string>> = {
-  create: 'Create policy',
-  update: 'Save changes',
-  overwrite: 'Overwrite policy',
-  copy: 'Save as new policy',
-};
-
 const NEW_BASELINE: EditorBaseline = { name: '', body: NEW_POLICY_BODY };
 const SHOW_MANAGED_PREFERENCE = 'cerebro.ilm.showManaged';
 const USAGE_PREVIEW = 8;
@@ -79,6 +72,8 @@ const USAGE_PREVIEW = 8;
     EmptyStateComponent,
     FormsModule,
     MenuComponent,
+    NumberPipe,
+    PluralPipe,
     RouterLink,
     SearchInputComponent,
   ],
@@ -171,7 +166,7 @@ export class IlmComponent implements PendingChangesAware {
   readonly previewStale = computed(() => !this.bodyState().ok);
 
   readonly mode = computed(() => saveMode(this.name(), this.selected(), this.names()));
-  readonly saveLabel = computed(() => SAVE_LABELS[this.mode()]);
+  readonly saveLabel = computed(() => saveLabel(this.mode(), 'policy'));
 
   // ---- Lifecycle status ----
   readonly explainTarget = signal('');
@@ -536,6 +531,7 @@ export class IlmComponent implements PendingChangesAware {
   readonly usageLabel = usageLabel;
   readonly needsAttention = needsAttention;
   readonly pluralize = pluralize;
+  readonly formatDate = formatDate;
 
   private resetEditor(): void {
     this.selected.set(null);

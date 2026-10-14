@@ -154,7 +154,7 @@
       <span class="saved-context__state" aria-live="polite">
         @if (linkedDirty()) {
           <span class="saved-context__dirty" title="The editor differs from the saved request">
-            <span class="dot dot-yellow" aria-hidden="true"></span>
+            <span class="dot dot-yellow dot-sm" aria-hidden="true"></span>
             <span class="saved-context__dirty-text">Unsaved changes</span>
           </span>
         } @else {
@@ -404,9 +404,9 @@
           @if (history(); as all) {
             <span class="count-label">
               @if (historyQuery().trim()) {
-                <strong>{{ visibleHistory().length }}</strong> of {{ pluralize(all.length, 'request') }}
+                <strong>{{ visibleHistory().length | num }}</strong> of {{ pluralize(all.length, 'request') }}
               } @else {
-                <strong>{{ all.length }}</strong> {{ all.length === 1 ? 'request' : 'requests' }}
+                <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'request' }}
               }
             </span>
           }
@@ -492,7 +492,7 @@
               [class]="'badge badge-lg status-badge ' + toneClass(result.status)"
               role="status"
             >
-              <span class="dot" [class]="'dot dot-' + statusToneOf(result.status)" aria-hidden="true"></span>
+              <span class="dot dot-sm" [class]="'dot dot-sm dot-' + statusToneOf(result.status)" aria-hidden="true"></span>
               {{ result.status ?? '—' }} {{ statusLabel(result.status) }}
             </span>
             @if (result.status !== null) {

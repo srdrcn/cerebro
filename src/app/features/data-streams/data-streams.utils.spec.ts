@@ -5,8 +5,6 @@ import {
   buildRows,
   filterRows,
   healthDescription,
-  healthLabel,
-  healthTone,
   isInternal,
   keepsStreamLink,
   lifecycleOf,
@@ -68,16 +66,7 @@ const stats: DataStreamStats = {
 };
 
 describe('health', () => {
-  it('maps statuses to tones and labels', () => {
-    expect(healthTone('GREEN')).toBe('green');
-    expect(healthTone('yellow')).toBe('yellow');
-    expect(healthTone('RED')).toBe('red');
-    expect(healthTone(undefined)).toBe('gray');
-    expect(healthTone(3)).toBe('gray');
-    expect(healthLabel('green')).toBe('Green');
-    expect(healthLabel('yellow')).toBe('Yellow');
-    expect(healthLabel('red')).toBe('Red');
-    expect(healthLabel('gray')).toBe('Unknown');
+  it('explains each health colour', () => {
     expect(healthDescription('yellow')).toMatch(/^Yellow: some replica shards/);
     expect(healthDescription('red')).toMatch(/primary shard/);
   });

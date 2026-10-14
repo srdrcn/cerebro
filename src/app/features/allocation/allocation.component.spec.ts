@@ -164,6 +164,38 @@ describe('AllocationComponent', () => {
     expect(target.announcement()).toBe('Explanation loaded for overflow-test shard 1 replica: Allocated to es-node-2.');
   });
 
+  it('names a requested node from the node list when the explanation fails', async () => {
+    post.mockImplementation(async (path: string) => {
+      if (path === 'nodes') {
+        return [{ id: 'I7MELLk0RvSiAPhRW6211Q', name: 'es-node-1' }];
+      }
+      if (path === 'allocation/explain') {
+        throw new ClusterApiError(400, { error: { type: 'illegal_argument_exception', reason: 'unable to find a replica shard assigned to node [I7MELLk0RvSiAPhRW6211Q]' } });
+      }
+      return [];
+    });
+    const target = component();
+    target.request.set({ index: 'overflow-test', shard: 0, primary: false, node: 'I7MELLk0RvSiAPhRW6211Q' });
+    expect(target.requestNodeName()).toBe('I7MELLk0RvSiAPhRW6211Q');
+    await target['loadNodeNames']();
+    expect(target.requestNodeName()).toBe('es-node-1');
+  });
+
+  it('names the requested node even when the link carries its id', async () => {
+    respond(async () => ({
+      ...UNASSIGNED,
+      current_state: 'started',
+      current_node: { id: 'n2', name: 'es-node-2' },
+      can_remain_on_current_node: 'yes',
+    }));
+    const target = component();
+    const request = { index: 'overflow-test', shard: 1, primary: false, node: 'n2' };
+    target.request.set(request);
+    expect(target.requestNodeName()).toBe('n2');
+    await target.explain(request);
+    expect(target.requestNodeName()).toBe('es-node-2');
+  });
+
   it('offers to drop an unknown node from the request', async () => {
     respond(async (payload) => {
       if (payload['current_node'] === 'es-node-9') {
@@ -192,9 +224,9 @@ describe('AllocationComponent', () => {
     target.submit();
 
     expect(target.submitted()).toBe(true);
-    expect(target.formError()).toBe('overflow-test has 2 shards (0–1).');
+    expect(target.formError()).toBe('overflow-test has 2 shards (0–1)');
     target.setShard('');
-    expect(target.formError()).toBe('The shard number is a whole number starting at 0.');
+    expect(target.formError()).toBe('The shard number is a whole number starting at 0');
   });
 
   it('lists unassigned shards from _cat/shards', async () => {

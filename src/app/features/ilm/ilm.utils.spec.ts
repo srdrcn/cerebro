@@ -11,12 +11,12 @@ import {
   normalizeExplain,
   normalizeExplainEntry,
   normalizePolicies,
+  normalizePolicy,
   parseTimeValue,
   phaseViews,
   policySource,
   policyUsage,
   policyWarnings,
-  saveMode,
   sortExplain,
   startsImmediately,
   summarizeExplain,
@@ -197,10 +197,12 @@ describe('policies', () => {
     expect(app?.description).toBe('Demo policy for application events');
     expect(app?.managed).toBe(false);
     expect(app?.version).toBe(1);
+    expect(app?.modifiedAt).toBe(Date.UTC(2026, 9, 14, 16, 8, 41, 111));
     expect(app?.usage.indices).toEqual(['.ds-app-events-web-1', '.ds-app-events-web-2']);
     expect(app?.usage.total).toBe(4);
     expect(policies[1]).toMatchObject({ managed: true, deprecated: true });
-    expect(policies[0]).toMatchObject({ managed: true, version: null, description: null });
+    expect(policies[0]).toMatchObject({ managed: true, version: null, description: null, modifiedAt: null });
+    expect(normalizePolicy('broken', { modified_date: 'not a date', policy: { phases: {} } }).modifiedAt).toBeNull();
     expect(normalizePolicies(null)).toEqual([]);
   });
 
@@ -282,14 +284,6 @@ describe('editor', () => {
     expect(validatePolicyName('a b')).toBe('Policy names cannot contain spaces');
     expect(validatePolicyName('_x')).toBe('Policy names cannot start with "_"');
     expect(validatePolicyName('Logs-30@lifecycle')).toBeNull();
-  });
-
-  it('works out what saving does', () => {
-    expect(saveMode('new', null, ['a'])).toBe('create');
-    expect(saveMode('a', null, ['a'])).toBe('overwrite');
-    expect(saveMode('a', 'a', ['a'])).toBe('update');
-    expect(saveMode('b', 'a', ['a'])).toBe('copy');
-    expect(saveMode('c', 'a', ['a', 'c'])).toBe('overwrite');
   });
 });
 

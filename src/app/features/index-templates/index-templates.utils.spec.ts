@@ -26,7 +26,6 @@ import {
   metaTags,
   parseKind,
   removeByName,
-  saveMode,
   templateSource,
   upsertByName,
 } from './index-templates.utils';
@@ -180,16 +179,6 @@ describe('filterRows', () => {
     expect(filterRows(rows, 'app-mappings', false).map((row) => row.name)).toEqual(['app-events']);
     expect(filterRows(rows, 'default logs', true).map((row) => row.name)).toEqual(['logs']);
     expect(filterRows(rows, '  ', false)).toHaveLength(2);
-  });
-});
-
-describe('saveMode', () => {
-  it('distinguishes create, update, overwrite and copy', () => {
-    expect(saveMode('new', null, ['a'])).toBe('create');
-    expect(saveMode('a', null, ['a'])).toBe('overwrite');
-    expect(saveMode('a', 'a', ['a'])).toBe('update');
-    expect(saveMode('b', 'a', ['a'])).toBe('copy');
-    expect(saveMode('c', 'a', ['a', 'c'])).toBe('overwrite');
   });
 });
 

@@ -1,4 +1,4 @@
-import { formatNumber, matchesText, pluralize } from '../../core/format';
+import { formatDate, formatNumber, matchesText, pluralize } from '../../core/format';
 import { isRecord } from '../../core/json';
 import type { RestDraft } from './rest.models';
 import {
@@ -79,11 +79,11 @@ export function nameProblem(
 export function nameProblemText(problem: NameProblem): string {
   switch (problem.kind) {
     case 'empty':
-      return 'Enter a name for the request.';
+      return 'Enter a name for the request';
     case 'too-long':
-      return `Use at most ${problem.max} characters.`;
+      return `Use at most ${problem.max} characters`;
     case 'duplicate':
-      return `A saved request named “${problem.existing}” already exists.`;
+      return `A saved request named “${problem.existing}” already exists`;
   }
 }
 
@@ -283,9 +283,7 @@ export function exportDocument(requests: readonly SavedRequest[], now: Date): Sa
 
 /** `cerebro-saved-requests-2026-10-14.json` (local date). */
 export function exportFileName(now: Date): string {
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `cerebro-saved-requests-${now.getFullYear()}-${month}-${day}.json`;
+  return `cerebro-saved-requests-${formatDate(now.getTime())}.json`;
 }
 
 /**

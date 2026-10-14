@@ -134,12 +134,6 @@
   color: var(--yellow-text);
 }
 
-.saved-item__state .dot {
-  width: 6px;
-  height: 6px;
-  box-shadow: none;
-}
-
 .saved-item__path {
   overflow: hidden;
   color: var(--text-3);

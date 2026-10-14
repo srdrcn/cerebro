@@ -1,4 +1,4 @@
-import { formatBytes, formatCompact, formatNumber, matchesText, pluralize, sentence } from '../../core/format';
+import { formatBytes, formatCompact, formatNumber, matchesText, plural, pluralize } from '../../core/format';
 import { isInternalAttribute } from '../../core/node-attributes';
 import {
   IndexOperation,
@@ -271,7 +271,7 @@ export function shardActivityLabel(counts: ShardCounts): string {
     .filter(([count]) => count > 0)
     .map(([count, state]) => `${formatNumber(count)} ${state}`)
     .join(' · ');
-  return `${label} ${total === 1 ? 'shard' : 'shards'}`;
+  return `${label} ${plural(total, 'shard')}`;
 }
 
 /** Below this width the grid switches to its compact phone geometry. */
@@ -312,11 +312,12 @@ export function pageOfIndex(
 
 /** "3 × 2 shards · 8.5k docs · 1.3 MB" (closed: "3 × 2 shards"). */
 export function indexSummary(index: OverviewIndex): string {
-  const layout = `${index.num_shards} × ${index.num_replicas + 1} shards`;
+  const copies = index.num_replicas + 1;
+  const layout = `${index.num_shards} × ${copies} ${plural(index.num_shards * copies, 'shard')}`;
   if (index.closed) {
     return layout;
   }
-  return `${layout} · ${formatCompact(index.doc_count)} docs · ${formatBytes(index.size_in_bytes)}`;
+  return `${layout} · ${formatCompact(index.doc_count)} ${plural(index.doc_count, 'doc')} · ${formatBytes(index.size_in_bytes)}`;
 }
 
 /** Index stat meta: a short breakdown for the tile and the full one for its title. */
@@ -375,26 +376,6 @@ export function nodeRoleIcons(node: OverviewNode): NodeRole[] {
     roles.push({ key: 'coordinating', icon: 'bi-signpost-split', title: 'Coordinating only' });
   }
   return roles;
-}
-
-export type HealthTone = 'green' | 'yellow' | 'red' | 'gray';
-
-/** Cluster health in sentence case ("Yellow"), like every other displayed value. */
-export function healthLabel(status: string | null | undefined): string {
-  return sentence((status ?? '').toLowerCase()) || 'Unknown';
-}
-
-export function healthTone(status: string | null | undefined): HealthTone {
-  switch ((status ?? '').toLowerCase()) {
-    case 'green':
-      return 'green';
-    case 'yellow':
-      return 'yellow';
-    case 'red':
-      return 'red';
-    default:
-      return 'gray';
-  }
 }
 
 /** Percentage of all shard copies that are active (started or relocating). */
@@ -567,7 +548,7 @@ export function operationConfirmation(
         ? `${definition.label} index`
         : `${definition.label} ${indexCount(count)}`;
   const skippedNote =
-    skipped > 0 ? ` ${indexCount(skipped, 'closed')} ${skipped === 1 ? 'is' : 'are'} skipped.` : '';
+    skipped > 0 ? ` ${indexCount(skipped, 'closed')} ${plural(skipped, 'is', 'are')} skipped.` : '';
   return {
     title: `${verb} ${target}?`,
     message: definition.message + skippedNote,

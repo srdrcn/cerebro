@@ -14,7 +14,6 @@ import {
   ResolvedField,
   ResolvedSetting,
   ResolvedView,
-  SaveMode,
   SettingEntry,
   SimulateResponse,
   TemplateContent,
@@ -191,21 +190,6 @@ export function filterRows(
 /* ------------------------------------------------------------------ */
 /* Editor                                                              */
 /* ------------------------------------------------------------------ */
-
-/**
- * What saving does: create a new template, update the one being edited,
- * overwrite another existing template with the typed name, or save a copy of
- * the edited template under a new name.
- */
-export function saveMode(name: string, selected: string | null, existing: readonly string[]): SaveMode {
-  if (selected !== null && name === selected) {
-    return 'update';
-  }
-  if (existing.includes(name)) {
-    return 'overwrite';
-  }
-  return selected === null ? 'create' : 'copy';
-}
 
 export function templateSource(body: unknown): string {
   return JSON.stringify(body ?? {}, null, 2);

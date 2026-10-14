@@ -18,6 +18,8 @@ import {
   friendlyNote,
   isNoUnassignedShards,
   lastAllocationStatusLabel,
+  nodeDisplayName,
+  nodeNamesById,
   normalizeExplanation,
   ordinal,
   parseExplainParams,
@@ -350,6 +352,19 @@ describe('normalizeExplanation', () => {
     expect(view.disks).toEqual([
       { id: 'n1', name: 'es-node-1', usedPercent: 87, usedBytes: 870, freeBytes: 130, totalBytes: 1000, path: '/data' },
     ]);
+  });
+
+  it('names a requested node by id or name', () => {
+    const view = normalizeExplanation(ASSIGNED);
+    expect(nodeDisplayName('n1', view)).toBe('es-node-1');
+    expect(nodeDisplayName('es-node-1', view)).toBe('es-node-1');
+    expect(nodeDisplayName('I7MELLk0RvSiAPhRW6211Q', view)).toBe('I7MELLk0RvSiAPhRW6211Q');
+    expect(nodeDisplayName('n1', undefined)).toBe('n1');
+    const names = nodeNamesById([{ id: 'abc', name: 'es-node-9' }, { id: 1 }, null]);
+    expect(names).toEqual(new Map([['abc', 'es-node-9']]));
+    expect(nodeDisplayName('abc', view, names)).toBe('es-node-9');
+    expect(nodeDisplayName('abc', undefined, names)).toBe('es-node-9');
+    expect(nodeNamesById({})).toEqual(new Map());
   });
 
   it('treats blocked rebalancing of a healthy shard as information, not failure (live products[0])', () => {

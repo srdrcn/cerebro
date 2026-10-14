@@ -88,12 +88,6 @@
   text-underline-offset: 3px;
 }
 
-.rec-badge-dot {
-  width: 6px;
-  height: 6px;
-  margin-right: 2px;
-}
-
 .rec-group__progress {
   display: flex;
   flex: 0 1 380px;

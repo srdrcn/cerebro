@@ -5,26 +5,26 @@ import {
   computed,
   effect,
   inject,
-  signal,
   viewChild,
 } from '@angular/core';
 import { AlertService } from '../core/alert.service';
 import { ClipboardService } from '../core/clipboard.service';
 import { DialogService } from '../core/dialog.service';
 import { CodeEditorComponent } from './code-editor.component';
+import { PluralPipe } from './format.pipes';
+import { ModalDialogDirective } from './modal-dialog.directive';
 
 /** Renders confirmation and JSON dialogs requested through DialogService. */
 @Component({
   selector: 'cerebro-dialog-host',
-  imports: [CodeEditorComponent],
+  imports: [CodeEditorComponent, ModalDialogDirective, PluralPipe],
   template: `
     <dialog
-      #dialog
+      cerebroModal="manual"
       class="dialog"
       [class.dialog--wide]="state()?.kind === 'json'"
-      [attr.aria-labelledby]="'cerebro-dialog-title'"
-      (cancel)="onCancel($event)"
-      (click)="onBackdropClick($event)"
+      aria-labelledby="cerebro-dialog-title"
+      (dismiss)="dialogs.close()"
     >
       @if (state(); as dialog) {
         @if (dialog.kind === 'confirm') {
@@ -85,7 +85,7 @@ import { CodeEditorComponent } from './code-editor.component';
               @if (dialog.subtitle) {
                 <p class="dialog__subtitle truncate">{{ dialog.subtitle }}</p>
               } @else {
-                <p class="dialog__subtitle">{{ lineCount() }} lines</p>
+                <p class="dialog__subtitle">{{ lineCount() }} {{ lineCount() | plural: 'line' }}</p>
               }
             </div>
             <div class="row">
@@ -172,7 +172,7 @@ export class DialogHostComponent {
   readonly dialogs = inject(DialogService);
   private readonly clipboard = inject(ClipboardService);
   private readonly alerts = inject(AlertService);
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly modal = viewChild.required(ModalDialogDirective);
   private readonly confirmButton = viewChild<ElementRef<HTMLButtonElement>>('confirmButton');
   private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>('cancelButton');
 
@@ -185,18 +185,13 @@ export class DialogHostComponent {
     const state = this.state();
     return state?.kind === 'json' ? state.text.split('\n').length : 0;
   });
-  private readonly opened = signal(false);
 
   constructor() {
     effect(() => {
-      const element = this.dialog().nativeElement;
-      const state = this.state();
-      if (state && !element.open) {
-        element.showModal();
-        this.opened.set(true);
-      } else if (!state && element.open) {
-        element.close();
-        this.opened.set(false);
+      if (this.state()) {
+        this.modal().open();
+      } else {
+        this.modal().close();
       }
     });
 
@@ -209,27 +204,6 @@ export class DialogHostComponent {
         target?.nativeElement.focus();
       }
     });
-  }
-
-  onCancel(event: Event): void {
-    event.preventDefault();
-    this.dialogs.close();
-  }
-
-  onBackdropClick(event: MouseEvent): void {
-    const element = this.dialog().nativeElement;
-    if (event.target !== element) {
-      return;
-    }
-    const rect = element.getBoundingClientRect();
-    const inside =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-    if (!inside) {
-      this.dialogs.close();
-    }
   }
 
   async copy(text: string): Promise<void> {

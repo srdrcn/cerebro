@@ -21,8 +21,10 @@ import { pluralize } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
+import { saveLabel, saveMode } from '../../core/save-mode';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import {
   FieldChange,
@@ -36,7 +38,6 @@ import {
 } from './pipelines.models';
 import {
   NEW_PIPELINE_BODY,
-  SaveMode,
   analyzePipelineBody,
   buildSimulatePayload,
   filterPipelines,
@@ -48,7 +49,6 @@ import {
   pipelineWarnings,
   processorViews,
   sampleDocsFor,
-  saveMode,
   simulationAnnouncement,
   validatePipelineId,
   withDescription,
@@ -72,11 +72,11 @@ interface ResultView {
   readonly ran: number;
 }
 
-const SAVE_LABELS: Readonly<Record<SaveMode, string>> = {
-  create: 'Create pipeline',
-  update: 'Save changes',
-  overwrite: 'Overwrite pipeline',
-  copy: 'Save as new pipeline',
+const STATUS_BADGES: Readonly<Record<string, string>> = {
+  success: 'badge-green',
+  error: 'badge-red',
+  error_ignored: 'badge-yellow',
+  dropped: 'badge-purple',
 };
 
 const STATUS_LABELS: Readonly<Record<string, string>> = {
@@ -97,7 +97,7 @@ function json(value: unknown): string {
 
 @Component({
   selector: 'cerebro-pipelines',
-  imports: [CodeEditorComponent, EmptyStateComponent, FormsModule, SearchInputComponent],
+  imports: [CodeEditorComponent, EmptyStateComponent, FormsModule, NumberPipe, PluralPipe, SearchInputComponent],
   host: { '(window:beforeunload)': 'onBeforeUnload($event)' },
   templateUrl: './pipelines.component.html',
   styleUrl: './pipelines.component.css',
@@ -182,7 +182,7 @@ export class PipelinesComponent implements PendingChangesAware {
     return this.id() !== baseline.id || this.body() !== baseline.body;
   });
   readonly mode = computed(() => saveMode(this.id(), this.selected(), this.ids()));
-  readonly saveLabel = computed(() => SAVE_LABELS[this.mode()]);
+  readonly saveLabel = computed(() => saveLabel(this.mode(), 'pipeline'));
 
   // ---- Test pipeline ----
   readonly sampleDocs = signal(sampleDocsFor(undefined));
@@ -653,6 +653,11 @@ export class PipelinesComponent implements PendingChangesAware {
 
   statusLabel(status: string): string {
     return STATUS_LABELS[status] ?? status;
+  }
+
+  /** Badge tone of a verbose step; skipped steps stay neutral. */
+  statusBadge(status: string): string {
+    return STATUS_BADGES[status] ?? '';
   }
 
   changeSymbol(change: FieldChange): string {

@@ -19,15 +19,15 @@ import { pluralize } from '../../core/format';
 import { validateResourceName } from '../../core/names';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
+import { saveLabel, saveMode } from '../../core/save-mode';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import {
   LegacyTemplate,
   NEW_TEMPLATE_BODY,
-  SaveMode,
   analyzeTemplateBody,
-  saveMode,
   searchLegacyTemplates,
   templateBodyWarning,
   templateOrder,
@@ -50,18 +50,19 @@ interface EditorBaseline {
   readonly body: string;
 }
 
-const SAVE_LABELS: Readonly<Record<SaveMode, string>> = {
-  create: 'Create template',
-  update: 'Save changes',
-  overwrite: 'Overwrite template',
-  copy: 'Save as new template',
-};
-
 const NEW_BASELINE: EditorBaseline = { name: '', body: NEW_TEMPLATE_BODY };
 
 @Component({
   selector: 'cerebro-templates',
-  imports: [CodeEditorComponent, EmptyStateComponent, FormsModule, RouterLink, SearchInputComponent],
+  imports: [
+    CodeEditorComponent,
+    EmptyStateComponent,
+    FormsModule,
+    NumberPipe,
+    PluralPipe,
+    RouterLink,
+    SearchInputComponent,
+  ],
   host: { '(window:beforeunload)': 'onBeforeUnload($event)' },
   templateUrl: './templates.component.html',
   styleUrl: './templates.component.css',
@@ -148,9 +149,7 @@ export class TemplatesComponent implements PendingChangesAware {
   });
 
   readonly mode = computed(() => saveMode(this.name(), this.selected(), this.names()));
-  readonly saveLabel = computed(() => SAVE_LABELS[this.mode()]);
-
-  readonly pluralize = pluralize;
+  readonly saveLabel = computed(() => saveLabel(this.mode(), 'template'));
 
   private loadSequence = 0;
 

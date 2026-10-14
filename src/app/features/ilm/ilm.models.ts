@@ -66,7 +66,8 @@ export interface PhaseView {
 export interface IlmPolicySummary {
   readonly name: string;
   readonly version: number | null;
-  readonly modifiedDate: string | null;
+  /** Last modification in epoch milliseconds, null when absent or unparseable. */
+  readonly modifiedAt: number | null;
   readonly description: string | null;
   readonly managed: boolean;
   readonly deprecated: boolean;
@@ -143,5 +144,3 @@ export interface UsageExplainTarget {
 export type PolicyBodyState =
   | { readonly ok: true; readonly value: IlmPolicyBody }
   | { readonly ok: false; readonly message: string };
-
-export type SaveMode = 'create' | 'update' | 'overwrite' | 'copy';

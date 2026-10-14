@@ -26,7 +26,7 @@ import {
 } from '../../core/preferences';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { BytesPipe } from '../../shared/format.pipes';
+import { BytesPipe, NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { RestImportDialogComponent } from './rest-import-dialog.component';
@@ -173,6 +173,8 @@ function isMacPlatform(): boolean {
     CodeEditorComponent,
     EmptyStateComponent,
     MenuComponent,
+    NumberPipe,
+    PluralPipe,
     RestImportDialogComponent,
     RestNameDialogComponent,
     RestSavedComponent,

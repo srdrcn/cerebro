@@ -74,7 +74,7 @@
             @if (query().trim()) {
               <strong>{{ rows().length | num }}</strong> of {{ pluralize(scopedRows().length, 'stream') }}
             } @else {
-              <strong>{{ scopedRows().length | num }}</strong> {{ scopedRows().length === 1 ? 'stream' : 'streams' }}
+              <strong>{{ scopedRows().length | num }}</strong> {{ scopedRows().length | plural: 'stream' }}
             }
           </span>
         </div>
@@ -153,7 +153,7 @@
                     </th>
                     <td>
                       <span class="badge" [class]="'badge badge-' + (row.health === 'gray' ? 'outline' : row.health)" [title]="healthTitle(row)">
-                        <span class="dot" [class]="'dot dot-' + row.health" aria-hidden="true"></span>
+                        <span class="dot dot-sm" [class]="'dot dot-sm dot-' + row.health" aria-hidden="true"></span>
                         {{ row.healthLabel }}
                       </span>
                     </td>

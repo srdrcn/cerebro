@@ -91,12 +91,6 @@
   font-size: var(--text-xs);
 }
 
-.ds-table .badge .dot {
-  width: 6px;
-  height: 6px;
-  box-shadow: none;
-}
-
 .ds-link {
   max-width: 100%;
   display: inline-block;

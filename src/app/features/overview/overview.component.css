@@ -169,11 +169,6 @@ cerebro-overview .chip-toggle .bi {
   opacity: 0.75;
 }
 
-cerebro-overview .chip-toggle:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 cerebro-overview .ov-chip-affected[aria-pressed="true"] {
   border-color: color-mix(in srgb, var(--yellow) 55%, transparent);
   background: var(--yellow-soft);

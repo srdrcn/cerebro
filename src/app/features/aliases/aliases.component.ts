@@ -25,6 +25,7 @@ import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { PagerComponent, clampPage, pageSlice } from '../../shared/pager.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { createSort } from '../../shared/sort-state';
@@ -80,7 +81,9 @@ const PAGE_SIZE = 20;
     CodeEditorComponent,
     EmptyStateComponent,
     FormsModule,
+    NumberPipe,
     PagerComponent,
+    PluralPipe,
     RouterLink,
     SearchInputComponent,
   ],

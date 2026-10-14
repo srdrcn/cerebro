@@ -2,13 +2,13 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
-  afterNextRender,
   computed,
   input,
   output,
   signal,
   viewChild,
 } from '@angular/core';
+import { ModalDialogDirective } from '../../shared/modal-dialog.directive';
 import type { SavedRequest } from './rest-saved.models';
 import {
   bodySummary,
@@ -34,14 +34,15 @@ export interface NameDialogResult {
  */
 @Component({
   selector: 'cerebro-rest-name-dialog',
+  imports: [ModalDialogDirective],
   template: `
     <dialog
-      #dialog
+      cerebroModal
       class="dialog name-dialog"
       aria-labelledby="rest-name-dialog-title"
       aria-describedby="rest-name-dialog-subtitle"
-      (cancel)="onCancel($event)"
-      (click)="onBackdropClick($event)"
+      (opened)="onOpened()"
+      (dismiss)="close()"
     >
       <form novalidate (submit)="$event.preventDefault(); submit()">
         <header class="dialog__header">
@@ -82,14 +83,16 @@ export interface NameDialogResult {
               autocomplete="off"
               spellcheck="false"
               [class.is-invalid]="visibleError() !== null"
-              [attr.aria-invalid]="visibleError() !== null"
-              aria-describedby="rest-saved-name-help"
+              [attr.aria-invalid]="visibleError() !== null ? true : null"
+              [attr.aria-describedby]="visibleError() !== null ? 'rest-saved-name-error' : 'rest-saved-name-help'"
               [value]="name()"
               (input)="onInput(nameInput.value)"
             />
             <div id="rest-saved-name-help">
               @if (visibleError(); as error) {
-                <p class="field-error" role="alert">{{ error }}</p>
+                <p id="rest-saved-name-error" class="field-error" role="alert">
+                  <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+                </p>
               } @else if (replaces(); as existing) {
                 <div class="callout callout-warning name-dialog__callout" role="status">
                   <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
@@ -205,7 +208,7 @@ export class RestNameDialogComponent {
   readonly submitted = output<NameDialogResult>();
   readonly closed = output<void>();
 
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly modal = viewChild.required(ModalDialogDirective);
   private readonly nameInput = viewChild.required<ElementRef<HTMLInputElement>>('nameInput');
 
   readonly name = signal('');
@@ -248,18 +251,13 @@ export class RestNameDialogComponent {
     this.replaces() !== null ? 'bi bi-arrow-repeat' : this.mode() === 'save' ? 'bi bi-bookmark-check' : 'bi bi-check2',
   );
 
-  constructor() {
-    afterNextRender(() => {
-      this.name.set(this.initialName());
-      const dialog = this.dialog().nativeElement;
-      if (!dialog.open) {
-        dialog.showModal();
-      }
-      const field = this.nameInput().nativeElement;
-      field.value = this.initialName();
-      field.focus();
-      field.select();
-    });
+  /** Starts from the suggested name, selected so typing replaces it. */
+  onOpened(): void {
+    this.name.set(this.initialName());
+    const field = this.nameInput().nativeElement;
+    field.value = this.initialName();
+    field.focus();
+    field.select();
   }
 
   onInput(value: string): void {
@@ -279,31 +277,7 @@ export class RestNameDialogComponent {
   }
 
   close(): void {
-    const dialog = this.dialog().nativeElement;
-    if (dialog.open) {
-      dialog.close();
-    }
+    this.modal().close();
     this.closed.emit();
-  }
-
-  onCancel(event: Event): void {
-    event.preventDefault();
-    this.close();
-  }
-
-  onBackdropClick(event: MouseEvent): void {
-    const dialog = this.dialog().nativeElement;
-    if (event.target !== dialog) {
-      return;
-    }
-    const rect = dialog.getBoundingClientRect();
-    const inside =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-    if (!inside) {
-      this.close();
-    }
   }
 }

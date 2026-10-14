@@ -68,8 +68,6 @@ export interface SimulateResponse {
 
 export type TemplateKind = 'index' | 'component';
 
-export type SaveMode = 'create' | 'update' | 'overwrite' | 'copy';
-
 /** One row of the template list (index or component template). */
 export interface TemplateRow {
   readonly kind: TemplateKind;

@@ -37,11 +37,11 @@
             required
             aria-required="true"
             [attr.aria-invalid]="nameError() ? true : null"
-            aria-describedby="create-index-name-help"
+            [attr.aria-describedby]="nameError() ? 'create-index-name-error' : 'create-index-name-help'"
           />
           <div id="create-index-name-help" aria-live="polite">
             @if (nameError(); as error) {
-              <p class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+              <p id="create-index-name-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
             } @else if (nameCheck().warning; as warning) {
               <p class="field-hint text-warning"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ warning }}</p>
             } @else {
@@ -67,11 +67,13 @@
               (input)="setShards(shardsInput.value)"
               (keydown.enter)="create()"
               [attr.aria-invalid]="shardsError() ? true : null"
-              aria-describedby="create-index-shards-help"
+              [attr.aria-describedby]="shardsError() ? 'create-index-shards-error' : 'create-index-shards-help'"
             />
-            <p id="create-index-shards-help" [class]="shardsError() ? 'field-error' : 'field-hint'">
-              {{ shardsError() ?? 'Fixed after creation' }}
-            </p>
+            @if (shardsError(); as error) {
+              <p id="create-index-shards-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+            } @else {
+              <p id="create-index-shards-help" class="field-hint">Fixed after creation</p>
+            }
           </div>
           <div class="field">
             <label class="field-label" for="create-index-replicas">Replicas</label>
@@ -89,11 +91,13 @@
               (input)="setReplicas(replicasInput.value)"
               (keydown.enter)="create()"
               [attr.aria-invalid]="replicasError() ? true : null"
-              aria-describedby="create-index-replicas-help"
+              [attr.aria-describedby]="replicasError() ? 'create-index-replicas-error' : 'create-index-replicas-help'"
             />
-            <p id="create-index-replicas-help" [class]="replicasError() ? 'field-error' : 'field-hint'">
-              {{ replicasError() ?? 'Copies of each shard' }}
-            </p>
+            @if (replicasError(); as error) {
+              <p id="create-index-replicas-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+            } @else {
+              <p id="create-index-replicas-help" class="field-hint">Copies of each shard</p>
+            }
           </div>
         </div>
 
@@ -148,8 +152,8 @@
             @if (copying()) {
               <p class="field-hint copy-status"><span class="spinner" aria-hidden="true"></span> Loading {{ sourceIndex() }}…</p>
             } @else if (indicesFailed() && indices() === undefined) {
-              <p class="field-error copy-status">
-                Could not load the indices.
+              <p class="field-error">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> Could not load the indices
                 <button type="button" class="link-button" (click)="loadIndices()">Try again</button>
               </p>
             } @else if (copyInfo(); as info) {
@@ -243,20 +247,20 @@
 
         <div class="editor-status" aria-live="polite">
           @if (bodyError(); as error) {
-            <span class="status-pill status-pill--danger">
+            <span class="badge badge-red">
               <i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid JSON
             </span>
             <span class="editor-status__message text-danger">{{ error }}</span>
           } @else if (usesBody()) {
-            <span class="status-pill status-pill--ok">
+            <span class="badge badge-green">
               <i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON
             </span>
             <span class="editor-status__message">Sent as the request body · {{ bodyLinesLabel() }}</span>
           } @else if (bodyState().kind === 'object') {
-            <span class="status-pill"><i class="bi bi-dash-circle" aria-hidden="true"></i> Empty object</span>
+            <span class="badge"><i class="bi bi-dash-circle" aria-hidden="true"></i> Empty object</span>
             <span class="editor-status__message">The shard and replica fields are used.</span>
           } @else {
-            <span class="status-pill"><i class="bi bi-circle" aria-hidden="true"></i> Empty</span>
+            <span class="badge"><i class="bi bi-circle" aria-hidden="true"></i> Empty</span>
             <span class="editor-status__message">
               The shard and replica fields are used.
               <button type="button" class="link-button" (click)="insertExample()">Insert an example</button>

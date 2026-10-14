@@ -94,7 +94,7 @@ describe('RestNameDialogComponent', () => {
 
     component.submit();
     await fixture.whenStable();
-    expect(component.visibleError()).toBe('Enter a name for the request.');
+    expect(component.visibleError()).toBe('Enter a name for the request');
     expect(element(fixture).querySelector('.field-error')?.textContent).toContain('Enter a name');
     expect(field(fixture).getAttribute('aria-invalid')).toBe('true');
     expect(submitted).not.toHaveBeenCalled();
@@ -106,7 +106,7 @@ describe('RestNameDialogComponent', () => {
   it('flags a whitespace-only name as soon as the user types', async () => {
     const fixture = await render();
     await type(fixture, '   ');
-    expect(fixture.componentInstance.visibleError()).toBe('Enter a name for the request.');
+    expect(fixture.componentInstance.visibleError()).toBe('Enter a name for the request');
     fixture.destroy();
   });
 
@@ -115,7 +115,7 @@ describe('RestNameDialogComponent', () => {
     const submitted = vi.fn();
     fixture.componentInstance.submitted.subscribe(submitted);
     await type(fixture, 'x'.repeat(MAX_SAVED_NAME_LENGTH + 1));
-    expect(fixture.componentInstance.visibleError()).toBe(`Use at most ${MAX_SAVED_NAME_LENGTH} characters.`);
+    expect(fixture.componentInstance.visibleError()).toBe(`Use at most ${MAX_SAVED_NAME_LENGTH} characters`);
     fixture.componentInstance.submit();
     expect(submitted).not.toHaveBeenCalled();
     fixture.destroy();
@@ -172,7 +172,7 @@ describe('RestNameDialogComponent', () => {
 
     await type(fixture, 'NODES');
     expect(component.replaces()).toBeNull();
-    expect(component.visibleError()).toBe('A saved request named “Nodes” already exists.');
+    expect(component.visibleError()).toBe('A saved request named “Nodes” already exists');
     component.submit();
     expect(submitted).not.toHaveBeenCalled();
     fixture.destroy();

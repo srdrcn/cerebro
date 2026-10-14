@@ -1,3 +1,4 @@
+import { HealthTone, healthTone } from '../../core/health';
 import { isRecord } from '../../core/json';
 
 export const CAT_APIS = [
@@ -21,7 +22,6 @@ export const CAT_APIS = [
 
 export type CatApi = (typeof CAT_APIS)[number];
 export type CatRow = Readonly<Record<string, unknown>>;
-export type CatTone = 'green' | 'yellow' | 'red' | 'gray';
 
 export interface CatApiInfo {
   /** Sentence case display name. */
@@ -373,28 +373,25 @@ export function catRowsToTsv(columns: readonly string[], rows: readonly CatRow[]
   return lines.join('\n');
 }
 
-const HEALTH_TONES: Readonly<Record<string, CatTone>> = {
-  green: 'green',
-  yellow: 'yellow',
-  red: 'red',
-  close: 'gray',
-};
-
-const SHARD_STATE_TONES: Readonly<Record<string, CatTone>> = {
+const SHARD_STATE_TONES: Readonly<Record<string, HealthTone>> = {
   STARTED: 'green',
   INITIALIZING: 'yellow',
   RELOCATING: 'yellow',
   UNASSIGNED: 'red',
 };
 
-/** Status colour of health and shard-state cells, `null` for other cells. */
-export function catCellTone(column: string, value: unknown): CatTone | null {
+/**
+ * Status colour of health and shard-state cells (a closed index is gray),
+ * `null` for other cells and values.
+ */
+export function catCellTone(column: string, value: unknown): HealthTone | null {
   if (typeof value !== 'string') {
     return null;
   }
   const name = column.toLowerCase();
   if (name === 'health' || name === 'status') {
-    return HEALTH_TONES[value.toLowerCase()] ?? null;
+    const tone = healthTone(value);
+    return tone !== 'gray' ? tone : value.toLowerCase() === 'close' ? 'gray' : null;
   }
   if (name === 'state') {
     return SHARD_STATE_TONES[value.toUpperCase()] ?? null;

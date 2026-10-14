@@ -15,10 +15,11 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { failureMessage } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { BytesPipe, DurationPipe, NumberPipe } from '../../shared/format.pipes';
+import { BytesPipe, DurationPipe, NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MeterComponent } from '../../shared/meter.component';
 import { PagerComponent, clampPage, pageSlice } from '../../shared/pager.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
@@ -68,6 +69,7 @@ const SORT_OPTIONS: readonly { readonly value: RecoverySortField; readonly label
     MeterComponent,
     NumberPipe,
     PagerComponent,
+    PluralPipe,
     RouterLink,
     SearchInputComponent,
   ],
@@ -215,7 +217,7 @@ export class RecoveryComponent {
       }
       // One toast per outage, not one per refresh.
       if (!this.failed()) {
-        this.alerts.error('Could not load shard recoveries', error);
+        this.alerts.error(failureMessage('Could not load shard recoveries', error), error);
       }
       this.failed.set(true);
       this.failure.set(describeLoadError(error));

@@ -114,27 +114,6 @@
   white-space: nowrap;
 }
 
-.write-badge {
-  height: 20px;
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 3px;
-  padding: 0 6px;
-  border: 1px solid color-mix(in srgb, var(--purple) 35%, transparent);
-  border-radius: var(--radius-full);
-  background: var(--purple-soft);
-  color: var(--purple-text);
-  font-size: var(--text-xs);
-  font-weight: 620;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.write-badge .bi {
-  font-size: 9px;
-}
-
 .write-cleared {
   border-style: dashed;
   color: var(--text-3);
@@ -504,10 +483,6 @@
 
 .routing-grid > .field {
   align-content: start;
-}
-
-.select.is-invalid {
-  border-color: var(--red);
 }
 
 /* The datalist arrow does not follow the design system; suggestions still

@@ -127,7 +127,7 @@ describe('RecoveryComponent', () => {
     post.mockRejectedValue(new Error('down'));
     await target.load();
     expect(target.failed()).toBe(true);
-    expect(alerts.error).toHaveBeenCalledWith('Could not load shard recoveries', expect.any(Error));
+    expect(alerts.error).toHaveBeenCalledWith('Could not load shard recoveries: down', expect.any(Error));
     // Data from the previous successful load stays on screen.
     expect(target.recoveries()).toHaveLength(2);
   });

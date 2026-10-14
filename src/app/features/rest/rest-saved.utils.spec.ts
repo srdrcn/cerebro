@@ -113,10 +113,10 @@ describe('saved request names', () => {
   });
 
   it('explains name problems in plain words', () => {
-    expect(nameProblemText({ kind: 'empty' })).toBe('Enter a name for the request.');
-    expect(nameProblemText({ kind: 'too-long', max: 120 })).toBe('Use at most 120 characters.');
+    expect(nameProblemText({ kind: 'empty' })).toBe('Enter a name for the request');
+    expect(nameProblemText({ kind: 'too-long', max: 120 })).toBe('Use at most 120 characters');
     expect(nameProblemText({ kind: 'duplicate', existing: 'A' })).toBe(
-      'A saved request named “A” already exists.',
+      'A saved request named “A” already exists',
     );
   });
 });

@@ -1,15 +1,7 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  ElementRef,
-  afterNextRender,
-  computed,
-  input,
-  output,
-  signal,
-  viewChild,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output, signal, viewChild } from '@angular/core';
 import { pluralize } from '../../core/format';
+import { PluralPipe } from '../../shared/format.pipes';
+import { ModalDialogDirective } from '../../shared/modal-dialog.directive';
 import type { ImportPlan, ImportStrategy } from './rest-saved.models';
 
 const MAX_LISTED_CONFLICTS = 8;
@@ -21,14 +13,14 @@ const MAX_LISTED_CONFLICTS = 8;
  */
 @Component({
   selector: 'cerebro-rest-import-dialog',
+  imports: [ModalDialogDirective, PluralPipe],
   template: `
     <dialog
-      #dialog
+      cerebroModal
       class="dialog import-dialog"
       aria-labelledby="rest-import-title"
       aria-describedby="rest-import-subtitle"
-      (cancel)="onCancel($event)"
-      (click)="onBackdropClick($event)"
+      (dismiss)="close()"
     >
       <form novalidate (submit)="$event.preventDefault(); confirm()">
         <header class="dialog__header">
@@ -56,7 +48,7 @@ const MAX_LISTED_CONFLICTS = 8;
               <span class="dot dot-yellow" aria-hidden="true"></span>
               <span>
                 <strong class="tabular">{{ plan().conflicts.length }}</strong>
-                {{ plan().conflicts.length === 1 ? 'uses a name that is' : 'use names that are' }} already saved with a different request
+                {{ plan().conflicts.length | plural: 'uses a name that is' : 'use names that are' }} already saved with a different request
               </span>
             </li>
             @if (plan().identical.length > 0) {
@@ -202,7 +194,7 @@ export class RestImportDialogComponent {
   readonly confirmed = output<ImportStrategy>();
   readonly closed = output<void>();
 
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly modal = viewChild.required(ModalDialogDirective);
 
   readonly strategy = signal<ImportStrategy>('skip');
   readonly pluralize = pluralize;
@@ -219,15 +211,6 @@ export class RestImportDialogComponent {
     return count === 0 ? 'Keep saved versions' : `Import ${pluralize(count, 'request')}`;
   });
 
-  constructor() {
-    afterNextRender(() => {
-      const dialog = this.dialog().nativeElement;
-      if (!dialog.open) {
-        dialog.showModal();
-      }
-    });
-  }
-
   /** With nothing to add, confirming keeps the saved versions (the page says so). */
   confirm(): void {
     this.confirmed.emit(this.strategy());
@@ -235,31 +218,7 @@ export class RestImportDialogComponent {
   }
 
   close(): void {
-    const dialog = this.dialog().nativeElement;
-    if (dialog.open) {
-      dialog.close();
-    }
+    this.modal().close();
     this.closed.emit();
-  }
-
-  onCancel(event: Event): void {
-    event.preventDefault();
-    this.close();
-  }
-
-  onBackdropClick(event: MouseEvent): void {
-    const dialog = this.dialog().nativeElement;
-    if (event.target !== dialog) {
-      return;
-    }
-    const rect = dialog.getBoundingClientRect();
-    const inside =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-    if (!inside) {
-      this.close();
-    }
   }
 }

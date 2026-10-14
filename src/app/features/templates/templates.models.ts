@@ -110,24 +110,3 @@ export function templateBodyWarning(body: JsonRecord): string | null {
 export function templateSource(template: LegacyTemplate): string {
   return JSON.stringify(template.template, null, 2);
 }
-
-export type SaveMode = 'create' | 'update' | 'overwrite' | 'copy';
-
-/**
- * What saving does: create a new template, update the one being edited,
- * overwrite another existing template with the typed name, or create a copy
- * of the edited template under a new name.
- */
-export function saveMode(
-  name: string,
-  selected: string | null,
-  existing: readonly string[],
-): SaveMode {
-  if (selected !== null && name === selected) {
-    return 'update';
-  }
-  if (existing.includes(name)) {
-    return 'overwrite';
-  }
-  return selected === null ? 'create' : 'copy';
-}

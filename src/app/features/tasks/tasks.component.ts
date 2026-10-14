@@ -19,7 +19,7 @@ import { elasticsearchReason, failureMessage } from '../../core/errors';
 import { formatDuration, pluralize, sentence } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { NumberPipe } from '../../shared/format.pipes';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { MeterComponent } from '../../shared/meter.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
@@ -45,7 +45,7 @@ const DESCRIPTION_LIMIT = 110;
 
 @Component({
   selector: 'cerebro-tasks',
-  imports: [DatePipe, EmptyStateComponent, MenuComponent, MeterComponent, NumberPipe, SearchInputComponent],
+  imports: [DatePipe, EmptyStateComponent, MenuComponent, MeterComponent, NumberPipe, PluralPipe, SearchInputComponent],
   templateUrl: './tasks.component.html',
   styleUrl: './tasks.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

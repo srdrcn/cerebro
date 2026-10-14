@@ -136,7 +136,7 @@
               </button>
             </div>
             @if (hostError()) {
-              <p id="host-error" class="field-error">Enter the address of an Elasticsearch node</p>
+              <p id="host-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Enter the address of an Elasticsearch node</p>
             }
           </form>
         </div>
@@ -183,7 +183,7 @@
                 (ngModelChange)="username.set($event)"
               />
               @if (usernameError()) {
-                <p id="username-error" class="field-error">Enter a username</p>
+                <p id="username-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Enter a username</p>
               }
             </div>
             <div class="field">
@@ -202,7 +202,7 @@
                 (ngModelChange)="password.set($event)"
               />
               @if (passwordError()) {
-                <p id="password-error" class="field-error">Enter a password</p>
+                <p id="password-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Enter a password</p>
               }
             </div>
             <button

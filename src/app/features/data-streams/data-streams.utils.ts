@@ -1,10 +1,10 @@
 import { matchesText } from '../../core/format';
+import { HealthTone, healthLabel, healthTone } from '../../core/health';
 import {
   BackingIndexRow,
   DataStream,
   DataStreamStats,
   DataStreamStatsEntry,
-  HealthTone,
   LifecycleInfo,
   StreamRow,
   StreamSortField,
@@ -15,37 +15,12 @@ function finite(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-export function healthTone(status: unknown): HealthTone {
-  switch (typeof status === 'string' ? status.toUpperCase() : '') {
-    case 'GREEN':
-      return 'green';
-    case 'YELLOW':
-      return 'yellow';
-    case 'RED':
-      return 'red';
-    default:
-      return 'gray';
-  }
-}
-
-/** Same wording as the cluster and index health elsewhere in the app. */
-const HEALTH_LABELS: Readonly<Record<HealthTone, string>> = {
-  green: 'Green',
-  yellow: 'Yellow',
-  red: 'Red',
-  gray: 'Unknown',
-};
-
 const HEALTH_DESCRIPTIONS: Readonly<Record<HealthTone, string>> = {
   green: 'Green: all primary and replica shards of the backing indices are assigned',
   yellow: 'Yellow: some replica shards of the backing indices are unassigned',
   red: 'Red: at least one primary shard of a backing index is unassigned; part of the data cannot be searched or written',
   gray: 'Health unknown: Elasticsearch did not report a status',
 };
-
-export function healthLabel(tone: HealthTone): string {
-  return HEALTH_LABELS[tone];
-}
 
 /** Explanation shown as the badge tooltip. */
 export function healthDescription(tone: HealthTone): string {

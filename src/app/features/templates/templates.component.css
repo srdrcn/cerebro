@@ -45,13 +45,6 @@
   gap: 7px;
 }
 
-.template-item__name .dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  box-shadow: none;
-}
-
 /* The list is locked while a template is being saved. */
 .template-item:disabled {
   cursor: default;
@@ -140,12 +133,6 @@
   flex-wrap: wrap;
 }
 
-.unsaved-badge .dot {
-  width: 6px;
-  height: 6px;
-  box-shadow: none;
-}
-
 /* Ace layers its gutter and scrollbars with z-indexes; keep them local. */
 .editor-card cerebro-code-editor {
   isolation: isolate;
@@ -153,11 +140,6 @@
 
 .name-field {
   max-width: 520px;
-}
-
-.field-error > .bi,
-.field-hint > .bi {
-  margin-right: 3px;
 }
 
 .body-label {

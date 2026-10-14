@@ -161,17 +161,6 @@
   color: var(--text);
 }
 
-.cat-tone {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.cat-tone .dot {
-  width: 7px;
-  height: 7px;
-}
-
 .cat-table__empty {
   white-space: normal;
 }
@@ -212,11 +201,6 @@
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.cat-record__value .dot {
-  width: 8px;
-  height: 8px;
 }
 
 /* ---- Responsive ------------------------------------------------------- */

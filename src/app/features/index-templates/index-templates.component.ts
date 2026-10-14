@@ -23,8 +23,10 @@ import { JsonRecord, isRecord } from '../../core/json';
 import { validateResourceName } from '../../core/names';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
+import { saveLabel, saveMode } from '../../core/save-mode';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import {
   ComponentTemplateBody,
@@ -36,7 +38,6 @@ import {
   NEW_COMPONENT_TEMPLATE_BODY,
   NEW_INDEX_TEMPLATE_BODY,
   ResolvedView,
-  SaveMode,
   SettingEntry,
   SimulateResponse,
   TemplateKind,
@@ -60,7 +61,6 @@ import {
   metaTags,
   parseKind,
   removeByName,
-  saveMode,
   templatePriority,
   templateSource,
   templateVersion,
@@ -99,13 +99,6 @@ type PreviewState =
       readonly components: number;
     };
 
-const SAVE_LABELS: Readonly<Record<SaveMode, string>> = {
-  create: 'Create template',
-  update: 'Save changes',
-  overwrite: 'Overwrite template',
-  copy: 'Save as new template',
-};
-
 const KIND_NOUN: Readonly<Record<TemplateKind, string>> = {
   index: 'index template',
   component: 'component template',
@@ -121,6 +114,8 @@ function skeleton(kind: TemplateKind): string {
     CodeEditorComponent,
     EmptyStateComponent,
     FormsModule,
+    NumberPipe,
+    PluralPipe,
     ResolvedTemplateComponent,
     RouterLink,
     SearchInputComponent,
@@ -302,7 +297,7 @@ export class IndexTemplatesComponent implements PendingChangesAware {
   });
 
   readonly mode = computed(() => saveMode(this.name(), this.selected(), this.namesOfKind()));
-  readonly saveLabel = computed(() => SAVE_LABELS[this.mode()]);
+  readonly saveLabel = computed(() => saveLabel(this.mode(), 'template'));
   readonly noun = computed(() => KIND_NOUN[this.kind()]);
   readonly pluralize = pluralize;
 

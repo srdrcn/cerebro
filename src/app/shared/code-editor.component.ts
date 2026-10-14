@@ -30,6 +30,9 @@ export type CodeEditorMode = 'json' | 'text';
  * Keyboard: Tab and Shift+Tab move focus in and out of the editor like in any
  * other form field (no keyboard trap); Ctrl/⌘+] and Ctrl/⌘+[ indent and
  * outdent, and Enter keeps the indentation of the current line.
+ *
+ * Validation: `[invalid]` draws the red error frame and sets aria-invalid,
+ * `[describedBy]` links the field error (`.field-error` id) like on inputs.
  */
 @Component({
   selector: 'cerebro-code-editor',
@@ -38,6 +41,7 @@ export type CodeEditorMode = 'json' | 'text';
     '[class.code-frame--flush]': 'flush()',
     '[class.is-fill]': 'fill()',
     '[class.is-readonly]': 'readOnly()',
+    '[class.is-invalid]': 'invalid()',
   },
   template: `<div #host class="code-editor__surface"></div>`,
   styles: `
@@ -75,6 +79,9 @@ export class CodeEditorComponent {
   readonly fill = input(false);
   readonly flush = input(false);
   readonly wrap = input(false);
+  readonly invalid = input(false);
+  /** Id of the element describing the content, typically the field error. */
+  readonly describedBy = input<string | null>(null);
   /** Emitted on Ctrl/⌘ + Enter. */
   readonly submit = output<void>();
 
@@ -109,6 +116,8 @@ export class CodeEditorComponent {
       const wrap = this.wrap();
       const placeholder = this.placeholder();
       const ariaLabel = this.ariaLabel();
+      const invalid = this.invalid();
+      const describedBy = this.describedBy();
       const editor = this.editor;
       if (!editor) {
         return;
@@ -118,6 +127,7 @@ export class CodeEditorComponent {
       editor.session.setUseWrapMode(wrap);
       editor.setOption('placeholder', placeholder);
       this.applyAriaLabel(editor, ariaLabel);
+      this.applyValidity(editor, invalid, describedBy);
     });
 
     this.destroyRef.onDestroy(() => {
@@ -174,6 +184,7 @@ export class CodeEditorComponent {
     editor.renderer.setScrollMargin(8, 8, 0, 0);
     editor.renderer.setPadding(10);
     this.applyAriaLabel(editor, this.ariaLabel());
+    this.applyValidity(editor, this.invalid(), this.describedBy());
     // Ace binds Tab/Shift+Tab to indent/outdent, which traps keyboard users
     // inside the editor (WCAG 2.1.2). Let the browser move focus instead;
     // block indentation stays on Ctrl/⌘+] and Ctrl/⌘+[.
@@ -213,5 +224,19 @@ export class CodeEditorComponent {
   private applyAriaLabel(editor: Ace.Editor, label: string): void {
     editor.setOption('textInputAriaLabel', label);
     editor.textInput.getElement().setAttribute('aria-label', label);
+  }
+
+  private applyValidity(editor: Ace.Editor, invalid: boolean, describedBy: string | null): void {
+    const field = editor.textInput.getElement();
+    if (invalid) {
+      field.setAttribute('aria-invalid', 'true');
+    } else {
+      field.removeAttribute('aria-invalid');
+    }
+    if (describedBy) {
+      field.setAttribute('aria-describedby', describedBy);
+    } else {
+      field.removeAttribute('aria-describedby');
+    }
   }
 }

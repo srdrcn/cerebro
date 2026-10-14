@@ -22,9 +22,13 @@
         <div class="stat__value">{{ summary().running | num }}</div>
         <div class="stat__meta">
           @if (hideInternal() && hiddenInternal() > 0) {
-            {{ hiddenInternal() }} internal hidden
+            {{ hiddenInternal() | num }} internal hidden
           } @else {
-            Across {{ nodeNames().size || 'all' }} nodes
+            @if (nodeNames().size > 0) {
+              Across {{ nodeNames().size | num }} {{ nodeNames().size | plural: 'node' }}
+            } @else {
+              Across all nodes
+            }
           }
         </div>
       </div>
@@ -66,9 +70,9 @@
         </div>
         <span class="count-label">
           @if (filtersActive() || (hideInternal() && hiddenInternal() > 0)) {
-            <strong>{{ visibleCount() | num }}</strong> of {{ pluralize(all.length, 'task') }}
+            <strong>{{ visibleCount() | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'task' }}
           } @else {
-            <strong>{{ all.length | num }}</strong> {{ all.length === 1 ? 'task' : 'tasks' }}
+            <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'task' }}
           }
         </span>
       </div>
@@ -209,10 +213,10 @@
                           · <span class="text-warning" title="requests_per_second throttle">{{ progress.requestsPerSecond }} req/s</span>
                         }
                         @if (progress.versionConflicts > 0) {
-                          · {{ progress.versionConflicts | num }} conflicts
+                          · {{ progress.versionConflicts | num }} {{ progress.versionConflicts | plural: 'conflict' }}
                         }
                         @if (progress.slices) {
-                          · {{ progress.slices }} slices
+                          · {{ progress.slices | num }} {{ progress.slices | plural: 'slice' }}
                         }
                       </div>
                     </div>

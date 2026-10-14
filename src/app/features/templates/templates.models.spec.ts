@@ -3,7 +3,6 @@ import {
   NEW_TEMPLATE_BODY,
   analyzeTemplateBody,
   parseTemplateBody,
-  saveMode,
   searchLegacyTemplates,
   templateBodyWarning,
   templateOrder,
@@ -84,18 +83,6 @@ describe('template body', () => {
 
   it('pretty prints stored templates', () => {
     expect(templateSource({ name: 'a', template: { order: 1 } })).toBe('{\n  "order": 1\n}');
-  });
-});
-
-describe('save mode', () => {
-  const existing = ['logs', 'metrics'];
-
-  it('creates, updates, overwrites or copies depending on the typed name', () => {
-    expect(saveMode('new-one', null, existing)).toBe('create');
-    expect(saveMode('logs', 'logs', existing)).toBe('update');
-    expect(saveMode('metrics', null, existing)).toBe('overwrite');
-    expect(saveMode('metrics', 'logs', existing)).toBe('overwrite');
-    expect(saveMode('logs-v2', 'logs', existing)).toBe('copy');
   });
 });
 

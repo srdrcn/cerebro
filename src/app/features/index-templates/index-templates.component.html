@@ -61,9 +61,9 @@
         @if (loaded()) {
           <span class="count-label">
             @if (query().trim()) {
-              <strong>{{ rows().length }}</strong> of {{ pluralize(totalCount(), 'template') }}
+              <strong>{{ rows().length | num }}</strong> of {{ totalCount() | num }} {{ totalCount() | plural: 'template' }}
             } @else {
-              <strong>{{ totalCount() }}</strong> {{ totalCount() === 1 ? 'template' : 'templates' }}
+              <strong>{{ totalCount() | num }}</strong> {{ totalCount() | plural: 'template' }}
             }
           </span>
         }
@@ -116,7 +116,7 @@
                   <span class="list-item__title it-item__name">
                     <span class="truncate min-w-0">{{ row.name }}</span>
                     @if (isSelected && dirty()) {
-                      <span class="dot dot-yellow" title="Unsaved changes"></span>
+                      <span class="dot dot-yellow dot-sm" title="Unsaved changes"></span>
                       <span class="visually-hidden">(unsaved changes)</span>
                     }
                   </span>
@@ -269,8 +269,8 @@
           </div>
           <div class="row it-editor__actions">
             @if (dirty()) {
-              <span class="badge badge-yellow it-unsaved" role="status">
-                <span class="dot dot-yellow" aria-hidden="true"></span> Unsaved changes
+              <span class="badge badge-yellow" role="status">
+                <span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Unsaved changes
               </span>
             }
             @if (selected() !== null) {
@@ -418,11 +418,11 @@
               required
               aria-required="true"
               [attr.aria-invalid]="nameError() ? true : null"
-              aria-describedby="it-name-help"
+              [attr.aria-describedby]="nameError() ? 'it-name-error' : 'it-name-help'"
             />
             <div id="it-name-help" aria-live="polite">
               @if (nameError(); as error) {
-                <p class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+                <p id="it-name-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
               } @else {
                 @switch (mode()) {
                   @case ('overwrite') {

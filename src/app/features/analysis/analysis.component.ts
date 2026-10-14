@@ -10,6 +10,7 @@ import { RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
+import { failureMessage } from '../../core/errors';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { AnalysisPanelComponent } from './analysis-panel.component';
@@ -107,7 +108,7 @@ export class AnalysisComponent {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Could not load the open indices', error);
+        this.alerts.error(failureMessage('Could not load the open indices', error), error);
       }
     } finally {
       if (sequence === this.loadSequence) {

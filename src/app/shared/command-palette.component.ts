@@ -15,6 +15,7 @@ import { ConnectionService } from '../core/connection.service';
 import { NAVIGATION_ITEMS } from '../core/navigation';
 import { RefreshService } from '../core/refresh.service';
 import { ThemeService } from '../core/theme.service';
+import { ModalDialogDirective } from './modal-dialog.directive';
 
 @Injectable({ providedIn: 'root' })
 export class CommandPaletteService {
@@ -80,13 +81,14 @@ export function scoreCommand(label: string, keywords: string, query: string): nu
 
 @Component({
   selector: 'cerebro-command-palette',
+  imports: [ModalDialogDirective],
   template: `
     <dialog
-      #dialog
+      cerebroModal="manual"
       class="palette"
       aria-label="Command palette"
-      (cancel)="onCancel($event)"
-      (click)="onBackdropClick($event)"
+      (opened)="onOpened()"
+      (dismiss)="palette.close()"
     >
       @if (palette.isOpen()) {
         <div class="palette__search">
@@ -156,7 +158,7 @@ export class CommandPaletteComponent {
   private readonly connection = inject(ConnectionService);
   private readonly refresh = inject(RefreshService);
   private readonly theme = inject(ThemeService);
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly modal = viewChild.required(ModalDialogDirective);
   private readonly input = viewChild<ElementRef<HTMLInputElement>>('input');
 
   readonly query = signal('');
@@ -259,14 +261,10 @@ export class CommandPaletteComponent {
 
   constructor() {
     effect(() => {
-      const element = this.dialog().nativeElement;
-      if (this.palette.isOpen() && !element.open) {
-        this.query.set('');
-        this.activeIndex.set(0);
-        element.showModal();
-        void this.loadIndices();
-      } else if (!this.palette.isOpen() && element.open) {
-        element.close();
+      if (this.palette.isOpen()) {
+        this.modal().open();
+      } else {
+        this.modal().close();
       }
     });
 
@@ -322,23 +320,11 @@ export class CommandPaletteComponent {
     }
   }
 
-  onCancel(event: Event): void {
-    event.preventDefault();
-    this.palette.close();
-  }
-
-  onBackdropClick(event: MouseEvent): void {
-    if (event.target === this.dialog().nativeElement) {
-      const rect = this.dialog().nativeElement.getBoundingClientRect();
-      const inside =
-        event.clientX >= rect.left &&
-        event.clientX <= rect.right &&
-        event.clientY >= rect.top &&
-        event.clientY <= rect.bottom;
-      if (!inside) {
-        this.palette.close();
-      }
-    }
+  /** Every opening starts from an empty query and fresh index names. */
+  onOpened(): void {
+    this.query.set('');
+    this.activeIndex.set(0);
+    void this.loadIndices();
   }
 
   private scrollActiveIntoView(): void {

@@ -544,12 +544,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.status-badge .dot {
-  width: 6px;
-  height: 6px;
-  box-shadow: none;
-}
-
 .response-meta {
   min-width: 0;
   overflow: hidden;
@@ -867,12 +861,6 @@
   gap: 6px;
   color: var(--yellow-text);
   font-weight: 560;
-}
-
-.saved-context__dirty .dot {
-  width: 6px;
-  height: 6px;
-  box-shadow: none;
 }
 
 .saved-context__clean {

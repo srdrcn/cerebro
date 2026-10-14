@@ -297,23 +297,6 @@ export function withDescription(source: string, description: string): string | n
   return pipelineSource(next);
 }
 
-export type SaveMode = 'create' | 'update' | 'overwrite' | 'copy';
-
-/**
- * What saving does: create a new pipeline, update the one being edited,
- * overwrite another existing pipeline with the typed id, or copy the edited
- * pipeline under a new id.
- */
-export function saveMode(id: string, selected: string | null, existing: readonly string[]): SaveMode {
-  if (selected !== null && id === selected) {
-    return 'update';
-  }
-  if (existing.includes(id)) {
-    return 'overwrite';
-  }
-  return selected === null ? 'create' : 'copy';
-}
-
 /** Characters that would break the `_ingest/pipeline/<id>` URL. */
 const PIPELINE_ID_RESERVED_CHARACTERS: readonly string[] = ['/', '\\', '?', '#'];
 

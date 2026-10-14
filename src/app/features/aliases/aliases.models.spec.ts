@@ -148,39 +148,39 @@ describe('alias draft validation', () => {
 
   it('requires an alias name and an index', () => {
     const errors = validateAliasDraft(EMPTY_ALIAS_DRAFT, []);
-    expect(errors.alias).toBe('Enter an alias name.');
-    expect(errors.index).toBe('Select the index the alias points to.');
+    expect(errors.alias).toBe('Enter an alias name');
+    expect(errors.index).toBe('Select the index the alias points to');
     expect(hasDraftErrors(errors)).toBe(true);
   });
 
   it('applies the Elasticsearch naming rules', () => {
-    expect(aliasNameError('_hidden')).toBe('An alias cannot start with _, - or +.');
-    expect(aliasNameError('..')).toBe('An alias cannot be named "." or "..".');
-    expect(aliasNameError('a b')).toBe('An alias cannot contain spaces.');
-    expect(aliasNameError('a b,c')).toBe('An alias cannot contain spaces, ",".');
-    expect(aliasNameError('a,b#c')).toBe('An alias cannot contain ",", "#".');
-    expect(aliasNameError('tenant:1')).toBe('An alias cannot contain ":".');
-    expect(aliasNameError('x'.repeat(256))).toBe('An alias name cannot be longer than 255 bytes.');
+    expect(aliasNameError('_hidden')).toBe('An alias cannot start with _, - or +');
+    expect(aliasNameError('..')).toBe('An alias cannot be named "." or ".."');
+    expect(aliasNameError('a b')).toBe('An alias cannot contain spaces');
+    expect(aliasNameError('a b,c')).toBe('An alias cannot contain spaces, ","');
+    expect(aliasNameError('a,b#c')).toBe('An alias cannot contain ",", "#"');
+    expect(aliasNameError('tenant:1')).toBe('An alias cannot contain ":"');
+    expect(aliasNameError('x'.repeat(256))).toBe('An alias name cannot be longer than 255 bytes');
     expect(aliasNameError('<logs-{now/d}>')).toBeUndefined();
     expect(aliasNameError(' Logs-Current ')).toBeUndefined();
   });
 
   it('rejects an alias named like an existing index', () => {
     expect(validateAliasDraft({ ...draft, alias: ' logs ' }, ['logs']).alias)
-      .toBe('An index with this name already exists.');
+      .toBe('An index with this name already exists');
     // Index names are lower case: an upper case alias cannot clash.
     expect(validateAliasDraft({ ...draft, alias: 'Logs' }, ['logs']).alias).toBeUndefined();
   });
 
   it('allows a single index routing value only', () => {
     expect(validateAliasDraft({ ...draft, indexRouting: '1,2' }, ['logs']).indexRouting)
-      .toBe('Index routing accepts a single value.');
+      .toBe('Index routing accepts a single value');
     expect(validateAliasDraft({ ...draft, searchRouting: '1,2' }, ['logs']).indexRouting).toBeUndefined();
   });
 
   it('reports malformed or non-object filters', () => {
     expect(validateAliasDraft({ ...draft, filterText: '{"term":' }, ['logs']).filter).toMatch(/^Invalid JSON: /);
-    expect(aliasFilterError('[1]')).toBe('Alias filter must be a JSON object.');
+    expect(aliasFilterError('[1]')).toBe('Alias filter must be a JSON object');
     expect(aliasFilterError('  ')).toBeUndefined();
   });
 });

@@ -9,9 +9,9 @@
     <div class="saved-toolbar__end">
       <span class="count-label saved-count">
         @if (query().trim()) {
-          <strong>{{ visible().length }}</strong> of {{ pluralize(requests().length, 'request') }}
+          <strong>{{ visible().length | num }}</strong> of {{ pluralize(requests().length, 'request') }}
         } @else {
-          <strong>{{ requests().length }}</strong> {{ requests().length === 1 ? 'request' : 'requests' }}
+          <strong>{{ requests().length | num }}</strong> {{ requests().length | plural: 'request' }}
         }
       </span>
       <div class="segmented segmented-sm" role="group" aria-label="Sort saved requests">
@@ -99,7 +99,7 @@
                 @if (linked) {
                   @if (dirty()) {
                     <span class="saved-item__state saved-item__state--dirty" title="The editor has unsaved changes">
-                      <span class="dot dot-yellow" aria-hidden="true"></span> Edited
+                      <span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Edited
                     </span>
                   } @else {
                     <span class="saved-item__state" title="Loaded in the editor">

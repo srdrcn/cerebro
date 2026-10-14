@@ -75,13 +75,6 @@
   gap: 7px;
 }
 
-.it-item__name .dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  box-shadow: none;
-}
-
 .it-item__patterns {
   display: block;
   margin-top: 1px;
@@ -182,12 +175,6 @@
 
 .it-editor__actions {
   flex-wrap: wrap;
-}
-
-.it-unsaved .dot {
-  width: 6px;
-  height: 6px;
-  box-shadow: none;
 }
 
 /* Ace layers its gutter and scrollbars with z-indexes; keep them local. */
@@ -296,11 +283,6 @@ button.it-chip:focus-visible {
 
 .it-name-field {
   max-width: 520px;
-}
-
-.field-error > .bi,
-.field-hint > .bi {
-  margin-right: 3px;
 }
 
 .it-body-label {

@@ -18,7 +18,7 @@ import { failureMessage } from '../../core/errors';
 import { formatRelative, formatTimestamp, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { BytesPipe, NumberPipe } from '../../shared/format.pipes';
+import { BytesPipe, NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { createSort } from '../../shared/sort-state';
@@ -57,7 +57,7 @@ interface SortColumn {
 
 @Component({
   selector: 'cerebro-data-streams',
-  imports: [BytesPipe, EmptyStateComponent, FormsModule, MenuComponent, NumberPipe, RouterLink, SearchInputComponent],
+  imports: [BytesPipe, EmptyStateComponent, FormsModule, MenuComponent, NumberPipe, PluralPipe, RouterLink, SearchInputComponent],
   templateUrl: './data-streams.component.html',
   styleUrl: './data-streams.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
