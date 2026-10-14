@@ -11,19 +11,11 @@ trait ElasticClient {
 
   def main(target: ElasticServer): Future[ElasticResponse]
 
-  def clusterState(target: ElasticServer): Future[ElasticResponse]
-
-  def indicesStats(target: ElasticServer): Future[ElasticResponse]
-
   def nodesStats(stats: Seq[String], target: ElasticServer): Future[ElasticResponse]
 
   def nodeStats(node: String, target: ElasticServer): Future[ElasticResponse]
 
   def indexStats(index: String, target: ElasticServer): Future[ElasticResponse]
-
-  def clusterSettings(target: ElasticServer): Future[ElasticResponse]
-
-  def aliases(target: ElasticServer): Future[ElasticResponse]
 
   def clusterHealth(target: ElasticServer): Future[ElasticResponse]
 
@@ -51,9 +43,6 @@ trait ElasticClient {
 
   def putClusterSettings(settings: String, target: ElasticServer): Future[ElasticResponse]
 
-  private def allocationSettings(value: String) =
-    s"""{"transient": {"cluster": {"routing": {"allocation": {"enable": \"$value\"}}}}}"""
-
   def enableShardAllocation(target: ElasticServer): Future[ElasticResponse]
 
   def disableShardAllocation(target: ElasticServer, kind: String): Future[ElasticResponse]
@@ -63,8 +52,6 @@ trait ElasticClient {
   def relocateShard(shard: Int, index: String, from: String, to: String, target: ElasticServer): Future[ElasticResponse]
 
   def getIndexRecovery(index: String, target: ElasticServer): Future[ElasticResponse]
-
-  def getClusterMapping(target: ElasticServer): Future[ElasticResponse]
 
   def getAliases(target: ElasticServer): Future[ElasticResponse]
 
@@ -81,8 +68,6 @@ trait ElasticClient {
   def createTemplate(name: String, template: JsValue, target: ElasticServer): Future[ElasticResponse]
 
   def deleteTemplate(name: String, target: ElasticServer): Future[ElasticResponse]
-
-  def getNodes(target: ElasticServer): Future[ElasticResponse]
 
   def analyzeTextByField(index: String, field: String, text: String, target: ElasticServer): Future[ElasticResponse]
 

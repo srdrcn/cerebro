@@ -1,5 +1,5 @@
-import { Routes } from '@angular/router';
-import { requireConnection } from './core/connection.guard';
+import { Route, Routes } from '@angular/router';
+import { hostOrParamsChange, requireConnection } from './core/connection.guard';
 import { confirmDiscardPendingChanges } from './core/pending-changes.guard';
 
 /**
@@ -7,7 +7,13 @@ import { confirmDiscardPendingChanges } from './core/pending-changes.guard';
  * bookmarks (including legacy `#!/` URLs, see legacy-hashbang.ts) still work.
  * Every feature is lazy loaded to keep the initial bundle small. Editor pages
  * implement `PendingChangesAware` and ask before unsaved edits are dropped.
+ * Cluster views re-run their guards when only `?host=` changes, so the URL
+ * and the connected cluster never disagree (see `requireConnection`).
  */
+function clusterViews(views: Route[]): Route[] {
+  return views.map((view) => ({ ...view, runGuardsAndResolvers: hostOrParamsChange }));
+}
+
 export const routes: Routes = [
   {
     path: 'connect',
@@ -18,7 +24,7 @@ export const routes: Routes = [
   {
     path: '',
     canActivateChild: [requireConnection],
-    children: [
+    children: clusterViews([
       {
         path: 'overview',
         loadComponent: () =>
@@ -137,7 +143,7 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/pipelines/pipelines.component').then((m) => m.PipelinesComponent),
       },
-    ],
+    ]),
   },
   { path: '**', redirectTo: 'connect' },
 ];

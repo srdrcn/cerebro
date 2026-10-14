@@ -14,6 +14,16 @@
   margin-bottom: var(--space-5);
 }
 
+.tasks-stale {
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+.tasks-stale__retry {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .stat--warn .stat__value {
   color: var(--yellow-text);
 }

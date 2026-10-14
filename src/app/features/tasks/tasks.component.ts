@@ -68,6 +68,14 @@ export class TasksComponent {
   readonly loadError = signal<string | undefined>(undefined);
   readonly loadedAt = signal(Date.now());
   readonly now = signal(Date.now());
+  /** Reason of the last failed background refresh while older tasks stay on screen. */
+  readonly staleReason = signal<string | undefined>(undefined);
+  readonly stale = computed(() => this.staleReason() !== undefined);
+  /**
+   * Clock the running times are extrapolated to: frozen at the last
+   * successful load while refreshes fail, so stale tasks do not keep ticking.
+   */
+  private readonly clock = computed(() => (this.stale() ? this.loadedAt() : this.now()));
   readonly nodeNames = signal<ReadonlyMap<string, string>>(new Map());
 
   readonly query = signal('');
@@ -101,7 +109,7 @@ export class TasksComponent {
   );
   readonly rows = computed<readonly TaskRow[]>(() => flattenTaskTree(this.tree(), this.collapsed()));
   readonly visibleCount = computed(() => this.rows().length);
-  readonly summary = computed(() => summarizeTasks(this.named(), this.hideInternal(), this.now() - this.loadedAt()));
+  readonly summary = computed(() => summarizeTasks(this.named(), this.hideInternal(), this.clock() - this.loadedAt()));
   readonly hiddenInternal = computed(() => this.named().filter((task) => task.internal).length);
   readonly filtersActive = computed(() => this.query().trim() !== '' || this.onlyCancellable());
 
@@ -127,6 +135,7 @@ export class TasksComponent {
           this.nodeNames.set(new Map());
           this.tasks.set(undefined);
           this.failed.set(false);
+          this.staleReason.set(undefined);
           this.collapsed.set(new Set());
         }
         if (host) {
@@ -153,6 +162,7 @@ export class TasksComponent {
       this.tasks.set(tasks);
       this.failed.set(false);
       this.loadError.set(undefined);
+      this.staleReason.set(undefined);
       this.pruneState(tasks);
       const unknown = new Set(tasks.map((task) => task.node).filter((node) => !this.nodeNames().has(node)));
       if (shouldLookUpNodes(unknown, this.nodesRequested, this.nodesFailedAt, Date.now())) {
@@ -160,10 +170,12 @@ export class TasksComponent {
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
-        // A failed background refresh keeps the last list on screen.
+        // A failed background refresh keeps the last list on screen, marked as stale.
         if (this.tasks() === undefined) {
           this.failed.set(true);
           this.loadError.set(readableReason(error));
+        } else {
+          this.staleReason.set(readableReason(error) ?? 'The request failed');
         }
         this.alerts.error(failureMessage('Could not load tasks', error), error);
       }
@@ -229,7 +241,7 @@ export class TasksComponent {
   }
 
   running(task: Task): number {
-    return liveRunningMillis(task, this.loadedAt(), this.now());
+    return liveRunningMillis(task, this.loadedAt(), this.clock());
   }
 
   runningLabel(task: Task): string {

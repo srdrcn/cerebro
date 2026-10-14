@@ -19,7 +19,7 @@ import {
 } from './cat.utils';
 
 describe('CAT API options', () => {
-  it('keeps the fixed sixteen APIs in legacy order', () => {
+  it('keeps the fixed sixteen APIs in alphabetical order', () => {
     expect(CAT_APIS).toHaveLength(16);
     expect(CAT_APIS).toEqual([
       'aliases',
@@ -35,9 +35,9 @@ describe('CAT API options', () => {
       'plugins',
       'recovery',
       'repositories',
-      'thread pool',
-      'shards',
       'segments',
+      'shards',
+      'thread pool',
     ]);
     expect(catApiValue('pending tasks')).toBe('pending_tasks');
     expect(catApiValue('thread pool')).toBe('thread_pool');

@@ -1,4 +1,6 @@
+import { matchesText } from '../../core/format';
 import { JsonRecord, isRecord, stringList } from '../../core/json';
+import { isManagedTemplate } from '../index-templates/index-templates.utils';
 
 export interface LegacyTemplate {
   name: string;
@@ -42,20 +44,33 @@ export function templateVersion(template: LegacyTemplate): number | null {
   return typeof version === 'number' && Number.isFinite(version) ? version : null;
 }
 
-/** Case-insensitive search over the name and the index patterns, sorted by name. */
+/**
+ * Built-in templates (".monitoring-*" and other system names, or
+ * `_meta.managed: true`), with the same rule as composable templates.
+ */
+export function isManagedLegacyTemplate(template: LegacyTemplate): boolean {
+  return isManagedTemplate(template.name, template.template['_meta']);
+}
+
+/**
+ * Search over the name and the index patterns with the regex-or-substring
+ * semantics of the other filters. Managed templates are left out unless
+ * asked for. Sorted by name with user templates first.
+ */
 export function searchLegacyTemplates(
   templates: readonly LegacyTemplate[],
   query: string,
+  showManaged: boolean,
 ): LegacyTemplate[] {
-  const needle = query.trim().toLocaleLowerCase();
-  return [...templates]
-    .filter(
-      (item) =>
-        !needle ||
-        item.name.toLocaleLowerCase().includes(needle) ||
-        templatePatterns(item).some((pattern) => pattern.toLocaleLowerCase().includes(needle)),
-    )
-    .sort((left, right) => left.name.localeCompare(right.name));
+  const matches = (value: string): boolean => matchesText(value, query);
+  return templates
+    .filter((item) => showManaged || !isManagedLegacyTemplate(item))
+    .filter((item) => !query.trim() || matches(item.name) || templatePatterns(item).some(matches))
+    .sort(
+      (left, right) =>
+        Number(isManagedLegacyTemplate(left)) - Number(isManagedLegacyTemplate(right)) ||
+        left.name.localeCompare(right.name),
+    );
 }
 
 /**

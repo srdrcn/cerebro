@@ -7,6 +7,24 @@
   </header>
 
   @if (nodes(); as all) {
+    @if (failed()) {
+      <div class="callout callout-warning nodes-stale" role="alert">
+        <i class="bi bi-wifi-off" aria-hidden="true"></i>
+        <div class="min-w-0">
+          <strong>Could not refresh the nodes.</strong>
+          Showing data from {{ loadedAt() | date: 'HH:mm:ss' }}. {{ loadError() ?? 'The cluster did not answer the nodes request.' }}
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm nodes-stale__retry"
+          [class.is-loading]="loading()"
+          [disabled]="loading()"
+          (click)="load()"
+        >
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </div>
+    }
     <div class="stat-grid nodes-stats">
       <div class="stat">
         <div class="stat__label"><i class="bi bi-hdd-stack" aria-hidden="true"></i> Nodes</div>
@@ -220,8 +238,8 @@
     </div>
   } @else if (failed()) {
     <div class="card">
-      <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load nodes" text="The cluster did not answer the nodes request.">
-        <button type="button" class="btn btn-sm" (click)="load()">
+      <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load nodes" [text]="loadError() ?? 'The cluster did not answer the nodes request.'">
+        <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
           <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
         </button>
       </cerebro-empty>

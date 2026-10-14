@@ -15,12 +15,19 @@
 }
 
 .list-toolbar {
+  display: grid;
+  gap: 10px;
   padding: 10px var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 
 .list-toolbar cerebro-search {
   width: 100%;
+}
+
+.managed-switch {
+  color: var(--text-2);
+  font-size: var(--text-sm);
 }
 
 .template-list {
@@ -112,6 +119,12 @@
   font-size: var(--text-xs);
 }
 
+/* A link inside running text must not rely on colour alone. */
+.list-card__note a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* ---- Editor ---- */
 
 .editor-card {
@@ -127,6 +140,11 @@
   position: sticky;
   bottom: 0;
   z-index: 3;
+}
+
+/* Fields focused with the keyboard stop above the sticky footer. */
+:host ::ng-deep .editor-card > .card-body :is(input, select, textarea, button) {
+  scroll-margin-bottom: calc(var(--control-height) + var(--space-10));
 }
 
 .editor-card__actions {

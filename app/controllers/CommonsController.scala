@@ -4,7 +4,7 @@ import javax.inject.Inject
 
 import controllers.auth.AuthenticationModule
 import elastic.{ElasticClient, Error, Success}
-import models.commons.{Indices, Nodes}
+import models.commons.Indices
 import models.{CerebroResponse, Hosts}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -16,13 +16,6 @@ class CommonsController @Inject()(val authentication: AuthenticationModule,
   def indices = process { request =>
     client.getIndices(request.target).map {
       case Success(status, indices) => CerebroResponse(status, Indices(indices))
-      case Error(status, error) => CerebroResponse(status, error)
-    }
-  }
-
-  def nodes = process { request =>
-    client.getNodes(request.target).map {
-      case Success(status, nodes) => CerebroResponse(status, Nodes(nodes))
       case Error(status, error) => CerebroResponse(status, error)
     }
   }

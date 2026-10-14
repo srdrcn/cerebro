@@ -29,7 +29,9 @@ export type CodeEditorMode = 'json' | 'text';
  *
  * Keyboard: Tab and Shift+Tab move focus in and out of the editor like in any
  * other form field (no keyboard trap); Ctrl/⌘+] and Ctrl/⌘+[ indent and
- * outdent, and Enter keeps the indentation of the current line.
+ * outdent, and Enter keeps the indentation of the current line. Ctrl/⌘+K is
+ * left to the command palette. The page scrolls to keep the caret visible
+ * and clear of sticky bars (top bar, sticky card footers).
  *
  * Validation: `[invalid]` draws the red error frame and sets aria-invalid,
  * `[describedBy]` links the field error (`.field-error` id) like on inputs.
@@ -190,6 +192,10 @@ export class CodeEditorComponent {
     // block indentation stays on Ctrl/⌘+] and Ctrl/⌘+[.
     editor.commands.removeCommand('indent');
     editor.commands.removeCommand('outdent');
+    // Ace binds Ctrl-K to "find next" and swallows it; leave it to the command
+    // palette (find next stays on Command-G on macOS). A null command removes
+    // the binding, which Ace's typings do not declare.
+    editor.commands.bindKey({ win: 'Ctrl-K', mac: 'Command-K' }, null as unknown as string);
     editor.selection.clearSelection();
     editor.session.getUndoManager().reset();
 
@@ -209,11 +215,123 @@ export class CodeEditorComponent {
       exec: () => this.format(),
     });
 
+    this.followCaret(editor);
+
     this.editor = editor;
     if (this.fill()) {
       this.resizeObserver = new ResizeObserver(() => editor.resize());
       this.resizeObserver.observe(this.hostRef().nativeElement);
     }
+  }
+
+  /**
+   * Auto-height editors grow taller than the viewport and rely on the page
+   * scroll, which Ace does not drive. After every render that moved the
+   * caret of the focused editor, scroll the nearest scroll container so the
+   * caret line is inside the viewport and not under a sticky or fixed bar.
+   */
+  private followCaret(editor: Ace.Editor): void {
+    let moved = false;
+    editor.on('changeSelection', () => {
+      moved = true;
+    });
+    editor.renderer.on('afterRender', () => {
+      if (!moved) {
+        return;
+      }
+      moved = false;
+      if (editor.isFocused()) {
+        this.revealCaret(editor);
+      }
+    });
+  }
+
+  private revealCaret(editor: Ace.Editor): void {
+    const view = editor.container.ownerDocument.defaultView;
+    if (!view) {
+      return;
+    }
+    const margin = 8;
+    const scroller = this.scrollParent(editor.container, view);
+    // Twice at most: scrolling a caret that was off-screen can land it under
+    // a sticky footer that only the second pass can see.
+    for (let pass = 0; pass < 2; pass++) {
+      const cursor = editor.getCursorPosition();
+      const point = editor.renderer.textToScreenCoordinates(cursor.row, cursor.column);
+      const top = point.pageY;
+      const bottom = top + (editor.renderer.lineHeight || 16);
+      const x = Math.min(Math.max(point.pageX + 2, 0), view.innerWidth - 1);
+      // A bar in the upper half of the viewport (the top bar) hides the caret
+      // from above, one in the lower half (a sticky footer) from below.
+      const covers = [top + 1, bottom - 1]
+        .map((y) => this.coveringBar(editor.container, x, y, view))
+        .filter((rect): rect is DOMRect => rect !== null);
+      const middle = view.innerHeight / 2;
+      const coverAbove = covers.find((rect) => rect.top + rect.height / 2 < middle);
+      const coverBelow = covers.find((rect) => rect.top + rect.height / 2 >= middle);
+
+      const frame = scroller?.getBoundingClientRect();
+      let visibleTop = Math.max(frame?.top ?? 0, 0);
+      let visibleBottom = Math.min(frame?.bottom ?? view.innerHeight, view.innerHeight);
+      if (coverAbove) {
+        visibleTop = Math.max(visibleTop, coverAbove.bottom);
+      } else if (!scroller && top < 0) {
+        // Off-screen above: the sticky top bar will cover the first rows.
+        visibleTop = this.topbarHeight(view);
+      }
+      if (coverBelow) {
+        visibleBottom = Math.min(visibleBottom, coverBelow.top);
+      }
+
+      let delta = 0;
+      if (top < visibleTop) {
+        delta = top - visibleTop - margin;
+      } else if (bottom > visibleBottom) {
+        delta = bottom - visibleBottom + margin;
+      }
+      if (delta === 0) {
+        return;
+      }
+      // scrollIntoView cannot be used: the editor frames clip with overflow
+      // hidden, which drops the scroll margins needed to clear the bars.
+      (scroller ?? view).scrollBy({ top: delta });
+    }
+  }
+
+  /** The nearest ancestor that scrolls vertically, or `null` for the page. */
+  private scrollParent(element: HTMLElement, view: Window): HTMLElement | null {
+    const root = element.ownerDocument.scrollingElement;
+    for (let node = element.parentElement; node && node !== root; node = node.parentElement) {
+      const overflow = view.getComputedStyle(node).overflowY;
+      if ((overflow === 'auto' || overflow === 'scroll') && node.scrollHeight > node.clientHeight) {
+        return node;
+      }
+    }
+    return null;
+  }
+
+  /** The sticky or fixed element drawn over the point, if any. */
+  private coveringBar(container: HTMLElement, x: number, y: number, view: Window): DOMRect | null {
+    if (y < 0 || y >= view.innerHeight) {
+      return null;
+    }
+    let element = container.ownerDocument.elementFromPoint(x, y);
+    if (!element || container.contains(element)) {
+      return null;
+    }
+    while (element) {
+      const position = view.getComputedStyle(element).position;
+      if (position === 'sticky' || position === 'fixed') {
+        return element.getBoundingClientRect();
+      }
+      element = element.parentElement;
+    }
+    return null;
+  }
+
+  private topbarHeight(view: Window): number {
+    const value = view.getComputedStyle(view.document.documentElement).getPropertyValue('--topbar-height');
+    return Number.parseFloat(value) || 0;
   }
 
   /**

@@ -32,12 +32,23 @@ export function isErrorReported(error: unknown): boolean {
   return typeof error === 'object' && error !== null && reportedErrors.has(error);
 }
 
+/**
+ * Errors stay until they are dismissed: they are often the only place a
+ * failure reason is shown, and keyboard users need time to reach them.
+ */
 const DEFAULT_TIMEOUTS: Readonly<Record<AlertLevel, number>> = {
-  error: 8_000,
+  error: 0,
   info: 3_500,
   success: 3_500,
   warn: 6_000,
 };
+
+interface Countdown {
+  /** Milliseconds left before the toast is dismissed. */
+  remaining: number;
+  startedAt: number;
+  handle?: ReturnType<typeof setTimeout>;
+}
 
 /**
  * Toast notifications. Identical alerts raised while one is still visible
@@ -45,15 +56,21 @@ const DEFAULT_TIMEOUTS: Readonly<Record<AlertLevel, number>> = {
  * instead of stacking up. `error()` ignores errors that were already reported
  * (see `markErrorReported`), so pages can pass every caught error without
  * doubling the network failure toast.
+ *
+ * Auto-dismiss countdowns stop while the user hovers or focuses the toasts
+ * (`pauseAll()` / `resumeAll()`, WCAG 2.2.1) and continue with the time left.
  */
 @Injectable({ providedIn: 'root' })
 export class AlertService {
   readonly maxAlerts = 4;
   private readonly alertsState = signal<readonly CerebroAlert[]>([]);
-  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly countdowns = new Map<string, Countdown>();
+  private readonly pausedState = signal(false);
   private nextId = 0;
 
   readonly alerts = this.alertsState.asReadonly();
+  /** True while auto-dismiss countdowns are suspended. */
+  readonly paused = this.pausedState.asReadonly();
 
   success(message: string, response?: unknown, timeoutMs?: number): string {
     return this.add('success', message, response, timeoutMs);
@@ -76,28 +93,46 @@ export class AlertService {
   }
 
   remove(id: string): void {
-    const timer = this.timers.get(id);
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      this.timers.delete(id);
-    }
+    this.cancel(id);
     this.alertsState.update((alerts) => alerts.filter((alert) => alert.id !== id));
   }
 
   /** Cancels the auto-dismiss timer of an alert. */
   pin(id: string): void {
-    const timer = this.timers.get(id);
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      this.timers.delete(id);
+    this.cancel(id);
+  }
+
+  /** Suspends every auto-dismiss countdown, keeping the time left. */
+  pauseAll(): void {
+    if (this.pausedState()) {
+      return;
+    }
+    this.pausedState.set(true);
+    const now = Date.now();
+    for (const countdown of this.countdowns.values()) {
+      if (countdown.handle !== undefined) {
+        clearTimeout(countdown.handle);
+        countdown.handle = undefined;
+        countdown.remaining = Math.max(0, countdown.remaining - (now - countdown.startedAt));
+      }
+    }
+  }
+
+  /** Continues the countdowns suspended by `pauseAll()`. */
+  resumeAll(): void {
+    if (!this.pausedState()) {
+      return;
+    }
+    this.pausedState.set(false);
+    for (const [id, countdown] of this.countdowns) {
+      this.start(id, countdown);
     }
   }
 
   clear(): void {
-    for (const timer of this.timers.values()) {
-      clearTimeout(timer);
+    for (const id of [...this.countdowns.keys()]) {
+      this.cancel(id);
     }
-    this.timers.clear();
     this.alertsState.set([]);
   }
 
@@ -153,11 +188,26 @@ export class AlertService {
   }
 
   private schedule(id: string, delay: number): void {
-    if (delay > 0) {
-      this.timers.set(
-        id,
-        setTimeout(() => this.remove(id), delay),
-      );
+    if (delay <= 0) {
+      return;
     }
+    const countdown: Countdown = { remaining: delay, startedAt: Date.now() };
+    this.countdowns.set(id, countdown);
+    if (!this.pausedState()) {
+      this.start(id, countdown);
+    }
+  }
+
+  private start(id: string, countdown: Countdown): void {
+    countdown.startedAt = Date.now();
+    countdown.handle = setTimeout(() => this.remove(id), countdown.remaining);
+  }
+
+  private cancel(id: string): void {
+    const countdown = this.countdowns.get(id);
+    if (countdown?.handle !== undefined) {
+      clearTimeout(countdown.handle);
+    }
+    this.countdowns.delete(id);
   }
 }

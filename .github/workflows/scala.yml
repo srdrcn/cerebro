@@ -46,12 +46,21 @@ jobs:
       - name: Report production-only npm audit
         run: npm audit --omit=dev --audit-level=high
 
+      # Runs after "Build frontend": public/js holds the bundle that is packaged.
+      # grep exits 0 on a match, 1 on no match and 2 on an error; only 1 passes.
       - name: Reject legacy vulnerable frontend bundles
         shell: bash
         run: |
-          if rg -n "AngularJS v1\.|angular\.module\(['\"]cerebro|ng-app=|ng-controller=|Bootstrap v3\." public; then
+          set +e
+          grep -rEn "AngularJS v1\.|angular\.module\(['\"]cerebro|ng-app=|ng-controller=|Bootstrap v3\." public
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
             echo "Legacy AngularJS or Bootstrap 3 content remains in packaged assets."
             exit 1
+          elif [ "$status" -ne 1 ]; then
+            echo "The legacy bundle check could not run (grep exit status $status)."
+            exit "$status"
           fi
 
       - name: Set up Java 17

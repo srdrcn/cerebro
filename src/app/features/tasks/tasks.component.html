@@ -8,6 +8,8 @@
       <span class="live-indicator text-sm text-muted" [attr.aria-busy]="loading()">
         @if (loading()) {
           <span class="spinner" aria-hidden="true"></span> Updating…
+        } @else if (tasks() && stale()) {
+          <span class="dot dot-yellow" aria-hidden="true"></span> Last updated {{ loadedAt() | date: 'HH:mm:ss' }}
         } @else if (tasks()) {
           <span class="dot dot-green dot-pulse" aria-hidden="true"></span> Updated {{ loadedAt() | date: 'HH:mm:ss' }}
         }
@@ -16,6 +18,24 @@
   </header>
 
   @if (tasks(); as all) {
+    @if (staleReason(); as reason) {
+      <div class="callout callout-warning tasks-stale" role="alert">
+        <i class="bi bi-wifi-off" aria-hidden="true"></i>
+        <div class="min-w-0">
+          <strong>Could not refresh the tasks.</strong>
+          Showing data from {{ loadedAt() | date: 'HH:mm:ss' }}. {{ reason }}
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm tasks-stale__retry"
+          [class.is-loading]="loading()"
+          [disabled]="loading()"
+          (click)="load()"
+        >
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </div>
+    }
     <div class="stat-grid tasks-stats">
       <div class="stat">
         <div class="stat__label"><i class="bi bi-activity" aria-hidden="true"></i> Running</div>

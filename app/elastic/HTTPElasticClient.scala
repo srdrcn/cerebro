@@ -1,6 +1,7 @@
 package elastic
 
 import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import javax.inject.Singleton
 
 import com.google.inject.Inject
@@ -18,16 +19,6 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
   def main(target: ElasticServer) =
     execute(s"", "GET", None, target)
 
-  def clusterState(target: ElasticServer) = {
-    val path = "/_cluster/state/master_node,routing_table,routing_nodes,blocks"
-    execute(path, "GET", None, target)
-  }
-
-  def indicesStats(target: ElasticServer) = {
-    val path = "/_stats/docs,store"
-    execute(path, "GET", None, target)
-  }
-
   def nodesStats(stats: Seq[String], target: ElasticServer) = {
     val path = s"/_nodes/stats/${stats.mkString(",")}?human=true"
     execute(path, "GET", None, target)
@@ -40,16 +31,6 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
 
   def nodeStats(node: String, target: ElasticServer) = {
     val path = s"/_nodes/${encoded(node)}/stats?human"
-    execute(path, "GET", None, target)
-  }
-
-  def clusterSettings(target: ElasticServer) = {
-    val path = "/_cluster/settings"
-    execute(path, "GET", None, target)
-  }
-
-  def aliases(target: ElasticServer) = {
-    val path = "/_aliases"
     execute(path, "GET", None, target)
   }
 
@@ -118,14 +99,11 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
     execute(path, "PUT", Some(settings), target, Seq(JsonContentType))
   }
 
-  private def allocationSettings(value: String) =
-    s"""{"transient": {"cluster": {"routing": {"allocation": {"enable": \"$value\"}}}}}"""
-
   def enableShardAllocation(target: ElasticServer) =
-    putClusterSettings(allocationSettings("all"), target)
+    putClusterSettings(allocationSettings(JsNull).toString, target)
 
   def disableShardAllocation(target: ElasticServer, kind: String) =
-    putClusterSettings(allocationSettings(kind), target)
+    putClusterSettings(allocationSettings(JsString(kind)).toString, target)
 
   def getShardStats(index: String, target: ElasticServer) = {
     val path = s"/${encoded(index)}/_stats?level=shards&human=true"
@@ -134,31 +112,18 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
 
   def relocateShard(shard: Int, index: String, from: String, to: String, target: ElasticServer) = {
     val path = "/_cluster/reroute"
-    val commands =
-      s"""
-         |{
-         |  "commands": [
-         |    {
-         |      "move": {
-         |        "shard": $shard,
-         |        "index": \"$index\",
-         |        "from_node": \"$from\",
-         |        "to_node": \"$to\"
-         |      }
-         |    }
-         |  ]
-         |}
-       """.stripMargin
-    execute(path, "POST", Some(commands), target, Seq(JsonContentType))
+    val commands = Json.obj(
+      "commands" -> Json.arr(
+        Json.obj(
+          "move" -> Json.obj("shard" -> shard, "index" -> index, "from_node" -> from, "to_node" -> to)
+        )
+      )
+    )
+    execute(path, "POST", Some(commands.toString), target, Seq(JsonContentType))
   }
 
   def getIndexRecovery(index: String, target: ElasticServer) = {
     val path = s"/${encoded(index)}/_recovery?active_only=true&human=true"
-    execute(path, "GET", None, target)
-  }
-
-  def getClusterMapping(target: ElasticServer) = {
-    val path = "/_mapping"
     execute(path, "GET", None, target)
   }
 
@@ -201,11 +166,6 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
   def deleteTemplate(name: String, target: ElasticServer) = {
     val path = s"/_template/${encoded(name)}"
     execute(path, "DELETE", None, target)
-  }
-
-  def getNodes(target: ElasticServer) = {
-    val path = s"/_cat/nodes?format=json"
-    execute(path, "GET", None, target)
   }
 
   def analyzeTextByField(index: String, field: String, text: String, target: ElasticServer) = {
@@ -312,11 +272,11 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
     execute(s"/${path}", method, body, target, headers)
   }
 
-  protected def execute[T](uri: String,
-                           method: String,
-                           body: Option[String] = None,
-                           target: ElasticServer,
-                           headers: Seq[(String, String)] = Seq()) = {
+  protected def execute(uri: String,
+                        method: String,
+                        body: Option[String] = None,
+                        target: ElasticServer,
+                        headers: Seq[(String, String)] = Seq()): Future[ElasticResponse] = {
     val authentication = target.host.authentication
     val url = s"${target.host.name.replaceAll("/+$", "")}$uri"
 
@@ -332,8 +292,6 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
       ElasticResponse(response)
     }
   }
-
-  private def encoded(text: String): String = URLEncoder.encode(text, "UTF-8")
 
   override def catMaster(target: ElasticServer): Future[ElasticResponse] = {
     val path = "/_cat/master"
@@ -458,4 +416,23 @@ object HTTPElasticClient {
   val JsonContentType: (String, String) = ("Content-type", "application/json")
 
   val NdJsonContentType: (String, String) = ("Content-type", "application/x-ndjson")
+
+  /** The shard allocation values Elasticsearch accepts for cluster.routing.allocation.enable. */
+  val AllocationKinds: Seq[String] = Seq("all", "primaries", "new_primaries", "none")
+
+  /**
+    * Persistent cluster.routing.allocation.enable (transient settings are deprecated). The
+    * transient value is always cleared: a leftover transient value would silently override
+    * the persistent one. JsNull resets both to the default ("all").
+    */
+  def allocationSettings(value: JsValue): JsObject = {
+    val setting = "cluster.routing.allocation.enable"
+    Json.obj("persistent" -> Json.obj(setting -> value), "transient" -> Json.obj(setting -> JsNull))
+  }
+
+  /**
+    * Encodes one URL path segment. URLEncoder implements form encoding, where a space becomes
+    * '+', but Elasticsearch reads '+' in a path literally, so spaces are written as %20.
+    */
+  def encoded(text: String): String = URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20")
 }

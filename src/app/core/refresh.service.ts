@@ -8,6 +8,8 @@ export type RefreshInterval = (typeof REFRESH_INTERVALS)[number];
 
 export const DEFAULT_REFRESH_INTERVAL: RefreshInterval = 15_000;
 export const REFRESH_STORAGE_KEY = 'cerebro.refresh-interval';
+/** The last interval that was not "Off", restored by `resume()`. */
+export const LAST_ACTIVE_REFRESH_STORAGE_KEY = 'cerebro.refresh-interval-active';
 
 export function isRefreshInterval(value: number): value is RefreshInterval {
   return REFRESH_INTERVALS.some((candidate) => candidate === value);
@@ -18,6 +20,12 @@ export function refreshIntervalLabel(interval: number): string {
     return 'Off';
   }
   return interval >= 60_000 ? `${interval / 60_000}m` : `${interval / 1_000}s`;
+}
+
+function storedInterval(key: string): RefreshInterval | undefined {
+  const raw = readPreference(key);
+  const value = Number(raw);
+  return raw !== null && raw.trim() !== '' && isRefreshInterval(value) ? value : undefined;
 }
 
 /**
@@ -31,6 +39,7 @@ export class RefreshService {
   private readonly destroyRef = inject(DestroyRef);
   private readonly tickState = signal(Date.now());
   private readonly intervalState = signal<RefreshInterval>(this.initialInterval());
+  private lastActive: RefreshInterval = this.initialLastActive();
   private timer: number | undefined;
   private missedWhileHidden = false;
 
@@ -62,10 +71,30 @@ export class RefreshService {
     const previous = this.intervalState();
     this.intervalState.set(interval);
     writePreference(REFRESH_STORAGE_KEY, String(interval));
+    if (interval !== 0) {
+      this.lastActive = interval;
+      writePreference(LAST_ACTIVE_REFRESH_STORAGE_KEY, String(interval));
+    }
     if (interval !== 0 && (previous === 0 || interval < previous)) {
       this.refresh();
     }
     this.schedule();
+  }
+
+  /** Turns automatic refresh back on with the interval used before pausing. */
+  resume(): void {
+    if (this.paused()) {
+      this.setInterval(this.lastActive);
+    }
+  }
+
+  /** Pauses automatic refresh, or resumes it with the previous interval. */
+  toggle(): void {
+    if (this.paused()) {
+      this.resume();
+    } else {
+      this.setInterval(0);
+    }
   }
 
   /** Requests an immediate reload of every view bound to `tick`. */
@@ -74,10 +103,16 @@ export class RefreshService {
   }
 
   private initialInterval(): RefreshInterval {
-    const stored = Number(readPreference(REFRESH_STORAGE_KEY));
-    return readPreference(REFRESH_STORAGE_KEY) !== null && isRefreshInterval(stored)
-      ? stored
-      : DEFAULT_REFRESH_INTERVAL;
+    return storedInterval(REFRESH_STORAGE_KEY) ?? DEFAULT_REFRESH_INTERVAL;
+  }
+
+  private initialLastActive(): RefreshInterval {
+    const current = this.intervalState();
+    if (current !== 0) {
+      return current;
+    }
+    const stored = storedInterval(LAST_ACTIVE_REFRESH_STORAGE_KEY);
+    return stored ? stored : DEFAULT_REFRESH_INTERVAL;
   }
 
   private schedule(): void {

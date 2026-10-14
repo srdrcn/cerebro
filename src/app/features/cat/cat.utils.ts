@@ -15,9 +15,9 @@ export const CAT_APIS = [
   'plugins',
   'recovery',
   'repositories',
-  'thread pool',
-  'shards',
   'segments',
+  'shards',
+  'thread pool',
 ] as const;
 
 export type CatApi = (typeof CAT_APIS)[number];
@@ -120,11 +120,11 @@ export const CAT_API_INFO: Readonly<Record<CatApi, CatApiInfo>> = {
     description: 'Registered snapshot repositories',
     emptyText: 'No snapshot repositories are registered.',
   },
-  'thread pool': {
-    label: 'Thread pool',
-    icon: 'bi-cpu',
-    description: 'Active, queued and rejected tasks per pool',
-    emptyText: 'No thread pool statistics were reported.',
+  segments: {
+    label: 'Segments',
+    icon: 'bi-layers',
+    description: 'Lucene segments of every shard',
+    emptyText: 'No Lucene segments were reported.',
   },
   shards: {
     label: 'Shards',
@@ -132,11 +132,11 @@ export const CAT_API_INFO: Readonly<Record<CatApi, CatApiInfo>> = {
     description: 'Where every shard lives and its state',
     emptyText: 'This cluster has no shards yet.',
   },
-  segments: {
-    label: 'Segments',
-    icon: 'bi-layers',
-    description: 'Lucene segments of every shard',
-    emptyText: 'No Lucene segments were reported.',
+  'thread pool': {
+    label: 'Thread pool',
+    icon: 'bi-cpu',
+    description: 'Active, queued and rejected tasks per pool',
+    emptyText: 'No thread pool statistics were reported.',
   },
 };
 

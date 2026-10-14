@@ -117,7 +117,7 @@
   /* Code editor palette (consumed by the Ace theme). */
   --code-bg: #fbfcfd;
   --code-gutter: #f3f5f8;
-  --code-gutter-text: #9aa3b2;
+  --code-gutter-text: #636d7f;
   --code-line: #f1f4f8;
   --code-selection: #d3ebfc;
   --code-text: #1f2937;
@@ -192,7 +192,7 @@
 
     --code-bg: #10141a;
     --code-gutter: #13171e;
-    --code-gutter-text: #4f5867;
+    --code-gutter-text: #7a8495;
     --code-line: #171c24;
     --code-selection: #24364d;
     --code-text: #d7dce4;
@@ -267,7 +267,7 @@
 
   --code-bg: #10141a;
   --code-gutter: #13171e;
-  --code-gutter-text: #4f5867;
+  --code-gutter-text: #7a8495;
   --code-line: #171c24;
   --code-selection: #24364d;
   --code-text: #d7dce4;

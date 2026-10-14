@@ -173,6 +173,11 @@
   z-index: 3;
 }
 
+/* Fields focused with the keyboard stop above the sticky footer. */
+:host ::ng-deep .it-editor > .card-body :is(input, select, textarea, button) {
+  scroll-margin-bottom: calc(var(--control-height) + var(--space-10));
+}
+
 .it-editor__actions {
   flex-wrap: wrap;
 }

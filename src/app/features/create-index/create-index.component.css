@@ -172,6 +172,11 @@
 
 /* ---- Action bar ---- */
 
+/* Fields focused with the keyboard stop above the sticky action bar. */
+:host ::ng-deep .create-layout :is(input, select, textarea, button) {
+  scroll-margin-bottom: calc(var(--control-height) + var(--space-10) + var(--space-4));
+}
+
 .create-actions {
   position: sticky;
   bottom: var(--space-4);
@@ -242,6 +247,10 @@
 
   .create-actions__meta {
     display: none;
+  }
+
+  :host ::ng-deep .create-layout :is(input, select, textarea, button) {
+    scroll-margin-bottom: calc(2 * var(--control-height) + var(--space-10) + var(--space-4));
   }
 
   .create-actions__buttons > * {

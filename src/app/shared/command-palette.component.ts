@@ -112,25 +112,30 @@ export function scoreCommand(label: string, keywords: string, query: string): nu
         </div>
         <div class="palette__results" id="palette-results" role="listbox">
           @for (group of groups(); track group.name) {
-            <div class="palette__group" role="presentation">{{ group.name }}</div>
-            @for (command of group.commands; track command.id) {
-              <button
-                type="button"
-                class="palette__item"
-                role="option"
-                [id]="'palette-' + command.id"
-                [class.is-active]="command.id === activeCommand()?.id"
-                [attr.aria-selected]="command.id === activeCommand()?.id"
-                (mousemove)="activate(command)"
-                (click)="execute(command)"
-              >
-                <i class="bi" [class]="'bi ' + command.icon" aria-hidden="true"></i>
-                <span class="palette__item-label">{{ command.label }}</span>
-                @if (command.hint) {
-                  <span class="palette__item-hint">{{ command.hint }}</span>
-                }
-              </button>
-            }
+            <div role="group" [attr.aria-labelledby]="'palette-group-' + group.name">
+              <div class="palette__group" [id]="'palette-group-' + group.name">{{ group.name }}</div>
+              @for (command of group.commands; track command.id) {
+                <!-- Options are not tab stops: focus stays in the combobox (aria-activedescendant). -->
+                <button
+                  type="button"
+                  class="palette__item"
+                  role="option"
+                  tabindex="-1"
+                  [id]="'palette-' + command.id"
+                  [class.is-active]="command.id === activeCommand()?.id"
+                  [attr.aria-selected]="command.id === activeCommand()?.id"
+                  (mousedown)="$event.preventDefault()"
+                  (mousemove)="activate(command)"
+                  (click)="execute(command)"
+                >
+                  <i class="bi" [class]="'bi ' + command.icon" aria-hidden="true"></i>
+                  <span class="palette__item-label">{{ command.label }}</span>
+                  @if (command.hint) {
+                    <span class="palette__item-hint">{{ command.hint }}</span>
+                  }
+                </button>
+              }
+            </div>
           } @empty {
             <div class="empty empty--compact">
               <p class="empty__title">No results</p>
@@ -200,7 +205,7 @@ export class CommandPaletteComponent {
         label: this.refresh.paused() ? 'Resume auto-refresh' : 'Pause auto-refresh',
         icon: this.refresh.paused() ? 'bi-play-circle' : 'bi-pause-circle',
         keywords: 'interval polling stop',
-        run: () => this.refresh.setInterval(this.refresh.paused() ? 15_000 : 0),
+        run: () => this.refresh.toggle(),
       },
       {
         id: 'action-switch',
@@ -208,7 +213,7 @@ export class CommandPaletteComponent {
         label: 'Switch cluster',
         icon: 'bi-arrow-left-right',
         keywords: 'disconnect connect host change',
-        run: () => this.connection.disconnect(),
+        run: () => void this.connection.disconnect(),
       },
     ];
     const indices: PaletteCommand[] = this.indices().map((index) => ({

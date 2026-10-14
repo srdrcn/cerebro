@@ -17,6 +17,7 @@ import { DialogService } from '../../core/dialog.service';
 import { failureMessage } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { INVALID_INDEX_NAME_CHARACTERS } from '../../core/names';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { MenuComponent } from '../../shared/menu.component';
@@ -50,11 +51,12 @@ function layoutCount(value: string, noun: string): string {
 @Component({
   selector: 'cerebro-create-index',
   imports: [CodeEditorComponent, FormsModule, MenuComponent, RouterLink],
+  host: { '(window:beforeunload)': 'onBeforeUnload($event)' },
   templateUrl: './create-index.component.html',
   styleUrl: './create-index.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CreateIndexComponent {
+export class CreateIndexComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
@@ -82,6 +84,8 @@ export class CreateIndexComponent {
   readonly copying = signal(false);
   readonly copyInfo = signal<CopyInfo | null>(null);
   readonly creating = signal(false);
+  /** Set once the index exists: leaving for the overview drops nothing. */
+  readonly created = signal(false);
 
   readonly indexGroups = computed(() => sortIndexNames(this.indices() ?? []));
 
@@ -107,6 +111,23 @@ export class CreateIndexComponent {
   });
   readonly bodyLines = computed(() => (this.body().trim() ? this.body().split('\n').length : 0));
   readonly bodyLinesLabel = computed(() => pluralize(this.bodyLines(), 'line'));
+  /** Announced to screen readers: changes on transitions only, not per keystroke. */
+  readonly bodyStatus = computed(() => {
+    const kind = this.bodyState().kind;
+    return kind === 'invalid' ? 'Invalid JSON' : this.usesBody() ? 'Valid JSON' : 'Empty body';
+  });
+
+  /** Anything typed or copied that a navigation would drop. */
+  readonly dirty = computed(
+    () =>
+      !this.created() &&
+      !this.creating() &&
+      (this.name() !== '' ||
+        this.shards() !== '' ||
+        this.replicas() !== '' ||
+        this.body().trim() !== '' ||
+        this.sourceIndex() !== ''),
+  );
 
   readonly shardsError = computed(() =>
     this.fieldsLocked() ? null : validateCount(this.shards(), 1, MAX_SHARDS),
@@ -169,7 +190,7 @@ export class CreateIndexComponent {
     } catch (error: unknown) {
       if (sequence === this.indicesSequence && this.indices() === undefined) {
         this.indicesFailed.set(true);
-        this.alerts.error('Could not load the list of indices', error);
+        this.alerts.error(failureMessage('Could not load the list of indices', error), error);
       }
     }
   }
@@ -184,6 +205,33 @@ export class CreateIndexComponent {
     } catch {
       // Only used to warn early; keep the last known names.
     }
+  }
+
+  /** Asks the browser to confirm closing the tab while the form holds edits. */
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.dirty()) {
+      event.preventDefault();
+    }
+  }
+
+  /**
+   * Resolves `true` when the form holds nothing or the user agreed to drop
+   * it. Used by the route guard.
+   */
+  async confirmDiscard(): Promise<boolean> {
+    if (!this.dirty()) {
+      return true;
+    }
+    const name = this.name().trim();
+    return this.dialogs.confirm({
+      title: 'Discard the new index?',
+      message: name
+        ? `Index ${name} has not been created. Its name, shard layout and JSON body will be lost.`
+        : 'The index has not been created. Its name, shard layout and JSON body will be lost.',
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+      tone: 'danger',
+    });
   }
 
   setShards(value: string): void {
@@ -257,7 +305,7 @@ export class CreateIndexComponent {
       if (sequence === this.copySequence) {
         this.sourceIndex.set(previous);
         select.value = previous;
-        this.alerts.error(`Could not load the settings and mappings of ${index}`, error);
+        this.alerts.error(failureMessage(`Could not load the settings and mappings of ${index}`, error), error);
       }
     } finally {
       if (sequence === this.copySequence) {
@@ -375,6 +423,7 @@ export class CreateIndexComponent {
     try {
       const response = await this.api.post<unknown>('create_index/create', { index, metadata });
       this.alerts.success(`Index ${index} created`, response);
+      this.created.set(true);
       await this.router.navigate(['/overview'], {
         queryParams: { ...this.connection.hostQuery(), filter: index },
       });

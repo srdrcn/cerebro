@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  inject,
+  signal,
+} from '@angular/core';
 import { AlertService, CerebroAlert } from '../core/alert.service';
 
 const ICONS: Readonly<Record<CerebroAlert['level'], string>> = {
@@ -11,7 +19,17 @@ const ICONS: Readonly<Record<CerebroAlert['level'], string>> = {
 @Component({
   selector: 'cerebro-toast-center',
   template: `
-    <section class="toasts" aria-label="Notifications" aria-live="polite">
+    <!-- Each toast is its own live region (role alert / status); hovering or
+         focusing the stack pauses the auto-dismiss countdowns. -->
+    <section
+      class="toasts"
+      aria-label="Notifications"
+      [class.is-paused]="alerts.paused()"
+      (mouseenter)="setHovered(true)"
+      (mouseleave)="setHovered(false)"
+      (focusin)="setFocused(true)"
+      (focusout)="onFocusOut($event)"
+    >
       @for (alert of alerts.alerts(); track alert.id) {
         <article
           class="toast"
@@ -52,7 +70,7 @@ const ICONS: Readonly<Record<CerebroAlert['level'], string>> = {
             type="button"
             class="toast__close"
             aria-label="Dismiss notification"
-            (click)="alerts.remove(alert.id)"
+            (click)="dismiss(alert)"
           >
             <i class="bi bi-x-lg" aria-hidden="true"></i>
           </button>
@@ -71,8 +89,61 @@ const ICONS: Readonly<Record<CerebroAlert['level'], string>> = {
 })
 export class ToastCenterComponent {
   readonly alerts = inject(AlertService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   readonly expanded = signal<string | undefined>(undefined);
   readonly pinned = signal<string | undefined>(undefined);
+  private hovered = false;
+  private focused = false;
+
+  setHovered(hovered: boolean): void {
+    this.hovered = hovered;
+    this.syncPause();
+  }
+
+  setFocused(focused: boolean): void {
+    this.focused = focused;
+    this.syncPause();
+  }
+
+  onFocusOut(event: FocusEvent): void {
+    const next = event.relatedTarget;
+    if (!(next instanceof Node) || !this.host.nativeElement.contains(next)) {
+      this.setFocused(false);
+    }
+  }
+
+  /**
+   * Removing the focused toast does not fire focusout, so move focus to the
+   * next toast's dismiss button, or let the countdowns continue.
+   */
+  dismiss(alert: CerebroAlert): void {
+    const position = this.alerts.alerts().findIndex((candidate) => candidate.id === alert.id);
+    this.alerts.remove(alert.id);
+    if (!this.focused) {
+      return;
+    }
+    afterNextRender(
+      () => {
+        const buttons = this.host.nativeElement.querySelectorAll<HTMLButtonElement>('.toast__close');
+        const next = buttons[Math.min(position, buttons.length - 1)];
+        if (next) {
+          next.focus();
+        } else {
+          this.setFocused(false);
+        }
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private syncPause(): void {
+    if (this.hovered || this.focused) {
+      this.alerts.pauseAll();
+    } else {
+      this.alerts.resumeAll();
+    }
+  }
 
   icon(alert: CerebroAlert): string {
     return ICONS[alert.level];

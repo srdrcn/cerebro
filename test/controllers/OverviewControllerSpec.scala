@@ -39,8 +39,9 @@ object OverviewControllerSpec extends MockedServices {
       should validate existence of shard parameter       $missingShardToFetchShardStats
       should validate existence of node parameter        $missingNodeToFetchShardStats
 
-      should correctly clear index cache                 $enableShardAllocation
-      should correctly clear index cache                 $disableShardAllocation
+      should enable shard allocation                     $enableShardAllocation
+      should disable shard allocation                    $disableShardAllocation
+      should reject an unknown allocation kind           $invalidAllocationKind
                                                          ${step(play.api.Play.stop(application))}
       """
 
@@ -273,6 +274,13 @@ object OverviewControllerSpec extends MockedServices {
     client.disableShardAllocation(ElasticServer(Host("somehost", None)), "none") returns Future.successful(Success(200, expectedResponse))
     val result = route(application, FakeRequest(POST, "/overview/disable_shard_allocation").withBody(body)).get
     ensure(result, 200, expectedResponse)
+  }
+
+  def invalidAllocationKind = {
+    val body = Json.obj("host" -> "somehost", "kind" -> "none\"}},\"persistent\":{")
+    val result = route(application, FakeRequest(POST, "/overview/disable_shard_allocation").withBody(body)).get
+    ensure(result, 400, Json.obj("error" -> "Invalid value for parameter kind, expected one of all, primaries, new_primaries, none")) and
+      (there was no(client).disableShardAllocation(any[ElasticServer], any[String]))
   }
 
   val expectedShardStats = Json.parse(

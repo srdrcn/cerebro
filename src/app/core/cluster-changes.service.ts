@@ -1,8 +1,9 @@
-import { effect, inject, Injectable } from '@angular/core';
+import { DestroyRef, effect, inject, Injectable } from '@angular/core';
 import { AlertService } from './alert.service';
 import { ClusterApiService } from './cluster-api.service';
 import { ConnectionService } from './connection.service';
 import { pluralize } from './format';
+import { stringList } from './json';
 import { RefreshService } from './refresh.service';
 
 export interface ClusterSnapshot {
@@ -38,12 +39,109 @@ export function detectClusterChanges(
   };
 }
 
+/** Changes the user is making in this app, left out of the notifications. */
+export interface ExpectedChanges {
+  readonly created?: readonly string[];
+  readonly deleted?: readonly string[];
+  /** Indices are being created under names not known in advance (snapshot restore). */
+  readonly createdUnknown?: boolean;
+}
+
+/** How long a named expectation waits for the change to show up. */
+const EXPECTED_CHANGE_TTL_MS = 120_000;
+/** How long index creations are not reported after a restore started. */
+const UNKNOWN_CREATIONS_TTL_MS = 30_000;
+
+function indexNames(value: unknown): string[] {
+  return stringList(value)
+    .flatMap((names) => names.split(','))
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+/** The index changes a successful Play endpoint call makes, if any. */
+export function expectedChangesFor(
+  path: string,
+  data: Readonly<Record<string, unknown>>,
+): ExpectedChanges | undefined {
+  switch (path) {
+    case 'overview/delete_indices':
+      return { deleted: indexNames(data['indices']) };
+    case 'create_index/create':
+      return { created: indexNames(data['index']) };
+    case 'snapshots/restore':
+      return { createdUnknown: true };
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Remembers the user's own index creations and deletions until the change
+ * detection sees them, so they are not announced a second time.
+ */
+export class ExpectedChangeLedger {
+  private readonly created = new Map<string, number>();
+  private readonly deleted = new Map<string, number>();
+  private unknownCreationsUntil = 0;
+
+  constructor(private readonly now: () => number = Date.now) {}
+
+  expect(changes: ExpectedChanges): void {
+    const now = this.now();
+    for (const name of changes.created ?? []) {
+      this.created.set(name, now + EXPECTED_CHANGE_TTL_MS);
+    }
+    for (const name of changes.deleted ?? []) {
+      this.deleted.set(name, now + EXPECTED_CHANGE_TTL_MS);
+    }
+    if (changes.createdUnknown) {
+      this.unknownCreationsUntil = now + UNKNOWN_CREATIONS_TTL_MS;
+    }
+  }
+
+  /** The change set without the expected changes (which are then forgotten). */
+  filter(changes: ClusterChangeSet): ClusterChangeSet {
+    const now = this.now();
+    this.prune(this.created, now);
+    this.prune(this.deleted, now);
+    const createdIndices =
+      this.unknownCreationsUntil > now
+        ? []
+        : changes.createdIndices.filter((name) => !this.created.delete(name));
+    const deletedIndices = changes.deletedIndices.filter((name) => !this.deleted.delete(name));
+    return { ...changes, createdIndices, deletedIndices };
+  }
+
+  clear(): void {
+    this.created.clear();
+    this.deleted.clear();
+    this.unknownCreationsUntil = 0;
+  }
+
+  private prune(expectations: Map<string, number>, now: number): void {
+    for (const [name, expiry] of expectations) {
+      if (expiry <= now) {
+        expectations.delete(name);
+      }
+    }
+  }
+}
+
+/**
+ * Compares the cluster on every refresh tick and announces nodes that joined
+ * or left and indices created or deleted outside this app. Index changes made
+ * through the app (see `expectedChangesFor`, or `expect()` for others) are
+ * already confirmed by the page and are not announced again.
+ */
 @Injectable({ providedIn: 'root' })
 export class ClusterChangesService {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly connection = inject(ConnectionService);
   private readonly refresh = inject(RefreshService);
+
+  private readonly ownChanges = new ExpectedChangeLedger();
 
   private baseline: ClusterSnapshot | undefined;
   private requestSequence = 0;
@@ -54,11 +152,25 @@ export class ClusterChangesService {
       this.refresh.tick();
       if (!host) {
         this.baseline = undefined;
+        this.ownChanges.clear();
         this.requestSequence += 1;
         return;
       }
       void this.poll(host);
     });
+
+    const stopListening = this.api.onSuccess(({ path, data }) => {
+      const changes = expectedChangesFor(path, data);
+      if (changes) {
+        this.expect(changes);
+      }
+    });
+    inject(DestroyRef).onDestroy(stopListening);
+  }
+
+  /** Leaves the user's own index changes out of the next notifications. */
+  expect(changes: ExpectedChanges): void {
+    this.ownChanges.expect(changes);
   }
 
   private async poll(expectedHost: string): Promise<void> {
@@ -78,7 +190,7 @@ export class ClusterChangesService {
         return;
       }
 
-      const changes = detectClusterChanges(previous, current);
+      const changes = this.ownChanges.filter(detectClusterChanges(previous, current));
       this.notify(changes.joinedNodes, ['node', 'nodes'], 'joined the cluster', 'info');
       this.notify(changes.leftNodes, ['node', 'nodes'], 'left the cluster', 'warn');
       this.notify(changes.createdIndices, ['index', 'indices'], 'created', 'info');

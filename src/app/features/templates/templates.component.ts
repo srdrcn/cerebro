@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   computed,
   effect,
@@ -8,13 +9,14 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { validateResourceName } from '../../core/names';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
@@ -28,6 +30,7 @@ import {
   LegacyTemplate,
   NEW_TEMPLATE_BODY,
   analyzeTemplateBody,
+  isManagedLegacyTemplate,
   searchLegacyTemplates,
   templateBodyWarning,
   templateOrder,
@@ -73,6 +76,8 @@ export class TemplatesComponent implements PendingChangesAware {
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
   private readonly refreshService = inject(RefreshService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   readonly connection = inject(ConnectionService);
 
   private readonly editor = viewChild(CodeEditorComponent);
@@ -82,7 +87,11 @@ export class TemplatesComponent implements PendingChangesAware {
   readonly templates = signal<readonly LegacyTemplate[] | undefined>(undefined);
   readonly loading = signal(false);
   readonly failed = signal(false);
+  /** Why the list could not be loaded, as a sentence for the error state. */
+  readonly loadError = signal<string | undefined>(undefined);
   readonly query = signal('');
+  /** Built-in templates (".monitoring-*", `_meta.managed`) are hidden by default. */
+  readonly showManaged = signal(false);
 
   /** Name of the stored template being edited; null while writing a new one. */
   readonly selected = signal<string | null>(null);
@@ -95,13 +104,21 @@ export class TemplatesComponent implements PendingChangesAware {
   readonly deleting = signal(false);
 
   readonly rows = computed<readonly TemplateRow[]>(() =>
-    searchLegacyTemplates(this.templates() ?? [], this.query()).map((template) => ({
+    searchLegacyTemplates(this.templates() ?? [], this.query(), this.showManaged()).map((template) => ({
       template,
       name: template.name,
       patterns: templatePattern(template),
       order: templateOrder(template),
       version: templateVersion(template),
     })),
+  );
+
+  readonly managedCount = computed(
+    () => (this.templates() ?? []).filter((template) => isManagedLegacyTemplate(template)).length,
+  );
+  /** Templates listed without a filter: managed ones count only while shown. */
+  readonly totalCount = computed(
+    () => (this.templates()?.length ?? 0) - (this.showManaged() ? 0 : this.managedCount()),
   );
 
   readonly names = computed(() => (this.templates() ?? []).map((template) => template.name));
@@ -141,6 +158,10 @@ export class TemplatesComponent implements PendingChangesAware {
     const state = this.bodyState();
     return state.ok ? templateBodyWarning(state.value) : null;
   });
+  /** Announced to screen readers: changes on transitions only, not per keystroke. */
+  readonly bodyStatus = computed(() =>
+    this.bodyError() ? 'Invalid JSON' : this.bodyWarning() ? 'Valid JSON, check the warning' : 'Valid JSON',
+  );
   readonly bodyLinesLabel = computed(() => pluralize(this.body().split('\n').length, 'line'));
 
   readonly dirty = computed(() => {
@@ -152,14 +173,47 @@ export class TemplatesComponent implements PendingChangesAware {
   readonly saveLabel = computed(() => saveLabel(this.mode(), 'template'));
 
   private loadSequence = 0;
+  private destroyed = false;
+  /** Template requested by the URL, opened once the list is loaded. */
+  private pendingName: string | null = this.route.snapshot.queryParamMap.get('name');
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      this.destroyed = true;
+    });
     effect(() => {
       this.refreshService.tick();
       if (this.connection.connected()) {
         void this.load();
       }
     });
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => void this.applyParams(params));
+  }
+
+  /** Follows links and history entries that name a template (?name=). */
+  private async applyParams(params: ParamMap): Promise<void> {
+    const name = params.get('name');
+    if (name === this.selected()) {
+      return;
+    }
+    if (this.templates() === undefined) {
+      this.pendingName = name;
+      return;
+    }
+    if (name === null) {
+      // A link to this page without a template (sidebar, palette) keeps the
+      // open template: write it back so the URL still describes the page.
+      this.syncUrl();
+      return;
+    }
+    const template = this.templates()?.find((item) => item.name === name);
+    if (template) {
+      await this.select(template);
+    } else {
+      this.alerts.warn(`The template ${name} does not exist`);
+    }
+    // A cancelled discard keeps the current template: put it back in the URL.
+    this.syncUrl();
   }
 
   async load(): Promise<void> {
@@ -170,10 +224,13 @@ export class TemplatesComponent implements PendingChangesAware {
       if (sequence === this.loadSequence) {
         this.templates.set(templates);
         this.failed.set(false);
+        this.loadError.set(undefined);
+        this.openPending();
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
+        this.loadError.set(readableReason(error));
         this.alerts.error(failureMessage('Could not load legacy templates', error), error);
       }
     } finally {
@@ -202,12 +259,8 @@ export class TemplatesComponent implements PendingChangesAware {
     if (!(await this.confirmDiscard()) || this.saving()) {
       return;
     }
-    const source = templateSource(template);
-    this.selected.set(template.name);
-    this.name.set(template.name);
-    this.body.set(source);
-    this.baseline.set({ name: template.name, body: source });
-    this.submitted.set(false);
+    this.open(template);
+    this.syncUrl();
     this.revealEditor();
   }
 
@@ -223,6 +276,7 @@ export class TemplatesComponent implements PendingChangesAware {
       return;
     }
     this.resetEditor();
+    this.syncUrl();
     this.revealEditor();
     this.nameInput()?.nativeElement.focus();
   }
@@ -305,6 +359,7 @@ export class TemplatesComponent implements PendingChangesAware {
         this.selected.set(name);
         this.baseline.set({ name, body });
         this.submitted.set(false);
+        this.syncUrl();
       }
     } catch (error: unknown) {
       this.alerts.error(failureMessage(`Could not save template ${name}`, error), error);
@@ -348,6 +403,7 @@ export class TemplatesComponent implements PendingChangesAware {
       this.alerts.success(`Template ${name} deleted`, response);
       if (this.selected() === name) {
         this.resetEditor();
+        this.syncUrl();
       }
       await this.load();
     } catch (error: unknown) {
@@ -373,6 +429,54 @@ export class TemplatesComponent implements PendingChangesAware {
       cancelLabel: 'Keep editing',
       tone: 'danger',
     });
+  }
+
+  private open(template: LegacyTemplate): void {
+    const source = templateSource(template);
+    if (isManagedLegacyTemplate(template)) {
+      this.showManaged.set(true);
+    }
+    this.selected.set(template.name);
+    this.name.set(template.name);
+    this.body.set(source);
+    this.baseline.set({ name: template.name, body: source });
+    this.submitted.set(false);
+  }
+
+  /** Opens the template named by the URL once the list has loaded. */
+  private openPending(): void {
+    const name = this.pendingName;
+    if (name === null) {
+      return;
+    }
+    this.pendingName = null;
+    const template = this.templates()?.find((item) => item.name === name);
+    if (!template) {
+      this.alerts.warn(`The template ${name} does not exist`);
+      this.syncUrl();
+      return;
+    }
+    // Opening from the URL never discards edits typed while the list loaded.
+    if (this.selected() === null && !this.dirty()) {
+      this.open(template);
+    } else {
+      this.syncUrl();
+    }
+  }
+
+  /** Keeps the open template in the URL so it can be reloaded and shared. */
+  private syncUrl(): void {
+    if (this.destroyed) {
+      return;
+    }
+    this.router
+      .navigate([], {
+        relativeTo: this.route,
+        queryParams: { name: this.selected() },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      })
+      .catch(() => false);
   }
 
   private resetEditor(): void {

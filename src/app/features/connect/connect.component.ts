@@ -9,7 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, PRIMARY_OUTLET, Router, UrlTree } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiError } from '../../core/api-envelope';
 import { ConnectionService } from '../../core/connection.service';
@@ -74,6 +74,11 @@ export class ConnectComponent implements OnInit {
   /** Set by the first submit of each form; field errors show from then on. */
   readonly hostSubmitted = signal(false);
   readonly authSubmitted = signal(false);
+  /**
+   * In-app page the user was on when the cluster asked for credentials
+   * (`returnUrl`, set by the 401 redirect); signing in goes back to it.
+   */
+  private returnUrl: string | null = null;
 
   readonly hostError = computed(() => this.hostSubmitted() && !this.host().trim());
   readonly usernameError = computed(() => this.authSubmitted() && !this.username());
@@ -98,6 +103,7 @@ export class ConnectComponent implements OnInit {
     const params = this.route.snapshot.queryParamMap;
     this.host.set(params.get('host') ?? this.connection.host() ?? '');
     this.unauthorized.set(params.has('unauthorized'));
+    this.returnUrl = params.get('returnUrl');
     void this.loadHosts();
   }
 
@@ -128,7 +134,7 @@ export class ConnectComponent implements OnInit {
         case 401:
           this.unauthorized.set(true);
           await this.router.navigate([], {
-            queryParams: { host: target, unauthorized: true },
+            queryParams: { host: target, unauthorized: true, returnUrl: this.returnUrl },
             replaceUrl: true,
           });
           break;
@@ -188,15 +194,47 @@ export class ConnectComponent implements OnInit {
     this.feedback.set(undefined);
     this.username.set('');
     this.password.set('');
+    this.returnUrl = null;
     void this.router.navigate([], {
-      queryParams: { host: this.host() || null, unauthorized: null },
+      queryParams: { host: this.host() || null, unauthorized: null, returnUrl: null },
       replaceUrl: true,
     });
   }
 
   private async enter(host: string, username?: string, password?: string): Promise<void> {
     this.connection.connect(host, username, password);
-    await this.router.navigate(['/overview'], { queryParams: { host } });
+    const target = this.returnTarget(host);
+    if (target) {
+      await this.router.navigateByUrl(target, { replaceUrl: true });
+    } else {
+      await this.router.navigate(['/overview'], { queryParams: { host } });
+    }
+  }
+
+  /**
+   * The validated `returnUrl` with its host rewritten to the connected one:
+   * only an in-app path (never another origin or the connect page itself).
+   */
+  private returnTarget(host: string): UrlTree | null {
+    const url = this.returnUrl;
+    if (!url || !url.startsWith('/') || url.startsWith('//') || url.startsWith('/\\')) {
+      return null;
+    }
+    let tree: UrlTree;
+    try {
+      tree = this.router.parseUrl(url);
+    } catch {
+      return null;
+    }
+    const first = tree.root.children[PRIMARY_OUTLET]?.segments[0]?.path;
+    if (!first || first === 'connect') {
+      return null;
+    }
+    const params: Record<string, unknown> = { ...tree.queryParams, host };
+    delete params['unauthorized'];
+    delete params['returnUrl'];
+    tree.queryParams = params;
+    return tree;
   }
 
   private describeFailure(host: string, status: number, body: unknown): string {

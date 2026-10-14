@@ -48,15 +48,41 @@ export class ConnectionService {
     this.refreshService.refresh();
   }
 
-  disconnect(): void {
-    const previousHost = this.hostState();
-    this.hostState.set(undefined);
+  /**
+   * Follows the host of the URL when it differs from the connected one (Back
+   * and Forward, pasted or bookmarked links). The URL already carries the
+   * host, and credentials belong to the previous cluster, so they are
+   * dropped; a secured cluster then goes through the sign-in flow.
+   */
+  followUrlHost(host: string): void {
+    const normalizedHost = host.trim();
+    if (!normalizedHost || normalizedHost === this.hostState()) {
+      return;
+    }
+    this.hostState.set(normalizedHost);
     this.usernameState.set(undefined);
     this.passwordState.set(undefined);
-    void this.router.navigate(['/connect'], {
+    this.recentHosts.remember(normalizedHost);
+    this.refreshService.refresh();
+  }
+
+  /**
+   * Leaves the cluster for the connect screen. The connection is only cleared
+   * once the navigation succeeded: when the user keeps unsaved edits (a
+   * cancelled `canDeactivate`), the page stays connected and usable.
+   */
+  async disconnect(): Promise<boolean> {
+    const previousHost = this.hostState();
+    const navigated = await this.router.navigate(['/connect'], {
       queryParams: previousHost ? { host: previousHost } : {},
       replaceUrl: true,
     });
+    if (navigated && this.hostState() === previousHost) {
+      this.hostState.set(undefined);
+      this.usernameState.set(undefined);
+      this.passwordState.set(undefined);
+    }
+    return navigated;
   }
 
   snapshot(): ConnectionSnapshot {

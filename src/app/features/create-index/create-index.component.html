@@ -236,6 +236,8 @@
             [readOnly]="copying()"
             placeholder='{ "settings": { … }, "mappings": { "properties": { … } } }'
             ariaLabel="Settings and mappings JSON"
+            [invalid]="!!bodyError()"
+            [describedBy]="bodyError() ? 'create-index-body-error' : null"
             (submit)="create()"
           />
           @if (copying()) {
@@ -245,12 +247,14 @@
           }
         </div>
 
-        <div class="editor-status" aria-live="polite">
+        <!-- Only the coarse state is live: the details change on every keystroke. -->
+        <span class="visually-hidden" role="status">{{ bodyStatus() }}</span>
+        <div class="editor-status">
           @if (bodyError(); as error) {
             <span class="badge badge-red">
               <i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid JSON
             </span>
-            <span class="editor-status__message text-danger">{{ error }}</span>
+            <span id="create-index-body-error" class="editor-status__message text-danger">{{ error }}</span>
           } @else if (usesBody()) {
             <span class="badge badge-green">
               <i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON
@@ -275,7 +279,7 @@
     </div>
   </div>
 
-  <div class="create-actions" role="region" aria-label="Create index">
+  <div class="create-actions" role="region" aria-label="Create index actions">
     <div class="create-actions__summary min-w-0">
       <span class="method method-PUT">PUT</span>
       <span class="create-actions__target mono truncate" [class.is-placeholder]="!name()">/{{ name() || 'index-name' }}</span>

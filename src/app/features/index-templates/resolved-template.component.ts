@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { matchesText } from '../../core/format';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { Origin, ResolvedView } from './index-templates.models';
@@ -422,17 +423,18 @@ export class ResolvedTemplateComponent {
 
   readonly fieldCount = computed(() => this.view().fields.filter((field) => !field.multi).length);
 
+  /** Regex-or-substring filter, like every other filter of the app. */
   readonly visibleSettings = computed(() => {
-    const needle = this.filter().trim().toLocaleLowerCase();
+    const query = this.filter();
     return this.view().settings.filter(
-      (entry) => !needle || entry.key.toLocaleLowerCase().includes(needle) || entry.value.toLocaleLowerCase().includes(needle),
+      (entry) => matchesText(entry.key, query) || matchesText(entry.value, query),
     );
   });
 
   readonly visibleFields = computed(() => {
-    const needle = this.filter().trim().toLocaleLowerCase();
+    const query = this.filter();
     return this.view().fields.filter(
-      (entry) => !needle || entry.path.toLocaleLowerCase().includes(needle) || entry.type.toLocaleLowerCase().includes(needle),
+      (entry) => matchesText(entry.path, query) || matchesText(entry.type, query),
     );
   });
 

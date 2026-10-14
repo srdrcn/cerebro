@@ -251,7 +251,7 @@
         <cerebro-empty
           icon="bi-exclamation-triangle"
           heading="Could not load aliases"
-          text="The cluster did not answer the aliases request."
+          [text]="loadError() ?? 'The cluster did not answer the aliases request.'"
         >
           <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
@@ -507,9 +507,9 @@
                   </div>
                   <cerebro-code-editor
                     #filterEditor
-                    class="filter-editor"
-                    [class.is-invalid]="showError('filter')"
                     ariaLabel="Alias filter (JSON query)"
+                    [invalid]="showError('filter')"
+                    [describedBy]="showError('filter') ? 'alias-filter-error' : 'alias-filter-hint'"
                     placeholder='{ "term": { "status": "active" } }'
                     [minLines]="6"
                     [maxLines]="18"
@@ -640,7 +640,7 @@
                 <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
                 <span>
                   {{ pluralize(problemCount(), 'change') }} cannot be applied as staged.
-                  Revert or edit {{ problemCount() === 1 ? 'it' : 'them' }} to continue.
+                  Revert or edit {{ problemCount() | plural: 'it' : 'them' }} to continue.
                 </span>
               </div>
             } @else {
@@ -678,7 +678,7 @@
       <span class="pending-bar__text">
         <strong>{{ pluralize(pending().length, 'change') }}</strong> pending
         @if (problemCount() > 0) {
-          <span class="pending-bar__problem">· {{ problemCount() }} {{ problemCount() === 1 ? 'needs' : 'need' }} attention</span>
+          <span class="pending-bar__problem">· {{ problemCount() }} {{ problemCount() | plural: 'needs' : 'need' }} attention</span>
         }
       </span>
       <button type="button" class="btn btn-primary btn-sm" (click)="reviewPending()">

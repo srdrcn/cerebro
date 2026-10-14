@@ -19,6 +19,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterStatusService } from '../../core/cluster-status.service';
 import { ConnectionService } from '../../core/connection.service';
+import { healthLabel, healthTone } from '../../core/health';
 import { NAVIGATION, navigationItemFor } from '../../core/navigation';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService, refreshIntervalLabel } from '../../core/refresh.service';
@@ -82,30 +83,33 @@ export class ShellComponent {
   readonly healthDotClass = computed(() => {
     const status = this.status.status();
     if (status) {
-      return `dot-${status}`;
+      return `dot-${healthTone(status)}`;
     }
     return this.status.reachable() ? 'dot-gray dot-pulse' : 'dot-red';
   });
 
-  readonly healthLabel = computed(() => {
+  /** "Yellow", or the connection state while the health is unknown. */
+  readonly statusText = computed(() => {
     const status = this.status.status();
     if (status) {
-      return `health ${status}`;
+      return healthLabel(status);
     }
-    return this.status.reachable() ? 'connecting' : 'unreachable';
+    return this.status.reachable() ? 'Connecting' : 'Unreachable';
+  });
+
+  /** "Cluster demo, health yellow" for the cluster menu button. */
+  readonly clusterMenuLabel = computed(() => {
+    const state = this.status.status() ? `health ${this.statusText()}` : this.statusText();
+    return `Cluster ${this.status.displayName()}, ${state.toLowerCase()}`;
   });
 
   readonly healthBadgeClass = computed(() => {
-    switch (this.status.status()) {
-      case 'green':
-        return 'badge-green';
-      case 'yellow':
-        return 'badge-yellow';
-      case 'red':
-        return 'badge-red';
-      default:
-        return this.status.reachable() ? '' : 'badge-red';
+    const status = this.status.status();
+    if (status) {
+      return `badge-${healthTone(status)}`;
     }
+    // An unreachable cluster has no health but deserves the red badge.
+    return this.status.reachable() ? '' : 'badge-red';
   });
 
   readonly themeLabel = computed(() => {

@@ -142,7 +142,11 @@ export interface ResolvedView {
   readonly lifecycle: string | null;
 }
 
-/** Starting point of a new composable index template. */
+/**
+ * Starting point of a new composable index template. It holds no
+ * `_meta.description`: a sample sentence would look like stored metadata and
+ * be saved unnoticed.
+ */
 export const NEW_INDEX_TEMPLATE_BODY = JSON.stringify(
   {
     index_patterns: ['my-index-*'],
@@ -156,9 +160,6 @@ export const NEW_INDEX_TEMPLATE_BODY = JSON.stringify(
         properties: {},
       },
       aliases: {},
-    },
-    _meta: {
-      description: 'What this template is for',
     },
   },
   null,
@@ -175,9 +176,6 @@ export const NEW_COMPONENT_TEMPLATE_BODY = JSON.stringify(
       },
     },
     version: 1,
-    _meta: {
-      description: 'Reusable building block for index templates',
-    },
   },
   null,
   2,

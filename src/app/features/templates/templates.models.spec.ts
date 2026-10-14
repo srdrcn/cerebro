@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NEW_TEMPLATE_BODY,
   analyzeTemplateBody,
+  isManagedLegacyTemplate,
   parseTemplateBody,
   searchLegacyTemplates,
   templateBodyWarning,
@@ -45,17 +46,32 @@ describe('template search', () => {
   ];
 
   it('matches the name or any pattern, case-insensitively', () => {
-    expect(searchLegacyTemplates(templates, 'LOGS').map((item) => item.name)).toEqual(['logs-template']);
-    expect(searchLegacyTemplates(templates, 'app-').map((item) => item.name)).toEqual(['logs-template']);
-    expect(searchLegacyTemplates(templates, '7-*').map((item) => item.name)).toEqual(['.monitoring-es']);
+    expect(searchLegacyTemplates(templates, 'LOGS', true).map((item) => item.name)).toEqual(['logs-template']);
+    expect(searchLegacyTemplates(templates, 'app-', true).map((item) => item.name)).toEqual(['logs-template']);
+    expect(searchLegacyTemplates(templates, 'es-7-', true).map((item) => item.name)).toEqual(['.monitoring-es']);
   });
 
-  it('returns every template sorted by name for a blank query', () => {
-    expect(searchLegacyTemplates(templates, '  ').map((item) => item.name)).toEqual([
-      '.monitoring-es',
+  it('accepts regular expressions and falls back to text for invalid ones', () => {
+    expect(searchLegacyTemplates(templates, '^metrics$', true).map((item) => item.name)).toEqual(['metrics']);
+    // "*" alone is not a valid expression: it matches the literal star of every pattern.
+    expect(searchLegacyTemplates(templates, '*', true)).toHaveLength(3);
+    expect(searchLegacyTemplates([{ name: 'a', template: {} }], '*', true)).toHaveLength(0);
+  });
+
+  it('lists user templates first, sorted by name, for a blank query', () => {
+    expect(searchLegacyTemplates(templates, '  ', true).map((item) => item.name)).toEqual([
       'logs-template',
       'metrics',
+      '.monitoring-es',
     ]);
+  });
+
+  it('hides managed templates unless asked', () => {
+    expect(searchLegacyTemplates(templates, '', false).map((item) => item.name)).toEqual(['logs-template', 'metrics']);
+    expect(searchLegacyTemplates(templates, 'monitoring', false)).toEqual([]);
+    expect(isManagedLegacyTemplate({ name: '.monitoring-es', template: {} })).toBe(true);
+    expect(isManagedLegacyTemplate({ name: 'fleet', template: { _meta: { managed: true } } })).toBe(true);
+    expect(isManagedLegacyTemplate({ name: 'logs', template: {} })).toBe(false);
   });
 });
 

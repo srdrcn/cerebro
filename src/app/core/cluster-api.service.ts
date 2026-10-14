@@ -11,6 +11,12 @@ import {
 } from './api-envelope';
 import { ConnectionService } from './connection.service';
 
+/** A Play endpoint call that Elasticsearch accepted. */
+export interface CompletedRequest {
+  readonly path: string;
+  readonly data: Readonly<Record<string, unknown>>;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ClusterApiService {
   private readonly http = inject(HttpClient);
@@ -18,6 +24,7 @@ export class ClusterApiService {
   private readonly alerts = inject(AlertService);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
+  private readonly successListeners = new Set<(request: CompletedRequest) => void>();
 
   async post<T>(
     path: string,
@@ -25,9 +32,31 @@ export class ClusterApiService {
   ): Promise<T> {
     const envelope = await this.rawPost<T>(path, data);
     if (isSuccessfulEnvelope(envelope)) {
+      this.notifySuccess(path, data);
       return envelope.body;
     }
     throw new ClusterApiError(envelope.status, envelope.body);
+  }
+
+  /**
+   * Calls `listener` after every successful `post()`, before the caller sees
+   * the result (used to tell the user's own changes from external ones).
+   * Returns the function that removes the listener.
+   */
+  onSuccess(listener: (request: CompletedRequest) => void): () => void {
+    this.successListeners.add(listener);
+    return () => this.successListeners.delete(listener);
+  }
+
+  private notifySuccess(path: string, data: Record<string, unknown>): void {
+    const request: CompletedRequest = { path: this.relativePath(path), data };
+    for (const listener of this.successListeners) {
+      try {
+        listener(request);
+      } catch {
+        // Listeners are best-effort and must not fail the request.
+      }
+    }
   }
 
   async rawPost<T>(

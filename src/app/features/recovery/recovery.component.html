@@ -19,7 +19,13 @@
           <i class="bi bi-clock-history" aria-hidden="true"></i> All
         </button>
       </div>
-      <button type="button" class="btn" [disabled]="raw() === undefined" (click)="viewJson()">
+      <button
+        type="button"
+        class="btn"
+        [disabled]="raw() === undefined || !recoveries()?.length"
+        [attr.title]="recoveries()?.length === 0 ? 'No recoveries to show' : null"
+        (click)="viewJson()"
+      >
         <i class="bi bi-braces" aria-hidden="true"></i> View JSON
       </button>
     </div>

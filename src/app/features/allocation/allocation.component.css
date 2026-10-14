@@ -520,6 +520,22 @@ td.alloc-nodes__weight {
   font-size: var(--text-sm);
 }
 
+/* ---- Stale data after a failed refresh ----------------------------------- */
+
+.alloc-stale {
+  align-items: center;
+}
+
+.alloc-stale__retry {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.alloc-copies-stale {
+  margin: var(--space-3) var(--space-5) 0;
+  font-size: var(--text-sm);
+}
+
 .alloc-unassigned__item {
   align-items: flex-start;
 }
@@ -682,6 +698,11 @@ td.alloc-nodes__weight {
   .alloc-aside__hint {
     padding-right: var(--space-4);
     padding-left: var(--space-4);
+  }
+
+  .alloc-copies-stale {
+    margin-right: var(--space-4);
+    margin-left: var(--space-4);
   }
 }
 

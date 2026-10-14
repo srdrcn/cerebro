@@ -1,4 +1,6 @@
-import { pluralize } from '../../core/format';
+import { ClusterApiError } from '../../core/api-envelope';
+import { elasticsearchReason } from '../../core/errors';
+import { matchesText, pluralize } from '../../core/format';
 import { JsonRecord, isRecord, stringList } from '../../core/json';
 import {
   AliasEntry,
@@ -161,30 +163,43 @@ export function componentTemplateRow(
 }
 
 /**
- * Case-insensitive search over name, patterns, component names and the
- * description. Managed templates are left out unless asked for. Sorted by
- * name with user templates first.
+ * Search over name, patterns, component names and the description, with the
+ * regex-or-substring semantics of the other filters (`matchesText`). Managed
+ * templates are left out unless asked for. Sorted by name with user
+ * templates first.
  */
 export function filterRows(
   rows: readonly TemplateRow[],
   query: string,
   showManaged: boolean,
 ): TemplateRow[] {
-  const needle = query.trim().toLocaleLowerCase();
+  const matches = (value: string): boolean => matchesText(value, query);
   return rows
     .filter((row) => showManaged || !row.managed)
     .filter(
       (row) =>
-        !needle ||
-        row.name.toLocaleLowerCase().includes(needle) ||
-        row.patterns.some((pattern) => pattern.toLocaleLowerCase().includes(needle)) ||
-        row.composedOf.some((name) => name.toLocaleLowerCase().includes(needle)) ||
-        (row.description?.toLocaleLowerCase().includes(needle) ?? false),
+        !query.trim() ||
+        matches(row.name) ||
+        row.patterns.some(matches) ||
+        row.composedOf.some(matches) ||
+        (row.description !== null && matches(row.description)),
     )
     .sort(
       (left, right) =>
         Number(left.managed) - Number(right.managed) || left.name.localeCompare(right.name),
     );
+}
+
+/**
+ * Whether a failed request reached an Elasticsearch without the composable
+ * template APIs (before 7.8): an unknown endpoint, not an unreachable host.
+ */
+export function isUnknownEndpoint(error: unknown): boolean {
+  if (error instanceof ClusterApiError && (error.status === 404 || error.status === 405)) {
+    return true;
+  }
+  const reason = elasticsearchReason(error) ?? '';
+  return /no handler found|incorrect HTTP method|index name \[_(index|component)_template\]/i.test(reason);
 }
 
 /* ------------------------------------------------------------------ */

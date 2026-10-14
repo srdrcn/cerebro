@@ -499,10 +499,6 @@
   min-height: 18px;
 }
 
-.filter-editor.is-invalid {
-  border-color: var(--red);
-}
-
 /* Pending changes */
 .pending-card .card-header .badge {
   min-width: 26px;

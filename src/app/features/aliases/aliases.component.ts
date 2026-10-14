@@ -19,8 +19,8 @@ import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage } from '../../core/errors';
-import { pluralize } from '../../core/format';
+import { failureMessage, readableReason } from '../../core/errors';
+import { plural, pluralize } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
@@ -116,6 +116,8 @@ export class AliasesComponent implements PendingChangesAware {
   readonly indices = signal<readonly string[] | undefined>(undefined);
   readonly loading = signal(false);
   readonly failed = signal(false);
+  /** Why the aliases could not be loaded, as a sentence for the error state. */
+  readonly loadError = signal<string | undefined>(undefined);
   readonly saving = signal(false);
 
   // ---- Table --------------------------------------------------------------
@@ -326,14 +328,17 @@ export class AliasesComponent implements PendingChangesAware {
         try {
           this.aliases.set(normalizeAliasRecords(aliases.value));
           this.failed.set(false);
+          this.loadError.set(undefined);
           aliasesLoaded = true;
         } catch (error: unknown) {
           // An unexpected response shape.
           this.failed.set(true);
+          this.loadError.set(readableReason(error));
           this.alerts.error(failureMessage('Could not load aliases', error), error);
         }
       } else {
         this.failed.set(true);
+        this.loadError.set(readableReason(aliases.reason));
         this.alerts.error(failureMessage('Could not load aliases', aliases.reason), aliases.reason);
       }
       if (indices.status === 'fulfilled') {
@@ -344,6 +349,7 @@ export class AliasesComponent implements PendingChangesAware {
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
+        this.loadError.set(readableReason(error));
         this.alerts.error(failureMessage('Could not load aliases', error), error);
       }
     } finally {
@@ -358,6 +364,7 @@ export class AliasesComponent implements PendingChangesAware {
     this.aliases.set(undefined);
     this.indices.set(undefined);
     this.failed.set(false);
+    this.loadError.set(undefined);
     this.changes.set([]);
     this.expanded.set(new Set());
     this.page.set(1);
@@ -660,7 +667,7 @@ export class AliasesComponent implements PendingChangesAware {
     }
     return this.dialogs.confirm({
       title: 'Discard unsaved changes?',
-      message: `${pluralize(count, 'staged alias change')} ${count === 1 ? 'has' : 'have'} not been applied and will be lost.`,
+      message: `${pluralize(count, 'staged alias change')} ${plural(count, 'has', 'have')} not been applied and will be lost.`,
       confirmLabel: 'Discard changes',
       cancelLabel: 'Keep editing',
       tone: 'danger',

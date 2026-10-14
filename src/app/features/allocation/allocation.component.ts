@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -16,7 +16,7 @@ import { ClusterApiError } from '../../core/api-envelope';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { formatRelative, formatTimestamp, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -77,7 +77,7 @@ type ExplainState =
 
 @Component({
   selector: 'cerebro-allocation',
-  imports: [BytesPipe, EmptyStateComponent, FormsModule, MeterComponent, NumberPipe, RouterLink],
+  imports: [BytesPipe, DatePipe, EmptyStateComponent, FormsModule, MeterComponent, NumberPipe, RouterLink],
   templateUrl: './allocation.component.html',
   styleUrl: './allocation.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -98,6 +98,10 @@ export class AllocationComponent {
   readonly indices = signal<readonly string[] | undefined>(undefined);
   readonly copies = signal<readonly ShardCopy[] | undefined>(undefined);
   readonly copiesFailed = signal(false);
+  /** Reason of the last failed shard list refresh while the older list stays on screen. */
+  readonly copiesStale = signal<string | undefined>(undefined);
+  /** Time of the last successful shard list load. */
+  readonly copiesAt = signal<number | null>(null);
 
   // Form.
   readonly formIndex = signal('');
@@ -111,6 +115,8 @@ export class AllocationComponent {
   readonly request = signal<ExplainRequest | null>(null);
   readonly explaining = signal(false);
   readonly now = signal(Date.now());
+  /** Reason of the last failed background refresh while an older explanation stays on screen. */
+  readonly explainStale = signal<string | undefined>(undefined);
   /** Screen reader announcement; only meaningful changes, never silent refreshes. */
   readonly announcement = signal('');
 
@@ -219,8 +225,15 @@ export class AllocationComponent {
 
   constructor() {
     // Deep links (?index=&shard=&primary=&node=) and back/forward navigation.
+    // The query params also emit when only another param changes (the host
+    // is written to the URL while connecting): the same shard is not explained twice.
+    let previous: ExplainRequest | null | undefined;
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const request = parseExplainParams((name) => params.get(name));
+      if (previous !== undefined && sameRequest(request, previous)) {
+        return;
+      }
+      previous = request;
       this.request.set(request);
       if (request?.node) {
         void this.loadNodeNames();
@@ -231,7 +244,11 @@ export class AllocationComponent {
         this.formPrimary.set(request.primary);
       }
       this.submitted.set(false);
-      void this.explain(request);
+      // The first explanation waits for the first refresh tick below: the
+      // page may be created and dropped again while the app shell appears.
+      if (!this.firstTick) {
+        void this.explain(request);
+      }
     });
 
     effect(() => {
@@ -244,6 +261,7 @@ export class AllocationComponent {
         void this.loadClusterData();
         if (this.firstTick) {
           this.firstTick = false;
+          void this.explain(this.request());
         } else {
           this.rerun(true);
         }
@@ -269,11 +287,15 @@ export class AllocationComponent {
     }
     if (shards.status === 'fulfilled') {
       this.copies.set(parseShardCopies(shards.value));
+      this.copiesAt.set(Date.now());
       this.copiesFailed.set(false);
+      this.copiesStale.set(undefined);
     } else {
       this.copiesFailed.set(true);
       if (this.copies() === undefined) {
         this.alerts.error(failureMessage('Could not load the shard list', shards.reason), shards.reason);
+      } else {
+        this.copiesStale.set(readableReason(shards.reason) ?? 'The request failed');
       }
     }
   }
@@ -294,6 +316,7 @@ export class AllocationComponent {
       }
       const view = normalizeExplanation(raw);
       const previous = this.state();
+      this.explainStale.set(undefined);
       this.state.set({ kind: 'done', view, raw, at: Date.now(), target: requestFor(view, request) });
       this.now.set(Date.now());
       const sameShard =
@@ -323,12 +346,17 @@ export class AllocationComponent {
         if (!silent || this.state().kind !== 'all-assigned') {
           this.announcement.set('All shards are assigned.');
         }
+        this.explainStale.set(undefined);
         this.state.set({ kind: 'all-assigned', at: Date.now() });
-      } else if (!silent || this.state().kind !== 'done') {
+      } else if (silent && this.state().kind === 'done') {
+        // A failed refresh keeps the last explanation on screen, marked as stale.
+        this.explainStale.set(readableReason(error) ?? 'The request failed');
+      } else {
         const failure = describeExplainError(error, request);
         if (!silent || this.state().kind !== 'error') {
           this.announcement.set(`${failure.title}. ${failure.message}`);
         }
+        this.explainStale.set(undefined);
         this.state.set({ kind: 'error', failure, body: this.errorBody(error) });
       }
     } finally {

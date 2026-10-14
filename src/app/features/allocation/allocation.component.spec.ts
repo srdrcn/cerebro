@@ -1,9 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, ParamMap, convertToParamMap, provideRouter } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiError } from '../../core/api-envelope';
 import { ClusterApiService } from '../../core/cluster-api.service';
+import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { AllocationComponent } from './allocation.component';
 import { RawAllocationExplain } from './allocation.models';
@@ -38,6 +40,7 @@ describe('AllocationComponent', () => {
         { provide: ClusterApiService, useValue: { post } },
         { provide: AlertService, useValue: alerts },
         { provide: DialogService, useValue: dialogs },
+        { provide: ConnectionService, useValue: { connected: () => true, hostQuery: () => ({}) } },
       ],
     });
   });
@@ -57,8 +60,11 @@ describe('AllocationComponent', () => {
     });
   }
 
+  /** Creates the page and runs its first refresh tick, which explains the requested shard. */
   function component(): AllocationComponent {
-    return TestBed.runInInjectionContext(() => new AllocationComponent());
+    const target = TestBed.runInInjectionContext(() => new AllocationComponent());
+    TestBed.tick();
+    return target;
   }
 
   it('explains the next unassigned shard on landing and fills the form with it', async () => {
@@ -122,6 +128,61 @@ describe('AllocationComponent', () => {
     await target.explain({ index: 'overflow-test', shard: 1, primary: false }, true);
 
     expect(target.state().kind).toBe('done');
+    expect(target.explainStale()).toBe('Boom');
+
+    fail = false;
+    await target.explain({ index: 'overflow-test', shard: 1, primary: false }, true);
+    expect(target.explainStale()).toBeUndefined();
+  });
+
+  it('explains once when the query params emit again for the same shard', async () => {
+    const params = new BehaviorSubject<ParamMap>(
+      convertToParamMap({ index: 'overflow-test', shard: '1', primary: 'false' }),
+    );
+    TestBed.overrideProvider(ActivatedRoute, { useValue: { queryParamMap: params, snapshot: {} } });
+    respond(async () => UNASSIGNED);
+    const target = component();
+    await vi.waitFor(() => expect(target.state().kind).toBe('done'));
+
+    // The host is written to the URL while connecting.
+    params.next(
+      convertToParamMap({ index: 'overflow-test', shard: '1', primary: 'false', host: 'http://localhost:9200' }),
+    );
+    await Promise.resolve();
+    const explains = () => post.mock.calls.filter(([path]) => path === 'allocation/explain').length;
+    expect(explains()).toBe(1);
+
+    params.next(convertToParamMap({ index: 'overflow-test', shard: '0', primary: 'true' }));
+    await vi.waitFor(() => expect(explains()).toBe(2));
+  });
+
+  it('waits for the first refresh tick before explaining', () => {
+    respond(async () => UNASSIGNED);
+    // The shell may create the page and drop it again before it ever renders.
+    TestBed.runInInjectionContext(() => new AllocationComponent());
+    expect(post).not.toHaveBeenCalledWith('allocation/explain', expect.anything());
+  });
+
+  it('marks the shard list as stale when a refresh fails', async () => {
+    let fail = false;
+    post.mockImplementation(async (path: string) => {
+      if (path === 'cat') {
+        if (fail) {
+          throw new ClusterApiError(500, { error: { type: 'x', reason: 'cat failed' } });
+        }
+        return [{ index: 'overflow-test', shard: '1', prirep: 'r', state: 'UNASSIGNED', node: null }];
+      }
+      return path === 'commons/indices' ? ['overflow-test'] : UNASSIGNED;
+    });
+    const target = component();
+    await target.loadClusterData();
+    expect(target.copiesStale()).toBeUndefined();
+
+    fail = true;
+    await target.loadClusterData();
+    expect(target.unassignedCount()).toBe(1);
+    expect(target.copiesStale()).toBe('Cat failed');
+    expect(alerts.error).not.toHaveBeenCalled();
   });
 
   it('ignores answers to superseded requests', async () => {

@@ -1,6 +1,6 @@
 Cerebro
 ------------
-[![Docker Pulls](https://img.shields.io/docker/pulls/lmenezes/cerebro.svg)](https://hub.docker.com/r/lmenezes/cerebro)
+[![Docker Pulls](https://img.shields.io/docker/pulls/chosenwar/cerebro.svg)](https://hub.docker.com/r/chosenwar/cerebro)
 [![build and security](https://github.com/lmenezes/cerebro/actions/workflows/scala.yml/badge.svg?branch=master)](https://github.com/lmenezes/cerebro/actions/workflows/scala.yml)
 
 cerebro is an open source (MIT License) Elasticsearch administration tool built with Scala, Play Framework and Angular.
@@ -32,7 +32,7 @@ sbt test
 sbt stage
 ```
 
-The Angular build writes the browser bundle to `public/js`; Play packages that output with the backend distribution. The frontend architecture and design system are described in [docs/FRONTEND.md](docs/FRONTEND.md).
+The Angular build writes the browser bundle to `public/js`; Play packages that output with the backend distribution. The bundle is build output and is not kept in git, so run `npm run build` (or `npm start` while developing) before `sbt run` or `sbt stage`. The frontend architecture and design system are described in [docs/FRONTEND.md](docs/FRONTEND.md).
 
 ### Installation
 - Download from [https://github.com/lmenezes/cerebro/releases](https://github.com/lmenezes/cerebro/releases)
@@ -66,7 +66,13 @@ docker run --rm \
 
 Both `linux/amd64` and `linux/arm64` are published. The final Wolfi/OpenJDK 17 image runs as UID/GID `65532`, includes SBOM/provenance attestations, and was scanned with Trivy 0.74.0 at all severities with zero known OS or Java-library findings on August 26, 2026.
 
-Visit [cerebro-docker](https://github.com/lmenezes/cerebro-docker) for further information. 
+To build the image yourself from this repository (the [Dockerfile](Dockerfile) builds the web application and the backend, and runs their tests):
+
+```sh
+docker build -t chosenwar/cerebro:0.9.4-secure .
+```
+
+The [examples folder](./examples) has Docker Compose files for basic auth and LDAP.
 
 ### Configuration
 
@@ -83,6 +89,9 @@ LDAP can be configured using environment variables. If you typically run cerebro
 you can pass a file with all the env vars. The file would look like:
 
 ```bash
+# Application secret, required by the Docker image
+CEREBRO_SECRET=replace-with-a-long-random-secret
+
 # Set it to ldap to activate ldap authorization
 AUTH_TYPE=ldap
 
@@ -126,7 +135,7 @@ LDAP_BIND_PWD=adminpass
 You can the pass this file as argument using:
 
 ```bash
- docker run -p 9000:9000 --env-file env-ldap  lmenezes/cerebro
+docker run -p 9000:9000 --env-file env-ldap chosenwar/cerebro:0.9.4-secure
 ```
 
 There are some examples of configuration in the [examples folder](./examples).

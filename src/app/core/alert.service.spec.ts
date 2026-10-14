@@ -50,6 +50,43 @@ describe('AlertService', () => {
     expect(service.alerts().some((alert) => alert.id === transient)).toBe(false);
   });
 
+  it('keeps errors until they are dismissed', () => {
+    vi.useFakeTimers();
+    const service = TestBed.inject(AlertService);
+
+    const id = service.error('Could not delete index', { reason: 'boom' });
+    vi.advanceTimersByTime(60_000);
+
+    expect(service.alerts().map((alert) => alert.id)).toEqual([id]);
+    expect(service.alerts()[0].timeoutMs).toBe(0);
+  });
+
+  it('pauses countdowns and continues with the time left', () => {
+    vi.useFakeTimers();
+    const service = TestBed.inject(AlertService);
+
+    service.success('Saved', undefined, 1_000);
+    vi.advanceTimersByTime(600);
+    service.pauseAll();
+    expect(service.paused()).toBe(true);
+    vi.advanceTimersByTime(5_000);
+    expect(service.alerts()).toHaveLength(1);
+
+    // Raised while paused: waits too.
+    service.info('Refreshed', undefined, 1_000);
+    vi.advanceTimersByTime(5_000);
+    expect(service.alerts()).toHaveLength(2);
+
+    // "Saved" had 400 ms left, "Refreshed" its full second.
+    service.resumeAll();
+    vi.advanceTimersByTime(350);
+    expect(service.alerts().map((alert) => alert.message)).toEqual(['Refreshed', 'Saved']);
+    vi.advanceTimersByTime(100);
+    expect(service.alerts().map((alert) => alert.message)).toEqual(['Refreshed']);
+    vi.advanceTimersByTime(600);
+    expect(service.alerts()).toHaveLength(0);
+  });
+
   it('does not show a second toast for an error that was already reported', () => {
     const service = TestBed.inject(AlertService);
     const networkFailure = new Error('connection refused');

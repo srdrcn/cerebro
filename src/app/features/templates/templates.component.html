@@ -12,12 +12,12 @@
     <div class="card list-card">
       <div class="card-header">
         <h2 class="card-title spacer"><i class="bi bi-files" aria-hidden="true"></i> Templates</h2>
-        @if (templates(); as all) {
+        @if (templates() !== undefined) {
           <span class="count-label">
-            @if (query().trim() && all.length > 0) {
-              <strong>{{ rows().length | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'template' }}
+            @if (query().trim() && totalCount() > 0) {
+              <strong>{{ rows().length | num }}</strong> of {{ totalCount() | num }} {{ totalCount() | plural: 'template' }}
             } @else {
-              <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'template' }}
+              <strong>{{ totalCount() | num }}</strong> {{ totalCount() | plural: 'template' }}
             }
           </span>
         }
@@ -41,6 +41,13 @@
               placeholder="Filter by name or pattern"
               ariaLabel="Filter templates by name or index pattern"
             />
+            @if (managedCount() > 0) {
+              <label class="switch managed-switch">
+                <input type="checkbox" [ngModel]="showManaged()" (ngModelChange)="showManaged.set($event)" />
+                Show managed templates
+                <span class="count">{{ managedCount() }}</span>
+              </label>
+            }
           </div>
           <ul class="list template-list" aria-label="Legacy templates" [attr.aria-busy]="loading() || saving() ? true : null">
             @for (row of rows(); track row.name) {
@@ -77,14 +84,28 @@
               </li>
             } @empty {
               <li>
-                <cerebro-empty
-                  icon="bi-funnel"
-                  heading="No matching templates"
-                  text="No template name or index pattern contains this text."
-                  [compact]="true"
-                >
-                  <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
-                </cerebro-empty>
+                @if (query().trim()) {
+                  <cerebro-empty
+                    icon="bi-funnel"
+                    heading="No matching templates"
+                    [text]="showManaged() || managedCount() === 0 ? 'No template name or index pattern matches this filter.' : 'No template name or index pattern matches this filter. Managed templates are hidden.'"
+                    [compact]="true"
+                  >
+                    <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+                    @if (!showManaged() && managedCount() > 0) {
+                      <button type="button" class="btn btn-sm btn-ghost" (click)="showManaged.set(true)">Show managed</button>
+                    }
+                  </cerebro-empty>
+                } @else {
+                  <cerebro-empty
+                    icon="bi-file-earmark-code"
+                    heading="No custom legacy templates"
+                    text="Only managed templates exist, and they are hidden. Create one to give new indices predefined settings, mappings and aliases."
+                    [compact]="true"
+                  >
+                    <button type="button" class="btn btn-sm" (click)="showManaged.set(true)">Show managed</button>
+                  </cerebro-empty>
+                }
               </li>
             }
           </ul>
@@ -103,7 +124,7 @@
         <cerebro-empty
           icon="bi-exclamation-triangle"
           heading="Could not load templates"
-          text="The cluster did not answer the templates request."
+          [text]="loadError() ?? 'The cluster did not answer the templates request.'"
         >
           <button type="button" class="btn btn-sm" (click)="load()">
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
@@ -253,14 +274,18 @@
             [minLines]="24"
             [maxLines]="70"
             ariaLabel="Template body JSON"
+            [invalid]="!!bodyError()"
+            [describedBy]="bodyError() ? 'template-body-error' : null"
             (submit)="save()"
           />
-          <div class="editor-status" aria-live="polite">
+          <!-- Only the coarse state is live: the details change on every keystroke. -->
+          <span class="visually-hidden" role="status">{{ bodyStatus() }}</span>
+          <div class="editor-status">
             @if (bodyError(); as error) {
               <span class="badge badge-red">
                 <i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid JSON
               </span>
-              <span class="editor-status__message text-danger">{{ error }}</span>
+              <span id="template-body-error" class="editor-status__message text-danger">{{ error }}</span>
             } @else if (bodyWarning(); as warning) {
               <span class="badge badge-yellow">
                 <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check

@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import {
+  LAST_ACTIVE_REFRESH_STORAGE_KEY,
   REFRESH_STORAGE_KEY,
   RefreshService,
   refreshIntervalLabel,
@@ -81,6 +82,48 @@ describe('RefreshService', () => {
     fake.document.hidden = false;
     fake.listeners.get('visibilitychange')?.();
     expect(service.tick()).toBeGreaterThan(initialTick);
+  });
+
+  it('resumes with the interval used before pausing', () => {
+    const fake = fakeDocument();
+    TestBed.configureTestingModule({
+      providers: [{ provide: DOCUMENT, useValue: fake.document as unknown as Document }],
+    });
+    const service = TestBed.inject(RefreshService);
+
+    service.setInterval(60_000);
+    service.toggle();
+    expect(service.paused()).toBe(true);
+
+    service.toggle();
+    expect(service.interval()).toBe(60_000);
+    expect(localStorage.getItem(REFRESH_STORAGE_KEY)).toBe('60000');
+  });
+
+  it('remembers the previous interval across reloads while paused', () => {
+    localStorage.setItem(REFRESH_STORAGE_KEY, '0');
+    localStorage.setItem(LAST_ACTIVE_REFRESH_STORAGE_KEY, '5000');
+    const fake = fakeDocument();
+    TestBed.configureTestingModule({
+      providers: [{ provide: DOCUMENT, useValue: fake.document as unknown as Document }],
+    });
+    const service = TestBed.inject(RefreshService);
+
+    expect(service.paused()).toBe(true);
+    service.resume();
+    expect(service.interval()).toBe(5_000);
+  });
+
+  it('resumes with the default when no previous interval is known', () => {
+    localStorage.setItem(REFRESH_STORAGE_KEY, '0');
+    const fake = fakeDocument();
+    TestBed.configureTestingModule({
+      providers: [{ provide: DOCUMENT, useValue: fake.document as unknown as Document }],
+    });
+    const service = TestBed.inject(RefreshService);
+
+    service.resume();
+    expect(service.interval()).toBe(15_000);
   });
 
   it('rejects unsupported intervals', () => {

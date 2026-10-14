@@ -3,7 +3,8 @@ package controllers
 import javax.inject.Inject
 
 import controllers.auth.AuthenticationModule
-import elastic.{ElasticClient, Error}
+import elastic.{ElasticClient, Error, HTTPElasticClient}
+import exceptions.InvalidParamException
 import models.overview.ClusterOverview
 import models.{CerebroResponse, Hosts, ShardStats}
 import services.overview.OverviewDataService
@@ -22,6 +23,9 @@ class ClusterOverviewController @Inject()(val authentication: AuthenticationModu
 
   def disableShardAllocation = process { request =>
     val kind = request.get("kind")
+    if (!HTTPElasticClient.AllocationKinds.contains(kind)) {
+      throw InvalidParamException("kind", HTTPElasticClient.AllocationKinds)
+    }
     client.disableShardAllocation(request.target, kind).map { response =>
       CerebroResponse(response.status, response.body)
     }

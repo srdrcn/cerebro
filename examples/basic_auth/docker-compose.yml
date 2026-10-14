@@ -1,8 +1,10 @@
 version: '3'
 services:
   cerebro:
-    image: lmenezes/cerebro
+    image: chosenwar/cerebro:0.9.4-secure
     environment:
+      # Required by the image: replace with a long random value
+      - CEREBRO_SECRET=replace-with-a-long-random-secret
       # Basic auth using admin/admin user
       - AUTH_TYPE=basic
       - BASIC_AUTH_USER=admin

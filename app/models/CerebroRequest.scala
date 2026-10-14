@@ -1,7 +1,7 @@
 package models
 
 import controllers.auth.AuthRequest
-import exceptions.{MissingRequiredParamException, MissingTargetHostException}
+import exceptions.MissingRequiredParamException
 import play.api.libs.json.{JsArray, JsObject, JsValue}
 
 case class CerebroRequest(val target: ElasticServer, body: JsValue, val user: Option[User]) {
@@ -26,9 +26,6 @@ case class CerebroRequest(val target: ElasticServer, body: JsValue, val user: Op
   def getBooleanOpt(name: String): Option[Boolean] =
     (body \ name).asOpt[Boolean]
 
-  def getIntOpt(name: String): Option[Int] =
-    (body \ name).asOpt[Int]
-
   def getArrayValue(name: String): JsArray =
     (body \ name).asOpt[JsArray].getOrElse(throw MissingRequiredParamException(name))
 
@@ -48,7 +45,7 @@ object CerebroRequest {
   def apply(request: AuthRequest[JsValue], hosts: Hosts): CerebroRequest = {
     val body = request.body
 
-    val hostName = (body \ "host").asOpt[String].getOrElse(throw MissingTargetHostException)
+    val hostName = (body \ "host").asOpt[String].getOrElse(throw MissingRequiredParamException("host"))
     val username = (body \ "username").asOpt[String]
     val password = (body \ "password").asOpt[String]
 

@@ -52,7 +52,7 @@
 
     <cerebro-menu
       triggerClass="cluster-switcher"
-      [label]="'Cluster ' + status.displayName() + ', ' + healthLabel()"
+      [label]="clusterMenuLabel()"
       [tooltip]="collapsed()"
       [minWidth]="260"
     >
@@ -73,7 +73,7 @@
           <div class="truncate mono text-muted text-xs">{{ connection.host() }}</div>
         </div>
         <span class="badge badge-uppercase" [class]="'badge badge-uppercase ' + healthBadgeClass()">
-          {{ status.status() ?? (status.reachable() ? 'connecting' : 'unreachable') }}
+          {{ statusText() }}
         </span>
       </div>
       <div class="menu-separator"></div>

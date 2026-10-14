@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -10,7 +11,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { BytesPipe, DurationPipe, NumberPipe, PluralPipe } from '../../shared/format.pipes';
@@ -46,6 +47,7 @@ const ROLE_FILTERS: readonly RoleFilter[] = [
   selector: 'cerebro-nodes',
   imports: [
     BytesPipe,
+    DatePipe,
     DurationPipe,
     EmptyStateComponent,
     MenuComponent,
@@ -69,6 +71,10 @@ export class NodesComponent {
   readonly nodes = signal<readonly NodesNode[] | undefined>(undefined);
   readonly loading = signal(false);
   readonly failed = signal(false);
+  /** Sentence explaining the last failed load. */
+  readonly loadError = signal<string | undefined>(undefined);
+  /** Time of the last successful load, shown while a refresh fails. */
+  readonly loadedAt = signal<number | null>(null);
   readonly name = signal('');
   readonly roles = signal<Readonly<Record<RoleKey, boolean>>>({
     master: true,
@@ -125,11 +131,15 @@ export class NodesComponent {
       const nodes = await this.api.post<readonly NodesNode[]>('nodes');
       if (sequence === this.loadSequence) {
         this.nodes.set(nodes);
+        this.loadedAt.set(Date.now());
         this.failed.set(false);
+        this.loadError.set(undefined);
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
+        // A failed refresh keeps the last figures on screen, marked as stale.
         this.failed.set(true);
+        this.loadError.set(readableReason(error));
         this.alerts.error(failureMessage('Could not load nodes', error), error);
       }
     } finally {

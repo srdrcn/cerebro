@@ -347,11 +347,13 @@ First cerebro release.
 - Rebuild every screen from scratch on a dedicated design system (see `docs/FRONTEND.md`): sidebar navigation, light and dark themes that follow the operating system, bundled Inter / JetBrains Mono fonts and responsive layouts down to phone width.
 - New command palette (Ctrl/⌘ + K) to jump to any page, action or index.
 - Auto-refresh can be paused, remembers its interval and skips polling while the tab is hidden.
-- Repeated notifications are folded together, and error details stay open while they are being read.
+- Repeated notifications are folded together, error notifications stay until they are dismissed, and hovering or focusing the notifications pauses their countdown.
+- Index creations and deletions made in cerebro are no longer announced a second time by the cluster change notifications.
+- Pausing and resuming auto-refresh from the command palette keeps the chosen interval.
 - Connect screen remembers recently used cluster addresses (never credentials).
 - JSON is edited and displayed with a themed, searchable code editor with folding.
 - Editors ask before in-app navigation discards unsaved changes.
-- Accessibility: visible focus ring, AA text contrast in both themes, Tab leaves the code editor (Ctrl + ] / [ indent), keyboard-friendly menus and mobile navigation.
+- Accessibility: visible focus ring, AA text contrast in both themes (including editor line numbers), Tab leaves the code editor (Ctrl + ] / [ indent), the page follows the editor caret, Ctrl/⌘ + K opens the command palette from an editor, keyboard-friendly menus and mobile navigation.
 - Drop Bootstrap CSS; feature pages are lazy loaded to keep the initial bundle small.
 
 #### Bug fixes
@@ -360,10 +362,18 @@ First cerebro release.
 - Aliases report their write index and hidden flags.
 - The overview computes disk usage from the space available to Elasticsearch, matching the nodes view and the disk allocation thresholds.
 - Repeated identical errors (for example while the cluster is unreachable) no longer flood the screen.
+- Disabling and enabling shard allocation from the overview writes the persistent setting and clears the transient one, so no leftover transient value overrides later persistent changes. Unknown allocation kinds are rejected.
+- Pipelines, ILM policies, templates and other resources whose name contains a space can be updated and deleted (the space was sent as "+").
+- The `?host=` of the URL now always decides which cluster is shown (Back/Forward, bookmarks, pasted links).
+- Cancelling "Switch cluster" because of unsaved edits keeps the page connected.
+- Requests without a target host are answered with 400 "Missing required parameter host" instead of a 500.
 
 #### Maintenance
 
 - Remove the unused `zone.js` dependency, the legacy logo image and the obsolete Travis CI configuration (CI runs on GitHub Actions).
+- Remove the unused `/commons/nodes` endpoint and unused Elasticsearch client methods.
+- `public/js` is build output and no longer tracked in git; run `npm run build` before `sbt run` / `sbt stage`.
+- Docker examples and documentation use the in-repository image (`chosenwar/cerebro`).
 
 #### Security updates
 

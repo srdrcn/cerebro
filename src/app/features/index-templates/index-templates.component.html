@@ -57,7 +57,10 @@
     <!-- ---------------------------------------------------------- List -->
     <div class="card it-list-card">
       <div class="card-header">
-        <h2 class="card-title spacer">{{ tab() === 'index' ? 'Index templates' : 'Component templates' }}</h2>
+        <!-- The tab above names the kind; the short title leaves room for the count and the action. -->
+        <h2 class="card-title spacer">
+          <i class="bi" [class]="'bi ' + (tab() === 'index' ? 'bi-layers' : 'bi-puzzle')" aria-hidden="true"></i> Templates
+        </h2>
         @if (loaded()) {
           <span class="count-label">
             @if (query().trim()) {
@@ -71,10 +74,10 @@
           type="button"
           class="btn btn-sm btn-soft"
           [disabled]="saving()"
-          [attr.title]="saving() ? 'Wait for the template to be saved' : null"
+          [attr.title]="saving() ? 'Wait for the template to be saved' : tab() === 'index' ? 'New index template' : 'New component template'"
           (click)="newTemplate()"
         >
-          <i class="bi bi-plus-lg" aria-hidden="true"></i> New
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> New template
         </button>
       </div>
 
@@ -208,7 +211,7 @@
         <cerebro-empty
           icon="bi-exclamation-triangle"
           heading="Could not load templates"
-          text="The cluster did not answer the template requests. Composable templates need Elasticsearch 7.8 or later."
+          [text]="loadError() ?? 'The cluster did not answer the template requests.'"
         >
           <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
@@ -385,19 +388,19 @@
                 <dt class="section-label">Version</dt>
                 <dd class="tabular">{{ facts.version ?? '–' }}</dd>
               </div>
-              @if (facts.description || facts.meta.length > 0) {
-                <div class="it-fact it-fact--full">
-                  <dt class="section-label">{{ facts.description ? 'Description' : 'Metadata' }}</dt>
-                  <dd>
-                    @if (facts.description) {
-                      <span class="it-description">{{ facts.description }}</span>
-                    }
-                    @for (entry of facts.meta; track entry.key) {
-                      <span class="tag" [title]="entry.key + ': ' + entry.value"><span class="tag-key">{{ entry.key }}</span><span>{{ entry.value }}</span></span>
-                    }
-                  </dd>
-                </div>
-              }
+              <div class="it-fact it-fact--full">
+                <dt class="section-label">{{ facts.description || facts.meta.length === 0 ? 'Description' : 'Metadata' }}</dt>
+                <dd>
+                  @if (facts.description) {
+                    <span class="it-description">{{ facts.description }}</span>
+                  } @else if (facts.meta.length === 0) {
+                    <span class="text-muted">No description <span class="text-xs">(set <span class="mono">_meta.description</span>)</span></span>
+                  }
+                  @for (entry of facts.meta; track entry.key) {
+                    <span class="tag" [title]="entry.key + ': ' + entry.value"><span class="tag-key">{{ entry.key }}</span><span>{{ entry.value }}</span></span>
+                  }
+                </dd>
+              </div>
             </dl>
           }
 
@@ -469,19 +472,23 @@
               [minLines]="20"
               [maxLines]="60"
               [ariaLabel]="(kind() === 'index' ? 'Index template' : 'Component template') + ' body JSON'"
+              [invalid]="bodyInvalid()"
+              [describedBy]="bodyInvalid() ? 'it-body-error' : null"
               (submit)="save()"
             />
-            <div class="it-status" aria-live="polite">
+            <!-- Only the coarse state is live: the details change on every keystroke. -->
+            <span class="visually-hidden" role="status">{{ bodyStatus() }}</span>
+            <div class="it-status">
               @if (syntaxError(); as error) {
                 <span class="badge badge-red">
                   <i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid JSON
                 </span>
-                <span class="it-status__message text-danger">{{ error }}</span>
+                <span id="it-body-error" class="it-status__message text-danger">{{ error }}</span>
               } @else if (errors().length > 0) {
                 <span class="badge badge-red">
                   <i class="bi bi-x-circle-fill" aria-hidden="true"></i> {{ pluralize(errors().length, 'problem') }}
                 </span>
-                <span class="it-status__message text-danger">{{ errors()[0]?.message }}</span>
+                <span id="it-body-error" class="it-status__message text-danger">{{ errors()[0]?.message }}</span>
               } @else if (warnings().length > 0) {
                 <span class="badge badge-yellow">
                   <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check

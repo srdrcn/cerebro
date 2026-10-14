@@ -17,7 +17,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize, sentence } from '../../core/format';
 import { JsonRecord, isRecord } from '../../core/json';
 import { validateResourceName } from '../../core/names';
@@ -56,6 +56,7 @@ import {
   indexTemplateRow,
   isDataStreamTemplate,
   isManagedTemplate,
+  isUnknownEndpoint,
   kindParam,
   metaDescription,
   metaTags,
@@ -143,6 +144,8 @@ export class IndexTemplatesComponent implements PendingChangesAware {
   readonly componentTemplates = signal<readonly ComponentTemplateEntry[] | undefined>(undefined);
   readonly loading = signal(false);
   readonly failed = signal(false);
+  /** Why the lists could not be loaded, as a sentence for the error state. */
+  readonly loadError = signal<string | undefined>(undefined);
 
   readonly tab = signal<TemplateKind>(parseKind(this.route.snapshot.queryParamMap.get('tab')));
   readonly query = signal('');
@@ -247,6 +250,15 @@ export class IndexTemplatesComponent implements PendingChangesAware {
   });
   readonly errors = computed(() => this.problems().filter((problem) => problem.level === 'error'));
   readonly warnings = computed(() => this.problems().filter((problem) => problem.level === 'warning'));
+  readonly bodyInvalid = computed(() => this.syntaxError() !== null || this.errors().length > 0);
+  /** Announced to screen readers: changes on transitions only, not per keystroke. */
+  readonly bodyStatus = computed(() => {
+    if (this.syntaxError() !== null) {
+      return 'Invalid JSON';
+    }
+    const errors = this.errors().length;
+    return errors > 0 ? pluralize(errors, 'problem') : 'Valid JSON';
+  });
 
   /** What the editor content describes; falls back to the stored template. */
   readonly summary = computed<EditorSummary | null>(() => {
@@ -330,7 +342,19 @@ export class IndexTemplatesComponent implements PendingChangesAware {
   private async applyParams(params: ParamMap): Promise<void> {
     const kind = parseKind(params.get('tab'));
     const name = params.get('name');
-    if (kind === this.tab() && (name === null || (name === this.selected() && kind === this.kind()))) {
+    if (kind === this.tab() && name === null) {
+      // A link to this page without a template (sidebar, palette) keeps the
+      // open template: write it back so the URL still describes the page.
+      if (this.loaded()) {
+        if (this.selected() !== null) {
+          this.syncUrl();
+        }
+      } else {
+        this.pendingName = null;
+      }
+      return;
+    }
+    if (kind === this.tab() && name === this.selected() && kind === this.kind()) {
       return;
     }
     if (!this.loaded()) {
@@ -364,10 +388,12 @@ export class IndexTemplatesComponent implements PendingChangesAware {
       this.indexTemplates.set(indexResponse?.index_templates ?? []);
       this.componentTemplates.set(componentResponse?.component_templates ?? []);
       this.failed.set(false);
+      this.loadError.set(undefined);
       this.openPending();
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
+        this.loadError.set(this.describeLoadFailure(error));
         this.alerts.error(failureMessage('Could not load index templates', error), error);
       }
     } finally {
@@ -375,6 +401,19 @@ export class IndexTemplatesComponent implements PendingChangesAware {
         this.loading.set(false);
       }
     }
+  }
+
+  /**
+   * The reason for the error state. The version hint is only added when the
+   * cluster answered without the composable template APIs, not when it is down.
+   */
+  private describeLoadFailure(error: unknown): string {
+    const reason = readableReason(error);
+    const versionHint = 'Composable templates need Elasticsearch 7.8 or later.';
+    if (isUnknownEndpoint(error)) {
+      return reason ? `${reason} ${versionHint}` : versionHint;
+    }
+    return reason ?? 'The cluster did not answer the template requests.';
   }
 
   /** Asks the browser to confirm closing the tab while edits are unsaved. */

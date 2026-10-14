@@ -591,6 +591,11 @@ cerebro-root {
   background: var(--blue);
 }
 
+/* Hovering or focusing the notifications pauses their countdown. */
+.toasts.is-paused .toast__progress {
+  animation-play-state: paused;
+}
+
 @keyframes toast-progress {
   to {
     transform: scaleX(0);

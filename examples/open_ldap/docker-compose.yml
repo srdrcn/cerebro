@@ -1,8 +1,10 @@
 version: '3'
 services:
   cerebro:
-    image: lmenezes/cerebro
-    environment: 
+    image: chosenwar/cerebro:0.9.4-secure
+    environment:
+      # Required by the image: replace with a long random value
+      - CEREBRO_SECRET=replace-with-a-long-random-secret
       - AUTH_TYPE=ldap
       - LDAP_URL=ldap://ldap:389
       - LDAP_BASE_DN=DC=example,DC=org

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ClusterApiError } from '../../core/api-envelope';
 import {
   ComponentTemplateEntry,
   IndexTemplateEntry,
@@ -20,6 +21,7 @@ import {
   indexPatterns,
   indexTemplateRow,
   isManagedTemplate,
+  isUnknownEndpoint,
   kindParam,
   mappingFields,
   mappingOptions,
@@ -179,6 +181,28 @@ describe('filterRows', () => {
     expect(filterRows(rows, 'app-mappings', false).map((row) => row.name)).toEqual(['app-events']);
     expect(filterRows(rows, 'default logs', true).map((row) => row.name)).toEqual(['logs']);
     expect(filterRows(rows, '  ', false)).toHaveLength(2);
+  });
+
+  it('accepts regular expressions like the other filters', () => {
+    expect(filterRows(rows, '^app-a', false).map((row) => row.name)).toEqual(['app-archive']);
+    expect(filterRows(rows, 'events$', false).map((row) => row.name)).toEqual(['app-events']);
+  });
+});
+
+describe('isUnknownEndpoint', () => {
+  it('recognises an Elasticsearch without the composable template APIs', () => {
+    const oldCluster = new ClusterApiError(400, {
+      error: { root_cause: [{ reason: "Invalid index name [_index_template], must not start with '_'." }] },
+    });
+    expect(isUnknownEndpoint(oldCluster)).toBe(true);
+    expect(isUnknownEndpoint(new ClusterApiError(404, {}))).toBe(true);
+    expect(isUnknownEndpoint(new ClusterApiError(400, { error: 'no handler found for uri [/_component_template]' }))).toBe(true);
+  });
+
+  it('does not blame the version for an unreachable or refusing cluster', () => {
+    expect(isUnknownEndpoint(new ClusterApiError(500, { error: 'Connection refused: localhost/127.0.0.1:9299' }))).toBe(false);
+    expect(isUnknownEndpoint(new ClusterApiError(403, { error: { reason: 'action is unauthorized' } }))).toBe(false);
+    expect(isUnknownEndpoint(new Error('network'))).toBe(false);
   });
 });
 

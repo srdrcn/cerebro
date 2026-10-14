@@ -1,4 +1,4 @@
-import { matchesText } from '../../core/format';
+import { matchesText, plural } from '../../core/format';
 import { isRecord } from '../../core/json';
 import { AliasChange, AliasRecord } from './aliases.models';
 
@@ -191,7 +191,7 @@ export function describePendingChanges(
     return competing.length > 0
       ? {
           ...base,
-          problem: `${competing.join(', ')} ${competing.length === 1 ? 'is' : 'are'} also a write index of this alias.`,
+          problem: `${competing.join(', ')} ${plural(competing.length, 'is', 'are')} also a write index of this alias.`,
         }
       : base;
   });

@@ -6,6 +6,16 @@
   margin-bottom: var(--space-5);
 }
 
+.nodes-stale {
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+.nodes-stale__retry {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .stat__value--text {
   font-size: var(--text-lg);
 }

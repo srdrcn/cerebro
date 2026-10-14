@@ -108,6 +108,24 @@
       @switch (state().kind) {
         @case ('done') {
           @if (view(); as view) {
+            @if (explainStale(); as reason) {
+              <div class="callout callout-warning alloc-stale" role="alert">
+                <i class="bi bi-wifi-off" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <strong>Could not refresh the explanation.</strong>
+                  Showing data from {{ explainedAt() | date: 'HH:mm:ss' }}. {{ reason }}
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-sm alloc-stale__retry"
+                  [class.is-loading]="explaining()"
+                  [disabled]="explaining()"
+                  (click)="rerun()"
+                >
+                  <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                </button>
+              </div>
+            }
             <article class="card" aria-labelledby="alloc-summary-title">
               <div class="card-header alloc-summary__header">
                 <div class="alloc-identity">
@@ -127,6 +145,8 @@
                   <span class="text-xs text-muted alloc-summary__time" [title]="'Explained at ' + formatTimestamp(explainedAt())">
                     @if (explaining()) {
                       <span class="spinner alloc-inline-spinner" aria-hidden="true"></span> Updating…
+                    } @else if (explainStale()) {
+                      <span class="dot dot-yellow" aria-hidden="true"></span> Last updated {{ formatRelative(explainedAt(), now()) }}
                     } @else {
                       Updated {{ formatRelative(explainedAt(), now()) }}
                     }
@@ -505,36 +525,48 @@
           } @else {
             <div class="loading-block" role="status"><span class="spinner"></span> Loading shards…</div>
           }
-        } @else if (unassigned().length === 0) {
-          <cerebro-empty [compact]="true" class="alloc-all-good" icon="bi-check2-all" heading="Nothing unassigned" text="Every shard copy is allocated to a node." />
         } @else {
-          <p class="alloc-aside__hint">Choose a shard to see why Elasticsearch cannot place it.</p>
-          <ul class="list">
-            @for (group of visibleUnassigned(); track group.index) {
-              <li class="list-item alloc-unassigned__item">
-                <div class="list-item__body">
-                  <div class="list-item__title truncate" [title]="group.index">{{ group.index }}</div>
-                  <div class="alloc-unassigned__chips">
-                    @for (copy of group.copies; track $index) {
-                      <button
-                        type="button"
-                        class="alloc-chip"
-                        [class.is-primary]="copy.primary"
-                        [attr.aria-pressed]="isCurrentCopy(copy)"
-                        [attr.aria-label]="'Explain unassigned ' + (copy.primary ? 'primary' : 'replica') + ' of shard ' + copy.shard + ' of ' + group.index"
-                        [title]="(copy.primary ? 'Primary' : 'Replica') + ' of shard ' + copy.shard"
-                        (click)="explainCopy(copy)"
-                      >{{ copy.shard }}</button>
-                    }
-                  </div>
-                </div>
-              </li>
-            }
-          </ul>
-          @if (unassigned().length > unassignedLimit) {
-            <div class="card-footer text-sm text-muted">
-              and {{ pluralize(unassigned().length - unassignedLimit, 'more index', 'more indices') }} with unassigned shards
+          @if (copiesStale(); as reason) {
+            <div class="callout callout-warning alloc-copies-stale" role="status">
+              <i class="bi bi-wifi-off" aria-hidden="true"></i>
+              <div class="min-w-0">
+                <strong>Could not refresh the shard list.</strong>
+                Showing data from {{ copiesAt() | date: 'HH:mm:ss' }}. {{ reason }}
+                <button type="button" class="link-button" (click)="loadClusterData()">Try again</button>
+              </div>
             </div>
+          }
+          @if (unassigned().length === 0) {
+            <cerebro-empty [compact]="true" class="alloc-all-good" icon="bi-check2-all" heading="Nothing unassigned" text="Every shard copy is allocated to a node." />
+          } @else {
+            <p class="alloc-aside__hint">Choose a shard to see why Elasticsearch cannot place it.</p>
+            <ul class="list">
+              @for (group of visibleUnassigned(); track group.index) {
+                <li class="list-item alloc-unassigned__item">
+                  <div class="list-item__body">
+                    <div class="list-item__title truncate" [title]="group.index">{{ group.index }}</div>
+                    <div class="alloc-unassigned__chips">
+                      @for (copy of group.copies; track $index) {
+                        <button
+                          type="button"
+                          class="alloc-chip"
+                          [class.is-primary]="copy.primary"
+                          [attr.aria-pressed]="isCurrentCopy(copy)"
+                          [attr.aria-label]="'Explain unassigned ' + (copy.primary ? 'primary' : 'replica') + ' of shard ' + copy.shard + ' of ' + group.index"
+                          [title]="(copy.primary ? 'Primary' : 'Replica') + ' of shard ' + copy.shard"
+                          (click)="explainCopy(copy)"
+                        >{{ copy.shard }}</button>
+                      }
+                    </div>
+                  </div>
+                </li>
+              }
+            </ul>
+            @if (unassigned().length > unassignedLimit) {
+              <div class="card-footer text-sm text-muted">
+                and {{ pluralize(unassigned().length - unassignedLimit, 'more index', 'more indices') }} with unassigned shards
+              </div>
+            }
           }
         }
       </section>

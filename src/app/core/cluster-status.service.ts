@@ -2,9 +2,10 @@ import { DOCUMENT } from '@angular/common';
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { ClusterApiService } from './cluster-api.service';
 import { ConnectionService } from './connection.service';
+import { HealthTone, healthTone } from './health';
 import { RefreshService } from './refresh.service';
 
-export type ClusterHealth = 'green' | 'yellow' | 'red';
+export type ClusterHealth = Exclude<HealthTone, 'gray'>;
 
 interface NavbarResponse {
   readonly status: string;
@@ -13,8 +14,10 @@ interface NavbarResponse {
   readonly number_of_nodes?: number;
 }
 
-export function isClusterHealth(value: unknown): value is ClusterHealth {
-  return value === 'green' || value === 'yellow' || value === 'red';
+/** The health colour of a response, `undefined` when it is not a known one. */
+function clusterHealth(value: unknown): ClusterHealth | undefined {
+  const tone = healthTone(value);
+  return tone === 'gray' ? undefined : tone;
 }
 
 /**
@@ -68,7 +71,7 @@ export class ClusterStatusService {
       if (sequence !== this.sequence || expectedHost !== this.connection.host()) {
         return;
       }
-      this.status.set(isClusterHealth(data.status) ? data.status : undefined);
+      this.status.set(clusterHealth(data.status));
       this.clusterName.set(data.cluster_name);
       this.username.set(data.username);
       this.reachable.set(true);
