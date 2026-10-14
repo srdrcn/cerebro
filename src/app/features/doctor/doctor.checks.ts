@@ -1,6 +1,6 @@
 import { formatBytes, formatDuration, formatNumber, plural, pluralize } from '../../core/format';
 import { isRecord, stringList } from '../../core/json';
-import { unassignedReasonMeta } from '../allocation/allocation.utils';
+import { unassignedReason } from '../../core/shards';
 import {
   CheckOutcome,
   ClusterSettingsLayers,
@@ -452,7 +452,7 @@ const unassignedShards: DoctorCheck = {
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([index, group]) => {
           const shards = [...group.shards].sort((left, right) => left - right);
-          const reasons = [...group.reasons].map((reason) => unassignedReasonMeta(reason).label);
+          const reasons = [...group.reasons].map((reason) => unassignedReason(reason).label);
           const tooMany =
             !primary && maxReplicas >= 0 && (replicasByIndex.get(index) ?? 0) > maxReplicas ? 'more replicas than nodes' : null;
           return {

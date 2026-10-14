@@ -2,6 +2,7 @@ import { elasticsearchReason } from '../../core/errors';
 import { formatBytes, formatDuration, humanize, sentence } from '../../core/format';
 import { isRecord } from '../../core/json';
 import { isInternalAttribute } from '../../core/node-attributes';
+import { unassignedReason } from '../../core/shards';
 import {
   CatShardRow,
   CheckView,
@@ -272,36 +273,6 @@ export function shardStateMeta(state: string | undefined): DecisionMeta {
   return STATES[key] ?? { label: humanize(key) || 'Unknown', tone: 'gray' };
 }
 
-interface ReasonMeta {
-  readonly label: string;
-  readonly text: string;
-}
-
-const UNASSIGNED_REASONS: Readonly<Record<string, ReasonMeta>> = {
-  INDEX_CREATED: { label: 'Index created', text: 'The index was just created and this copy has not been allocated yet.' },
-  CLUSTER_RECOVERED: { label: 'Cluster recovered', text: 'The cluster restarted (full cluster recovery) and this copy has not been allocated since.' },
-  INDEX_REOPENED: { label: 'Index reopened', text: 'The index was reopened after being closed.' },
-  DANGLING_INDEX_IMPORTED: { label: 'Dangling index imported', text: 'A dangling index was imported into the cluster.' },
-  NEW_INDEX_RESTORED: { label: 'Restored into a new index', text: 'A snapshot was restored into a new index.' },
-  EXISTING_INDEX_RESTORED: { label: 'Restored into an existing index', text: 'A snapshot was restored into a closed index.' },
-  REPLICA_ADDED: { label: 'Replica added', text: 'The number of replicas was increased.' },
-  ALLOCATION_FAILED: { label: 'Allocation failed', text: 'A previous attempt to allocate this copy failed.' },
-  NODE_LEFT: { label: 'Node left', text: 'The node holding this copy left the cluster.' },
-  NODE_RESTARTING: { label: 'Node restarting', text: 'The node holding this copy is restarting (registered with the node shutdown API).' },
-  REROUTE_CANCELLED: { label: 'Reroute cancelled', text: 'A reroute command explicitly cancelled this copy.' },
-  REINITIALIZED: { label: 'Reinitialized', text: 'The copy went back from started to initializing.' },
-  REALLOCATED_REPLICA: { label: 'Replica reallocated', text: 'A better location was found, so the existing replica allocation was cancelled.' },
-  PRIMARY_FAILED: { label: 'Primary failed', text: 'The primary failed while this replica was initializing.' },
-  FORCED_EMPTY_PRIMARY: { label: 'Forced empty primary', text: 'An empty primary was forcibly allocated.' },
-  MANUAL_ALLOCATION: { label: 'Manual allocation', text: 'The copy was allocated manually with the reroute API.' },
-  INDEX_CLOSED: { label: 'Index closed', text: 'The index was closed.' },
-};
-
-export function unassignedReasonMeta(reason: string | undefined): ReasonMeta {
-  const key = (reason ?? '').toUpperCase();
-  return UNASSIGNED_REASONS[key] ?? { label: humanize(key) || 'Unknown', text: '' };
-}
-
 const LAST_ALLOCATION_STATUS: Readonly<Record<string, string>> = {
   no_attempt: 'Not attempted yet',
   deciders_no: 'Every node said no',
@@ -320,7 +291,7 @@ export function lastAllocationStatusLabel(status: string | undefined): string | 
 
 export function toUnassignedView(info: RawUnassignedInfo): UnassignedView {
   const reason = info.reason ?? '';
-  const meta = unassignedReasonMeta(reason);
+  const meta = unassignedReason(reason);
   const at = info.at ? Date.parse(info.at) : Number.NaN;
   const lastStatusLabel = lastAllocationStatusLabel(info.last_allocation_status);
   const details = info.details?.trim();

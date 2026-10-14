@@ -434,7 +434,7 @@ describe('shards', () => {
       docs: null,
       size: null,
       unassignedReason: 'NODE_LEFT',
-      unassignedReasonLabel: 'Node left the cluster',
+      unassignedReasonLabel: 'Node left',
       unassignedFor: '5m',
       stateLabel: 'Unassigned',
     });

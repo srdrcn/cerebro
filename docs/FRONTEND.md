@@ -46,6 +46,7 @@ src/
 | `json.ts` | `isRecord`, `stringList` for defensive parsing of Elasticsearch responses. |
 | `layout.ts` | `STACKED_LAYOUT_QUERY` (the 1180px breakpoint of rule 11), `isStackedLayout()`, `revealWhenStacked(element, { onlyBelowFold? })`: after a pick in a master/detail list, scrolls the editor or detail into view when the layout is stacked. Never repeat the breakpoint in TypeScript. |
 | `names.ts` | `validateResourceName(name, noun)` (template, snapshot and repository names) and the invalid character lists for resource and index names. ILM policy and pipeline ids follow their own rules in their features. |
+| `shards.ts` | `unassignedReason(reason)`: label and explanation of an `unassigned.reason`. |
 | `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
 | `pending-changes.guard.ts` | `PendingChangesAware` (`confirmDiscard()`) and the `confirmDiscardPendingChanges` route guard. |
 | `preferences.ts` | best-effort `localStorage` helpers for per-browser UI preferences; writes return `false` when the browser refused them. |
@@ -297,6 +298,8 @@ templates, lifecycle policies, pipelines, repositories) share one layout:
   `-accent` | `-outline`, `.badge-lg`, `.badge-uppercase`; `.tag` (with
   `.tag-key`); `.dot` + `-green` | `-yellow` | `-red` | `-gray`, `.dot-pulse`,
   `-accent`, `.dot-sm` (inside a badge, e.g. "Unsaved changes");
+  `.tone-green` | `-yellow` | `-red` | `-blue` | `-purple` | `-gray` set `--tone`,
+  `--tone-soft` and `--tone-text` for custom diagnostic visuals;
   `.method` + `.method-GET|POST|PUT|DELETE|HEAD`; `kbd`/`.kbd`; `.spinner`
   (`-lg`); `.skeleton`; `.count-label`; `.toolbar`, `.toolbar-divider`.
 

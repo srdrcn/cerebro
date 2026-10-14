@@ -1,6 +1,7 @@
 import { formatBytes, formatDuration, formatNumber, humanize, pluralize, textMatcher } from '../../core/format';
 import { HealthTone, healthTone } from '../../core/health';
 import { isRecord } from '../../core/json';
+import { unassignedReason } from '../../core/shards';
 import {
   AliasDetail,
   CatShardRow,
@@ -714,31 +715,11 @@ export function statSections(group: JsonObject | null | undefined): readonly Sta
 
 /* ---- Shards ---------------------------------------------------------------- */
 
-const UNASSIGNED_REASONS: Readonly<Record<string, string>> = {
-  INDEX_CREATED: 'Index was just created',
-  CLUSTER_RECOVERED: 'Cluster restarted (full cluster recovery)',
-  INDEX_REOPENED: 'Index was reopened',
-  DANGLING_INDEX_IMPORTED: 'Dangling index imported',
-  NEW_INDEX_RESTORED: 'Restored into a new index',
-  EXISTING_INDEX_RESTORED: 'Restored into a closed index',
-  REPLICA_ADDED: 'Replica was added',
-  ALLOCATION_FAILED: 'Allocation failed',
-  NODE_LEFT: 'Node left the cluster',
-  NODE_RESTARTING: 'Node is restarting',
-  REROUTE_CANCELLED: 'Reroute was cancelled',
-  REINITIALIZED: 'Shard was re-initialised',
-  REALLOCATED_REPLICA: 'Better replica location found',
-  PRIMARY_FAILED: 'Primary shard failed',
-  FORCED_EMPTY_PRIMARY: 'Forced empty primary',
-  MANUAL_ALLOCATION: 'Manual allocation',
-  INDEX_CLOSED: 'Index was closed',
-};
-
 export function unassignedReasonLabel(reason: string | null): string | null {
   if (!reason) {
     return null;
   }
-  return UNASSIGNED_REASONS[reason] ?? humanize(reason);
+  return unassignedReason(reason).label;
 }
 
 function shardState(state: string): ShardState {

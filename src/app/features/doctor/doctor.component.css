@@ -2,32 +2,6 @@
   display: block;
 }
 
-/* ---- Tones (verdict, severity) ----------------------------------------- */
-
-.tone-green {
-  --tone: var(--green);
-  --tone-soft: var(--green-soft);
-  --tone-text: var(--green-text);
-}
-
-.tone-yellow {
-  --tone: var(--yellow);
-  --tone-soft: var(--yellow-soft);
-  --tone-text: var(--yellow-text);
-}
-
-.tone-red {
-  --tone: var(--red);
-  --tone-soft: var(--red-soft);
-  --tone-text: var(--red-text);
-}
-
-.tone-blue {
-  --tone: var(--blue);
-  --tone-soft: var(--blue-soft);
-  --tone-text: var(--blue-text);
-}
-
 .doctor-stale {
   margin-bottom: var(--space-4);
 }

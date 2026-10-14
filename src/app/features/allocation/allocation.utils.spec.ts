@@ -32,7 +32,6 @@ import {
   sortNodeDecisions,
   summarizeDecisions,
   unassignedGroups,
-  unassignedReasonMeta,
   visibleAttributes,
 } from './allocation.utils';
 
@@ -221,10 +220,7 @@ describe('decisions and deciders', () => {
 });
 
 describe('unassigned info', () => {
-  it('explains unassigned reasons and allocation statuses', () => {
-    expect(unassignedReasonMeta('NODE_LEFT').label).toBe('Node left');
-    expect(unassignedReasonMeta('node_left').text).toContain('left the cluster');
-    expect(unassignedReasonMeta('FUTURE_REASON')).toEqual({ label: 'Future reason', text: '' });
+  it('explains allocation statuses', () => {
     expect(lastAllocationStatusLabel('deciders_no')).toBe('Every node said no');
     expect(lastAllocationStatusLabel('brand_new')).toBe('Brand new');
     expect(lastAllocationStatusLabel(undefined)).toBeUndefined();
