@@ -167,7 +167,9 @@
               </td>
               <td class="num tabular col-wide" [class.text-muted]="row.size === null">
                 @if (row.size === null) {
-                  <span title="Not reported for scaling pools (_cat/thread_pool leaves size empty)">–</span>
+                  <span title="Not reported by this Elasticsearch version">–</span>
+                } @else if (row.threads !== null && row.threads !== row.size) {
+                  <span [title]="(row.threads | num) + ' threads alive now, up to ' + (row.size | num)">{{ row.size | num }}</span>
                 } @else {
                   {{ row.size | num }}
                 }

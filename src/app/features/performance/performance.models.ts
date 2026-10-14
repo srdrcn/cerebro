@@ -146,6 +146,7 @@ export interface PoolLoad {
 
 /** One `_cat/thread_pool?format=json` row: every column is a string (or null). */
 export interface RawThreadPoolRow {
+  readonly node_id?: string | null;
   readonly node_name?: string | null;
   readonly name?: string | null;
   readonly type?: string | null;
@@ -154,11 +155,15 @@ export interface RawThreadPoolRow {
   readonly rejected?: string | null;
   readonly completed?: string | null;
   readonly size?: string | null;
+  /** Scaling pools: minimum and maximum threads, and the threads alive now. */
+  readonly core?: string | null;
+  readonly max?: string | null;
+  readonly pool_size?: string | null;
   readonly queue_size?: string | null;
 }
 
 export interface ThreadPoolRow {
-  /** `<node>/<pool>` (`_cat/thread_pool` has no node id column, see the sample helpers). */
+  /** `<node id>/<pool>` (node names can repeat and survive restarts with new ids). */
   readonly key: string;
   readonly node: string;
   readonly pool: string;
@@ -168,8 +173,10 @@ export interface ThreadPoolRow {
   readonly queue: number;
   readonly rejected: number;
   readonly completed: number;
-  /** Threads in the pool; `null` when `_cat/thread_pool` leaves `size` empty (scaling pools). */
+  /** Thread capacity: the size of a fixed pool, the maximum of a scaling pool; `null` when not reported. */
   readonly size: number | null;
+  /** Threads alive now (`pool_size`); scaling pools grow towards `size`. */
+  readonly threads: number | null;
   /** Queue capacity; `null` for unbounded queues (`-1`). */
   readonly queueSize: number | null;
   readonly interesting: boolean;

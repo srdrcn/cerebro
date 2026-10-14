@@ -148,10 +148,9 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
     execute(path, "PUT", Some(metadata.toString), target, Seq(JsonContentType))
   }
 
-  def getIndices(target: ElasticServer) = {
-    val path = s"/_cat/indices?format=json"
-    execute(path, "GET", None, target)
-  }
+  // Callers only use the names; asking for that column keeps the answer small.
+  def getIndices(target: ElasticServer) =
+    execute("/_cat/indices?format=json&h=index", "GET", None, target)
 
   def getTemplates(target: ElasticServer) = {
     val path = s"/_template"
@@ -442,7 +441,7 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
   }
 
   def catThreadPools(target: ElasticServer) = {
-    val columns = "node_name,name,type,active,queue,rejected,completed,size,queue_size"
+    val columns = "node_id,node_name,name,type,active,queue,rejected,completed,size,core,max,pool_size,queue_size"
     execute(s"/_cat/thread_pool?format=json&h=$columns", "GET", None, target)
   }
 

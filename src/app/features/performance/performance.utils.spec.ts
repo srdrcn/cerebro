@@ -521,13 +521,22 @@ describe('thread pools', () => {
       rejected: 0,
       completed: 1627,
       size: 4,
+      threads: null,
       queueSize: 10000,
       interesting: true,
     });
-    // Idle scaling pools report no size and an unbounded queue.
+    // Without the max column, idle scaling pools report no size and an unbounded queue.
     expect(row('es-node-1', 'azure_event_loop')).toMatchObject({ size: null, queueSize: null, interesting: false });
     expect(normalizeThreadPools(null)).toEqual([]);
     expect(normalizeThreadPools([{ name: 'x', active: 'abc' }])[0]).toMatchObject({ node: '', active: 0, size: null });
+  });
+
+  it('keys pools by node id and reads the capacity of scaling pools', () => {
+    const [generic] = normalizeThreadPools([
+      { node_id: 'wEqT', node_name: 'es-node-2', name: 'generic', type: 'scaling', active: '3', size: null, core: '4', max: '128', pool_size: '32', queue_size: '-1' },
+    ]);
+    expect(generic).toMatchObject({ key: 'wEqT/generic', node: 'es-node-2', size: 128, threads: 32, queueSize: null });
+    expect(isSaturated(generic!)).toBe(false);
   });
 
   it('measures how full a bounded queue is', () => {

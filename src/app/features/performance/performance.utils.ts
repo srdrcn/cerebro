@@ -880,7 +880,7 @@ export function normalizeThreadPools(rows: unknown): ThreadPoolRow[] {
     const pool = raw.name ?? '';
     const queueSize = toOptionalCount(raw.queue_size);
     return {
-      key: `${node}/${pool}`,
+      key: `${raw.node_id || node}/${pool}`,
       node,
       pool,
       type: raw.type ?? '',
@@ -888,7 +888,8 @@ export function normalizeThreadPools(rows: unknown): ThreadPoolRow[] {
       queue: toCount(raw.queue),
       rejected: toCount(raw.rejected),
       completed: toCount(raw.completed),
-      size: toOptionalCount(raw.size),
+      size: toOptionalCount(raw.size) ?? toOptionalCount(raw.max),
+      threads: toOptionalCount(raw.pool_size),
       queueSize: queueSize !== null && queueSize >= 0 ? queueSize : null,
       interesting: INTERESTING_POOLS.includes(pool),
     };

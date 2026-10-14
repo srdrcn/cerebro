@@ -110,11 +110,36 @@ describe('IndexPickerComponent', () => {
     expect(picker.indices()).toEqual(['orders']);
   });
 
+  it('refreshes on ticks only once the list is a minute old, and on focus after a few seconds', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    post.mockResolvedValue(['orders']);
+    const { fixture, select } = await render();
+    expect(post).toHaveBeenCalledTimes(1);
+
+    tick.update((value) => value + 1);
+    await fixture.whenStable();
+    select.dispatchEvent(new Event('focus'));
+    expect(post).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(1_011_000);
+    select.dispatchEvent(new Event('focus'));
+    await fixture.whenStable();
+    expect(post).toHaveBeenCalledTimes(2);
+
+    now.mockReturnValue(1_080_000);
+    tick.update((value) => value + 1);
+    await fixture.whenStable();
+    expect(post).toHaveBeenCalledTimes(3);
+    now.mockRestore();
+  });
+
   it('keeps the list already shown when a background refresh fails', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
     post.mockResolvedValue(['orders']);
     const { fixture, picker } = await render();
     expect(picker.indices()).toEqual(['orders']);
 
+    now.mockReturnValue(1_100_000);
     post.mockRejectedValue(new ClusterApiError(500, { error: { reason: 'cluster is blocked' } }));
     tick.update((value) => value + 1);
     await fixture.whenStable();
@@ -124,6 +149,7 @@ describe('IndexPickerComponent', () => {
     expect(picker.indices()).toEqual(['orders']);
     expect(picker.failed()).toBe(false);
     expect(alerts.error).not.toHaveBeenCalled();
+    now.mockRestore();
   });
 
   it('forgets the list of the previous cluster', async () => {

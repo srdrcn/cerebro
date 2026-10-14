@@ -36,7 +36,7 @@ export function groupIndexOptions(names: readonly string[]): IndexOptionGroups {
 /**
  * Header select (`.context-picker`) that picks the index a page shows. It
  * loads the index list of the connected cluster itself (reloaded on every
- * refresh, reset when the host changes) and exposes it, so the page can offer
+ * refresh once it is a minute old, reset when the host changes) and exposes it, so the page can offer
  * quick picks or explain an empty or failed list:
  *
  *   <cerebro-index-picker #picker inputId="x-picker" [index]="index()" (picked)="navigate($event)" />
@@ -56,6 +56,7 @@ export function groupIndexOptions(names: readonly string[]): IndexOptionGroups {
       class="select"
       [id]="inputId()"
       [disabled]="indices() === undefined && !index()"
+      (focus)="refreshIfOlderThan(focusRefreshMs)"
       (change)="onChange(select.value)"
     >
       <option value="" [selected]="!index()">
@@ -113,6 +114,14 @@ export class IndexPickerComponent {
   });
 
   private readonly select = viewChild.required<ElementRef<HTMLSelectElement>>('select');
+  /**
+   * Listing indices makes every node compute index statistics, so the list
+   * is refreshed on ticks only once it is a minute old, and when the select
+   * is focused if it is older than a few seconds.
+   */
+  private readonly tickRefreshMs = 60_000;
+  protected readonly focusRefreshMs = 10_000;
+  private loadedAt = 0;
   private sequence = 0;
   /** Cluster the index list belongs to. */
   private host: string | undefined;
@@ -129,7 +138,7 @@ export class IndexPickerComponent {
           this.failed.set(false);
         }
         if (host) {
-          void this.load();
+          this.refreshIfOlderThan(this.tickRefreshMs);
         }
       });
     });
@@ -142,6 +151,7 @@ export class IndexPickerComponent {
       if (sequence === this.sequence) {
         this.indices.set(Array.isArray(indices) ? indices : []);
         this.failed.set(false);
+        this.loadedAt = Date.now();
       }
     } catch (error: unknown) {
       // A failed background refresh keeps the list that is already shown.
@@ -150,6 +160,13 @@ export class IndexPickerComponent {
         this.failed.set(true);
         this.alerts.error(failureMessage('Could not load indices', error), error);
       }
+    }
+  }
+
+  /** Loads the list unless the one shown is younger than `maxAgeMs`. */
+  refreshIfOlderThan(maxAgeMs: number): void {
+    if (this.indices() === undefined || Date.now() - this.loadedAt >= maxAgeMs) {
+      void this.load();
     }
   }
 
