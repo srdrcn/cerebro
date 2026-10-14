@@ -28,6 +28,13 @@ export const NAVIGATION: readonly NavigationGroup[] = [
         keywords: 'home shards allocation health dashboard',
       },
       {
+        label: 'Cluster doctor',
+        route: '/doctor',
+        icon: 'bi-heart-pulse',
+        description: 'Checks the cluster for problems and explains how to fix them',
+        keywords: 'doctor health check diagnose problems disk watermark replicas deprecations upgrade jvm heap',
+      },
+      {
         label: 'Nodes',
         route: '/nodes',
         icon: 'bi-hdd-stack',
