@@ -176,6 +176,7 @@ describe('runChecks on the live 8.15 report', () => {
     expect(disk.resources[0]).toEqual({
       kind: 'node',
       name: 'es-node-1',
+      link: { label: 'Open node', icon: 'bi-hdd', route: '/nodes', params: { node: 'es-node-1' } },
       detail: '90.6% used · 23.6 GB free of 252 GB · the high watermark needs 25.2 GB free',
     });
     expect(disk.facts).toEqual([
@@ -540,6 +541,14 @@ describe('JVM', () => {
     const report = runChecks(raw);
     expect(finding(report, 'jvm-heap:critical')).toMatchObject({ title: 'JVM memory pressure is critical on 1 node' });
     expect(finding(report, 'jvm-heap:critical').resources[0]?.detail).toBe('old gen 97% · heap 71% of 400 MB');
+    // Each node links to its own row of the nodes page; one node needs no extra "Open nodes".
+    expect(finding(report, 'jvm-heap:critical').resources[0]?.link).toEqual({
+      label: 'Open node',
+      icon: 'bi-hdd',
+      route: '/nodes',
+      params: { node: 'es-node-3' },
+    });
+    expect(finding(report, 'jvm-heap:critical').links).toEqual([]);
     expect(finding(report, 'jvm-heap:warning').resources.map((item) => item.name)).toEqual(['es-node-1']);
     expect(finding(report, 'jvm-heap:warning').note).toContain('single sample');
   });
@@ -567,6 +576,8 @@ describe('JVM', () => {
       '4 collections · 1s on average · 0.2% of uptime',
       '100 collections · 200ms on average · 10% of uptime',
     ]);
+    expect(gc.resources.map((item) => item.link?.params)).toEqual([{ node: 'es-node-1' }, { node: 'es-node-3' }]);
+    expect(gc.links).toEqual([{ label: 'Open nodes', icon: 'bi-hdd-stack', route: '/nodes' }]);
   });
 
   it('reports tripped breakers, as a warning when the parent breaker tripped', () => {
@@ -577,6 +588,7 @@ describe('JVM', () => {
     const breakers = finding(runChecks(raw), 'circuit-breakers');
     expect(breakers.severity).toBe('warning');
     expect(breakers.resources.map((item) => item.detail)).toEqual(['fielddata 2 times', 'parent 5 times']);
+    expect(breakers.resources.every((item) => item.link?.route === '/nodes')).toBe(true);
   });
 });
 

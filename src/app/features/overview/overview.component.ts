@@ -28,6 +28,7 @@ import { MenuComponent } from '../../shared/menu.component';
 import { MeterComponent } from '../../shared/meter.component';
 import { PagerComponent } from '../../shared/pager.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
+import { OverviewLiveComponent } from './overview-live.component';
 import {
   AllocationKind,
   IndexOperation,
@@ -152,6 +153,7 @@ const BULK_OPERATIONS: readonly IndexOperation[] = ['open', 'close', 'merge', 'r
     MenuComponent,
     MeterComponent,
     NumberPipe,
+    OverviewLiveComponent,
     PagerComponent,
     PluralPipe,
     RouterLink,

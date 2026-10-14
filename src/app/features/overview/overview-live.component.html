@@ -1,0 +1,96 @@
+<section class="card ov-live" [class.is-collapsed]="collapsed()" aria-labelledby="ov-live-title">
+  <div class="ov-live__header">
+    <h2 id="ov-live-title" class="ov-live__title">
+      <button
+        type="button"
+        class="ov-live__toggle"
+        [attr.aria-expanded]="!collapsed()"
+        [attr.aria-controls]="collapsed() ? null : 'ov-live-body'"
+        (click)="toggle()"
+      >
+        <i class="bi bi-chevron-right ov-live__chevron" aria-hidden="true"></i>
+        <span class="card-icon ov-live__icon" aria-hidden="true"><i class="bi bi-activity"></i></span>
+        Live activity
+      </button>
+    </h2>
+    <div class="ov-live__status">
+      @if (collapsed()) {
+        <span class="text-muted" role="status">Hidden, not sampling</span>
+      } @else if (failed()) {
+        <span class="ov-live__warning">
+          <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Not updating
+        </span>
+      } @else if (late()) {
+        <span class="ov-live__warning" role="status">
+          <span class="spinner" aria-hidden="true"></span> Waiting for the nodes…
+        </span>
+        <span class="text-muted">last sample {{ sampledAt() | date: 'HH:mm:ss' }}</span>
+      } @else if (paused()) {
+        <span class="badge badge-yellow" role="status"><i class="bi bi-pause-fill" aria-hidden="true"></i> Paused</span>
+        @if (history().span > 0) {
+          <span class="text-muted ov-live__window">last {{ windowLabel() }}</span>
+        }
+        <button type="button" class="link-button text-sm" (click)="resume()">Resume auto refresh</button>
+      } @else if (!ready()) {
+        <span class="ov-live__collecting" role="status">
+          <span class="spinner" aria-hidden="true"></span> Collecting samples…
+        </span>
+      } @else {
+        <span class="ov-live__sampling" role="status">
+          <span class="dot dot-green dot-pulse dot-sm" aria-hidden="true"></span>
+          Every {{ intervalLabel() }}
+        </span>
+        <span class="text-muted" aria-hidden="true">·</span>
+        <span class="text-muted ov-live__window">last {{ windowLabel() }}</span>
+      }
+      @if (!collapsed() && partialLabel(); as partial) {
+        <span class="badge badge-yellow" title="Cluster totals leave out samples that some nodes did not answer">{{ partial }}</span>
+      }
+    </div>
+  </div>
+
+  @if (!collapsed()) {
+    @if (failed()) {
+      <div class="callout callout-warning ov-live__callout" role="status">
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        <div class="min-w-0">
+          <strong>Could not sample the nodes.</strong>
+          {{ lastError() ?? 'The cluster did not answer the node statistics request.' }}
+          @if (hasSamples()) {
+            Showing samples up to {{ sampledAt() | date: 'HH:mm:ss' }}.
+          }
+        </div>
+        <button type="button" class="btn btn-sm ov-live__retry" [class.is-loading]="sampling()" [disabled]="sampling()" (click)="retry()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </div>
+    }
+    <div id="ov-live-body" class="ov-live__grid">
+      @for (tile of tiles(); track tile.key) {
+        <div class="ov-live__tile">
+          <div class="stat__label" [title]="tile.description">
+            <i class="bi" [class]="'bi ' + tile.icon" aria-hidden="true"></i> {{ tile.label }}
+          </div>
+          <div class="ov-live__reading">
+            <span class="ov-live__value">{{ tile.value }}</span>
+            @if (tile.unit) {
+              <span class="ov-live__unit">{{ tile.unit }}</span>
+            }
+          </div>
+          <cerebro-sparkline
+            class="ov-live__chart"
+            [points]="tile.points"
+            [label]="tile.label"
+            [format]="format(tile.key)"
+            [tone]="tile.tone"
+            [domainMax]="tile.domainMax"
+            [minDomain]="tile.minDomain"
+            [height]="34"
+            [focusable]="true"
+          />
+          <div class="ov-live__meta truncate" [title]="tile.meta">{{ tile.meta }}</div>
+        </div>
+      }
+    </div>
+  }
+</section>

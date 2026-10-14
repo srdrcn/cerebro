@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NodeCounters, buildHistory } from '../../core/metrics';
 import {
   OverviewData,
   OverviewIndex,
@@ -18,6 +19,7 @@ import {
   indexBreakdown,
   indexSummary,
   indicesPayload,
+  liveActivityTiles,
   loadPercent,
   matchesOverviewIndex,
   nodeAttributes,
@@ -454,5 +456,107 @@ describe('revealing the index of a selected shard', () => {
     expect(revealed.healthy).toBe(true);
     expect(names(revealed)).toEqual(['a.b+c']);
     expect(escapeRegExp('x(1)')).toBe('x\\(1\\)');
+  });
+});
+
+describe('liveActivityTiles', () => {
+  function counters(id: string, time: number, overrides: Partial<NodeCounters> = {}): NodeCounters {
+    return {
+      id,
+      name: id,
+      roles: ['data'],
+      timestamp: time,
+      indexTotal: 0,
+      indexTimeMs: 0,
+      queryTotal: 0,
+      queryTimeMs: 0,
+      fetchTotal: 0,
+      getTotal: 0,
+      docsCount: 0,
+      storeBytes: 0,
+      heapPercent: 40,
+      osCpuPercent: 20,
+      processCpuPercent: 5,
+      load1m: 1,
+      uptimeMs: null,
+      pressureRejected: null,
+      write: null,
+      search: null,
+      ...overrides,
+    };
+  }
+
+  it('shows gauges at once and rates as collecting until two samples', () => {
+    const tiles = liveActivityTiles(
+      buildHistory([{ time: 1_000, nodes: [counters('a', 1_000, { heapPercent: 30 }), counters('b', 1_000, { heapPercent: 50 })] }]),
+    );
+    expect(tiles.map((tile) => [tile.label, tile.value, tile.unit, tile.meta])).toEqual([
+      ['Indexing', '–', '', 'Collecting samples…'],
+      ['Search', '–', '', 'Collecting samples…'],
+      ['Search latency', '–', '', 'Collecting samples…'],
+      ['Avg. heap', '40', '%', 'max 50% on b'],
+      ['Avg. CPU', '20', '%', 'max 20% on a'],
+    ]);
+    expect(tiles[3]?.domainMax).toBe(100);
+    const paused = liveActivityTiles(buildHistory([{ time: 1_000, nodes: [counters('a', 1_000)] }]), 'Refresh to measure rates');
+    expect(paused.map((tile) => tile.meta).slice(0, 3)).toEqual(Array(3).fill('Refresh to measure rates'));
+    expect(tiles[0]?.domainMax).toBeUndefined();
+    expect(tiles[0]?.minDomain).toBe(1);
+  });
+
+  it('shows every tile as pending before the first sample', () => {
+    const tiles = liveActivityTiles(buildHistory([]), 'No sample yet');
+    expect(tiles.map((tile) => [tile.value, tile.meta])).toEqual(Array(5).fill(['–', 'No sample yet']));
+  });
+
+  it('says a rate is not measured, not zero, when the latest sample follows a gap', () => {
+    // Indexing 2,000 docs/s every 5s, then the catch-up sample of a tab hidden for 40s.
+    const at = (time: number) =>
+      counters('a', time, { indexTotal: time * 2, indexTimeMs: time / 100, queryTotal: time / 10, queryTimeMs: time / 5 });
+    const history = buildHistory([
+      { time: 0, nodes: [at(0)], expected: 5_000 },
+      { time: 5_000, nodes: [at(5_000)], expected: 5_000 },
+      { time: 45_000, nodes: [at(45_000)], expected: 5_000 },
+    ]);
+    expect(history.gaps.at(-1)).toBe(true);
+    const [indexing, search, latency, heap] = liveActivityTiles(history);
+    expect(indexing).toMatchObject({ value: '–', meta: 'Collecting samples…' });
+    expect(search).toMatchObject({ value: '–', meta: 'Collecting samples…' });
+    expect(latency).toMatchObject({ value: '–', meta: 'Collecting samples…' });
+    expect(heap).toMatchObject({ value: '40', meta: '1 node' });
+    expect(indexing?.points.map((point) => point.value)).toEqual([null, 2_000, null]);
+  });
+
+  it('sums rates and weights the search latency across nodes', () => {
+    const history = buildHistory([
+      { time: 0, nodes: [counters('a', 0), counters('b', 0)] },
+      {
+        time: 10_000,
+        nodes: [
+          counters('a', 10_000, { indexTotal: 1_000, indexTimeMs: 200, queryTotal: 90, queryTimeMs: 90, fetchTotal: 40, heapPercent: 95 }),
+          counters('b', 10_000, { indexTotal: 500, indexTimeMs: 100, queryTotal: 10, queryTimeMs: 910, fetchTotal: 10 }),
+        ],
+      },
+    ]);
+    const [indexing, search, latency, heap] = liveActivityTiles(history);
+    expect(indexing).toMatchObject({ value: '150', unit: 'docs/s', meta: '0.2 ms per document', tone: 'accent' });
+    expect(search).toMatchObject({ value: '10', unit: 'shard queries/s', meta: '5 fetches/s' });
+    // 1,000ms over 100 queries, not the average of 1ms and 91ms.
+    expect(latency).toMatchObject({ value: '10', unit: 'ms', meta: 'Query phase, per shard' });
+    // Heap colour follows the window's low (40%), the meta the busiest node's range.
+    expect(heap).toMatchObject({ value: '68', unit: '%', meta: 'max 95%, low 40% · a', tone: 'accent' });
+    expect(indexing?.points.map((point) => point.value)).toEqual([null, 150]);
+  });
+
+  it('says when nothing was indexed or searched and names a single node', () => {
+    const history = buildHistory([
+      { time: 0, nodes: [counters('solo', 0, { heapPercent: 91 })] },
+      { time: 10_000, nodes: [counters('solo', 10_000, { heapPercent: 91 })] },
+    ]);
+    const [indexing, search, latency, heap] = liveActivityTiles(history);
+    expect(indexing).toMatchObject({ value: '0', meta: 'No documents indexed' });
+    expect(search).toMatchObject({ value: '0', meta: '0 fetches/s' });
+    expect(latency).toMatchObject({ value: '–', unit: '', meta: 'No queries in the last interval' });
+    expect(heap).toMatchObject({ meta: '1 node', tone: 'red' });
   });
 });

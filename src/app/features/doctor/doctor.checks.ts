@@ -121,6 +121,19 @@ function ilmStatusLink(indices: readonly string[]): DoctorLink {
   };
 }
 
+/** The nodes page with this node expanded (`/nodes?node=`): its live activity and thread pools. */
+function nodeLink(name: string): DoctorLink {
+  return { label: 'Open node', icon: 'bi-hdd', route: '/nodes', params: { node: name } };
+}
+
+/**
+ * The finding's own link next to node resources (each of which links to its
+ * node): the nodes page, unless the one affected node already links there.
+ */
+function nodesLinks(names: readonly string[]): DoctorLink[] {
+  return names.length > 1 ? [NODES_LINK] : [];
+}
+
 function indexLink(index: string, tab?: string): DoctorLink {
   return {
     label: 'Index details',
@@ -833,13 +846,14 @@ const diskWatermarks: DoctorCheck = {
           resources: nodes.map((state) => ({
             kind: 'node',
             name: state.node.name,
+            link: nodeLink(state.node.name),
             detail: `${roundPercent(state.used)}% used · ${formatBytes(state.available)} free of ${formatBytes(state.total)}${
               state.required !== null ? ` · the ${level.name} needs ${formatBytes(state.required)} free` : ''
             }`,
           })),
           resourceLabel: 'Affected nodes',
           fixes: [],
-          links: [NODES_LINK],
+          links: nodesLinks(nodes.map((state) => state.node.name)),
         },
       ];
     });
@@ -1323,6 +1337,7 @@ const jvmHeap: DoctorCheck = {
         resources: level.entries.map((entry) => ({
           kind: 'node' as const,
           name: entry.node.name,
+          link: nodeLink(entry.node.name),
           detail: [
             ...(entry.pressure!.oldGen ? [`old gen ${roundPercent(entry.pressure!.percent)}%`] : []),
             `heap ${entry.node.heapPercent ?? '?'}% of ${formatBytes(entry.node.heapMax)}`,
@@ -1330,7 +1345,7 @@ const jvmHeap: DoctorCheck = {
         })),
         resourceLabel: 'Affected nodes',
         fixes: [],
-        links: [NODES_LINK],
+        links: nodesLinks(level.entries.map((entry) => entry.node.name)),
       }));
   },
 };
@@ -1367,11 +1382,12 @@ const jvmGc: DoctorCheck = {
         resources: slow.map((entry) => ({
           kind: 'node',
           name: entry.node.name,
+          link: nodeLink(entry.node.name),
           detail: `${pluralize(entry.count, 'collection')} · ${formatDuration(entry.average)} on average · ${roundPercent(entry.share * 100)}% of uptime`,
         })),
         resourceLabel: 'Affected nodes',
         fixes: [],
-        links: [NODES_LINK],
+        links: nodesLinks(slow.map((entry) => entry.node.name)),
       },
     ];
   },
@@ -1407,6 +1423,7 @@ const circuitBreakers: DoctorCheck = {
         resources: tripped.map((entry) => ({
           kind: 'node',
           name: entry.node.name,
+          link: nodeLink(entry.node.name),
           detail: entry.breakers
             .sort((left, right) => right.tripped - left.tripped)
             .map((breaker) => `${breaker.name} ${pluralize(breaker.tripped, 'time')}`)
@@ -1414,7 +1431,7 @@ const circuitBreakers: DoctorCheck = {
         })),
         resourceLabel: 'Affected nodes',
         fixes: [],
-        links: [NODES_LINK],
+        links: nodesLinks(tripped.map((entry) => entry.node.name)),
       },
     ];
   },

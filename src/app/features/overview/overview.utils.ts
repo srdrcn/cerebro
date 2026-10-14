@@ -1,4 +1,17 @@
 import { formatBytes, formatCompact, formatNumber, plural, pluralize, textMatcher } from '../../core/format';
+import {
+  METRICS,
+  MetricKey,
+  MetricSeries,
+  MetricsHistory,
+  busiestNode,
+  currentValue,
+  formatLatency,
+  formatMetric,
+  formatRate,
+  metricParts,
+  seriesTone,
+} from '../../core/metrics';
 import { isInternalAttribute } from '../../core/node-attributes';
 import {
   IndexOperation,
@@ -578,4 +591,114 @@ export function operationFailure(operation: IndexOperation, names: readonly stri
   const verb = operation === 'cache' ? 'clear the cache of' : OPERATIONS[operation].label.toLowerCase();
   const target = names.length === 1 ? `index ${names[0]}` : indexCount(names.length);
   return `Could not ${verb} ${target}`;
+}
+
+/* ---- Live activity ------------------------------------------------------- */
+
+/** One tile of the "Live activity" strip. */
+export interface LiveTile {
+  readonly key: MetricKey;
+  readonly label: string;
+  readonly icon: string;
+  /** Current value ("2,535", "–") and its unit ("docs/s"). */
+  readonly value: string;
+  readonly unit: string;
+  /** Second line: latency, busiest node, … */
+  readonly meta: string;
+  readonly description: string;
+  readonly points: MetricSeries;
+  readonly tone: 'accent' | 'yellow' | 'red';
+  readonly domainMax?: number;
+  readonly minDomain?: number;
+}
+
+interface LiveTileDefinition {
+  readonly key: MetricKey;
+  readonly label: string;
+  readonly icon: string;
+  readonly unit?: string;
+}
+
+const LIVE_TILES: readonly LiveTileDefinition[] = [
+  { key: 'indexingRate', label: 'Indexing', icon: 'bi-box-arrow-in-down', unit: 'docs/s' },
+  { key: 'searchRate', label: 'Search', icon: 'bi-search', unit: 'shard queries/s' },
+  { key: 'searchLatency', label: 'Search latency', icon: 'bi-stopwatch' },
+  { key: 'heap', label: 'Avg. heap', icon: 'bi-memory' },
+  { key: 'cpu', label: 'Avg. CPU', icon: 'bi-cpu' },
+];
+
+/**
+ * Second line of a tile. A rate of `null` was not measured (no second sample
+ * yet, or the latest one follows a gap such as a hidden tab): that shows
+ * `pending`, never "nothing indexed", which is only said for a measured 0.
+ */
+function liveMeta(key: MetricKey, history: MetricsHistory, pending: string): string {
+  const { cluster, nodes } = history;
+  if (history.times.length === 0) {
+    return pending;
+  }
+  switch (key) {
+    case 'indexingRate': {
+      const rate = currentValue(cluster.indexingRate);
+      if (rate === null) {
+        return pending;
+      }
+      const latency = currentValue(cluster.indexingLatency);
+      return rate === 0 || latency === null ? 'No documents indexed' : `${formatLatency(latency)} per document`;
+    }
+    case 'searchRate': {
+      if (currentValue(cluster.searchRate) === null) {
+        return pending;
+      }
+      const fetches = currentValue(cluster.fetchRate);
+      return fetches === null ? 'Per shard, not per search' : `${formatRate(fetches)} fetches/s`;
+    }
+    case 'searchLatency': {
+      const rate = currentValue(cluster.searchRate);
+      if (rate === null) {
+        return pending;
+      }
+      return rate === 0 || currentValue(cluster.searchLatency) === null
+        ? 'No queries in the last interval'
+        : 'Query phase, per shard';
+    }
+    default: {
+      const nodeCount = nodes.filter((node) => node.present).length;
+      const busiest = busiestNode(nodes, key);
+      if (!busiest || nodeCount < 2) {
+        return nodeCount === 1 ? '1 node' : '–';
+      }
+      // Heap: the low of that node tells garbage (it falls back after a
+      // collection) from retained heap; the node name comes last as it may be cut.
+      return key === 'heap' && busiest.low < busiest.value
+        ? `max ${formatMetric(key, busiest.value)}, low ${formatMetric(key, busiest.low)} · ${busiest.name}`
+        : `max ${formatMetric(key, busiest.value)} on ${busiest.name}`;
+    }
+  }
+}
+
+/**
+ * The tiles of the overview's "Live activity" strip, from the cluster series.
+ * `pending` explains rates that are not measured ("Collecting samples…", or
+ * what to do while auto refresh is paused).
+ */
+export function liveActivityTiles(history: MetricsHistory, pending = 'Collecting samples…'): LiveTile[] {
+  return LIVE_TILES.map((tile) => {
+    const points = history.cluster[tile.key];
+    const parts = metricParts(tile.key, currentValue(points));
+    const definition = METRICS[tile.key];
+    return {
+      key: tile.key,
+      label: tile.label,
+      icon: tile.icon,
+      value: parts.value,
+      unit: parts.value === '–' ? '' : (tile.unit ?? parts.unit),
+      meta: liveMeta(tile.key, history, pending),
+      description: definition.description,
+      points,
+      tone: seriesTone(tile.key, points),
+      ...(definition.domainMax !== undefined ? { domainMax: definition.domainMax } : {}),
+      ...(definition.minDomain !== undefined ? { minDomain: definition.minDomain } : {}),
+    };
+  });
 }
