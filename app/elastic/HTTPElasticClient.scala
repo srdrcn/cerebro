@@ -331,8 +331,19 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
     execute(s"/_cat/shards/${encoded(index)}?format=json&bytes=b&h=$columns", "GET", None, target)
   }
 
-  def getTasks(target: ElasticServer) =
-    execute("/_tasks?detailed=true&group_by=none", "GET", None, target)
+  // Not part of the index settings; split targets must divide it.
+  def getIndexRoutingShards(index: String, target: ElasticServer) =
+    execute(s"/_cluster/state/metadata/${encoded(index)}?filter_path=metadata.indices.*.routing_num_shards", "GET", None, target)
+
+  def getTasks(parentTaskId: Option[String], target: ElasticServer) = {
+    val parent = parentTaskId.map(id => s"&parent_task_id=${encoded(id)}").getOrElse("")
+    execute(s"/_tasks?detailed=true&group_by=none$parent", "GET", None, target)
+  }
+
+  def lookupIndices(expression: String, target: ElasticServer) = {
+    val columns = "index,status,health,pri,rep,docs.count,pri.store.size,store.size"
+    execute(s"/_cat/indices/${encoded(expression)}?format=json&bytes=b&expand_wildcards=open,closed&h=$columns", "GET", None, target)
+  }
 
   def cancelTask(taskId: String, target: ElasticServer) =
     execute(s"/_tasks/${encoded(taskId)}/_cancel", "POST", None, target)

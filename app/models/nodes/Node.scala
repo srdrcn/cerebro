@@ -19,9 +19,14 @@ object Node extends NodeInfo {
       "uptime" -> (stats \ "jvm" \ "uptime_in_millis").as[JsValue],
       "jvm" -> jvmVersion,
       "attributes" -> attrs(info),
-      "version" -> (info \ "version").as[JsValue]
+      "version" -> (info \ "version").as[JsValue],
+      // Raw roles, including data tiers (data_hot, data_warm…) since 7.10
+      "roles" -> roleNames(info)
     ) ++ roles(info)
   }
+
+  private def roleNames(info: JsValue): JsValue =
+    (info \ "roles").asOpt[JsArray].map(identity[JsValue]).getOrElse(Json.arr())
 
   private def roles(info: JsValue): JsObject = {
     val roles = NodeRoles(info)

@@ -42,6 +42,7 @@ POST        /cluster_changes                          controllers.ClusterChanges
 
 # Commons
 POST        /commons/indices                          controllers.CommonsController.indices
+POST        /commons/indices/lookup                   controllers.CommonsController.lookupIndices
 POST        /commons/get_index_settings               controllers.CommonsController.getIndexSettings
 POST        /commons/get_index_mapping                controllers.CommonsController.getIndexMappings
 POST        /commons/get_node_stats                   controllers.CommonsController.getNodeStats

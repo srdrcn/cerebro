@@ -20,6 +20,13 @@ class CommonsController @Inject()(val authentication: AuthenticationModule,
     }
   }
 
+  // Indices matching an expression (patterns, comma lists) with sizes in bytes.
+  def lookupIndices = process { request =>
+    client.lookupIndices(request.get("expression"), request.target).map { response =>
+      CerebroResponse(response.status, response.body)
+    }
+  }
+
   def getIndexSettings = process { request =>
     client.getIndexSettings(request.get("index"), request.target) map { response =>
       CerebroResponse(response.status, response.body)

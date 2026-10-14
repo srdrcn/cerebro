@@ -129,8 +129,12 @@ trait ElasticClient {
 
   def getIndexShards(index: String, target: ElasticServer): Future[ElasticResponse]
 
+  def getIndexRoutingShards(index: String, target: ElasticServer): Future[ElasticResponse]
+
+  def lookupIndices(expression: String, target: ElasticServer): Future[ElasticResponse]
+
   // Tasks
-  def getTasks(target: ElasticServer): Future[ElasticResponse]
+  def getTasks(parentTaskId: Option[String], target: ElasticServer): Future[ElasticResponse]
 
   def cancelTask(taskId: String, target: ElasticServer): Future[ElasticResponse]
 

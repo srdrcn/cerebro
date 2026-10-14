@@ -103,7 +103,10 @@ object HTTPElasticClientSpec extends Specification {
       (record(_.rollover("logs-write", None, Json.obj(), true, server)).uri mustEqual "/logs-write/_rollover?dry_run=true") and
       (record(_.rollover("logs-write", Some("logs-000002"), Json.obj(), false, server)).uri mustEqual "/logs-write/_rollover/logs-000002?dry_run=false") and
       (record(_.reindex(Json.obj(), Some("auto"), None, server)).uri mustEqual "/_reindex?wait_for_completion=false&slices=auto") and
-      (record(_.getTask("node:42", server)).uri mustEqual "/_tasks/node%3A42")
+      (record(_.getTask("node:42", server)).uri mustEqual "/_tasks/node%3A42") and
+      (record(_.getTasks(Some("node:42"), server)).uri mustEqual "/_tasks?detailed=true&group_by=none&parent_task_id=node%3A42") and
+      (record(_.getIndexRoutingShards("logs", server)).uri mustEqual "/_cluster/state/metadata/logs?filter_path=metadata.indices.*.routing_num_shards") and
+      (record(_.lookupIndices("logs-*,orders", server)).uri must startWith("/_cat/indices/logs-*%2Corders?format=json&bytes=b&expand_wildcards=open,closed&h="))
   }
 
 }

@@ -24,6 +24,7 @@ object IndexDetailControllerSpec extends MockedServices {
   private val mappings = Json.obj("logs" -> Json.obj("mappings" -> Json.obj()))
   private val stats = Json.obj("_all" -> Json.obj())
   private val shards = Json.arr(Json.obj("index" -> "logs", "shard" -> "0"))
+  private val routing = Json.obj("metadata" -> Json.obj("indices" -> Json.obj("logs" -> Json.obj("routing_num_shards" -> 640))))
 
   private def mockSections(settingsResponse: elastic.ElasticResponse) = {
     client.getIndexSettings("logs", server) returns Future.successful(settingsResponse)
@@ -31,6 +32,7 @@ object IndexDetailControllerSpec extends MockedServices {
     client.indexStats("logs", server) returns Future.successful(Success(200, stats))
     client.getIndexAliases("logs", server) returns Future.successful(Error(403, Json.obj("error" -> "forbidden")))
     client.getIndexShards("logs", server) returns Future.successful(Success(200, shards))
+    client.getIndexRoutingShards("logs", server) returns Future.successful(Success(200, routing))
   }
 
   def combine = {
@@ -41,7 +43,8 @@ object IndexDetailControllerSpec extends MockedServices {
       "mappings" -> mappings,
       "stats" -> stats,
       "aliases" -> JsNull,
-      "shards" -> shards
+      "shards" -> shards,
+      "routing_num_shards" -> 640
     ))
   }
 

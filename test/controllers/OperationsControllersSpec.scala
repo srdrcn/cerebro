@@ -15,6 +15,7 @@ object OperationsControllersSpec extends MockedServices {
     s2"""
     Operations controllers should                        ${step(play.api.Play.start(application))}
       list tasks                                         $listTasks
+      list the sub-tasks of a task                       $listSubTasks
       cancel a task                                      $cancelTask
       require the task id to cancel                      $requireTaskId
       list active recoveries by default                  $activeRecoveries
@@ -45,8 +46,14 @@ object OperationsControllersSpec extends MockedServices {
 
   def listTasks = {
     val tasks = Json.obj("tasks" -> Json.arr(Json.obj("node" -> "n1", "id" -> 7, "action" -> "indices:data/write/reindex")))
-    client.getTasks(server) returns Future.successful(Success(200, tasks))
+    client.getTasks(None, server) returns Future.successful(Success(200, tasks))
     ensure(post("/tasks"), 200, tasks)
+  }
+
+  def listSubTasks = {
+    val tasks = Json.obj("tasks" -> Json.arr())
+    client.getTasks(Some("n1:7"), server) returns Future.successful(Success(200, tasks))
+    ensure(post("/tasks", Json.obj("parent_task_id" -> "n1:7")), 200, tasks)
   }
 
   def cancelTask = {

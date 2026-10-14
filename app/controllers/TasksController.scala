@@ -13,7 +13,7 @@ class TasksController @Inject()(val authentication: AuthenticationModule,
                                 client: ElasticClient) extends BaseController {
 
   def list = process { request =>
-    client.getTasks(request.target).map { response =>
+    client.getTasks(request.getOpt("parent_task_id").filter(_.nonEmpty), request.target).map { response =>
       CerebroResponse(response.status, response.body)
     }
   }
