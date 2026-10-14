@@ -443,12 +443,14 @@
                 [minLines]="18"
                 [maxLines]="60"
                 ariaLabel="Lifecycle policy JSON"
+                [invalid]="!!bodyError()"
+                [describedBy]="bodyError() ? 'ilm-body-error' : null"
                 (submit)="save()"
               />
               <div class="editor-status" aria-live="polite">
                 @if (bodyError(); as error) {
                   <span class="badge badge-red"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid</span>
-                  <span class="editor-status__message text-danger">{{ error }}</span>
+                  <span id="ilm-body-error" class="editor-status__message text-danger">{{ error }}</span>
                 } @else if (bodyWarnings().length > 0) {
                   <span class="badge badge-yellow"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check</span>
                   <span class="editor-status__message">{{ bodyWarnings().join(' · ') }}</span>
@@ -591,6 +593,18 @@
               @if (explainLoading()) {
                 <span class="spinner" role="status" aria-label="Refreshing"></span>
               }
+              @if (explainFilter() === 'errors' && retryableRows().length > 0) {
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  [class.is-loading]="retryingSteps()"
+                  [disabled]="retryingSteps()"
+                  [attr.aria-busy]="retryingSteps() ? true : null"
+                  (click)="retryListedSteps()"
+                >
+                  <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Retry {{ retryableRows().length | num }} failed
+                </button>
+              }
               @if (explainFilter() !== 'all' || explainQuery().trim()) {
                 <span class="count-label"><strong>{{ visibleExplainRows().length | num }}</strong> of {{ rows.length | num }} {{ rows.length | plural: 'index' : 'indices' }}</span>
               } @else {
@@ -679,6 +693,12 @@
                       <cerebro-menu [label]="'Actions for ' + row.index" align="end">
                         <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
                         <div class="menu-label">{{ row.index }}</div>
+                        @if (canRetryStep(row)) {
+                          <button type="button" class="menu-item" [disabled]="retryingSteps()" (click)="retryStep(row)">
+                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Retry failed step
+                          </button>
+                          <div class="menu-separator"></div>
+                        }
                         <a class="menu-item" [routerLink]="['/index_detail']" [queryParams]="{ ...connection.hostQuery(), index: row.index }">
                           <i class="bi bi-box" aria-hidden="true"></i> Open index details
                         </a>

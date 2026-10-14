@@ -91,11 +91,6 @@
   margin-top: 6px;
 }
 
-.field-hint code {
-  font-family: var(--font-mono);
-  font-size: 0.95em;
-}
-
 .restore-footer-count {
   display: inline-flex;
   align-items: center;

@@ -154,6 +154,19 @@ describe('SnapshotsComponent', () => {
     await vi.waitFor(() => expect(router.url).toContain('repository=beta'));
     expect(post.mock.calls.filter(([path]) => path === 'snapshots').length).toBe(landingCalls + 1);
     expect(target.repository()).toBe('beta');
+    expect(alerts.warn).toHaveBeenCalledWith('Repository gone does not exist');
+  });
+
+  it('drops an unknown ?repository= when the cluster has no repository at all', async () => {
+    post.mockImplementation(async (path: string) => (path === 'snapshots' ? { ...landing, repositories: [] } : []));
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/?repository=gone');
+    const target = component();
+    await target.load();
+
+    expect(alerts.warn).toHaveBeenCalledWith('Repository gone does not exist');
+    await vi.waitFor(() => expect(router.url).not.toContain('repository='));
+    expect(target.repository()).toBe('');
   });
 
   it('opens a repository from the URL once it shows up in the list', async () => {

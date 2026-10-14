@@ -378,12 +378,14 @@
                 [maxLines]="48"
                 [wrap]="true"
                 ariaLabel="Pipeline JSON"
+                [invalid]="!!bodyError()"
+                [describedBy]="bodyError() ? 'pipeline-body-error' : null"
                 (submit)="save()"
               />
               <div class="editor-status" aria-live="polite">
                 @if (bodyError(); as error) {
                   <span class="badge badge-red"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid</span>
-                  <span class="editor-status__message text-danger">{{ error }}</span>
+                  <span id="pipeline-body-error" class="editor-status__message text-danger">{{ error }}</span>
                 } @else if (bodyWarnings().length > 0) {
                   <span class="badge badge-yellow"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check</span>
                   <span class="editor-status__message">{{ bodyWarnings().join(' · ') }}</span>
@@ -444,6 +446,8 @@
               [minLines]="10"
               [maxLines]="30"
               ariaLabel="Sample documents JSON"
+              [invalid]="!!docsError()"
+              [describedBy]="docsError() ? 'sample-docs-error' : null"
               (submit)="simulate()"
             />
             @if (docsError(); as error) {

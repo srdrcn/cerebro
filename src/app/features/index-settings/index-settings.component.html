@@ -7,9 +7,9 @@
           <span class="truncate">{{ resolvedIndex() || index() }}</span>
           @if (metadata(); as meta) {
             @if (meta.closed) {
-              <span class="badge badge-lg badge-yellow"><i class="bi bi-lock" aria-hidden="true"></i> Closed</span>
+              <span class="badge badge-lg badge-outline"><i class="bi bi-lock" aria-hidden="true"></i> Closed</span>
             } @else {
-              <span class="badge badge-lg badge-green">Open</span>
+              <span class="badge badge-lg badge-outline"><i class="bi bi-unlock" aria-hidden="true"></i> Open</span>
             }
           }
         </h1>
@@ -27,7 +27,7 @@
             }
             @if (meta.createdAt) {
               <span class="tag" [title]="meta.createdAt.toISOString()">
-                <span class="tag-key">created</span><span>{{ formatTimestamp(meta.createdAt.getTime()) }}</span>
+                <span class="tag-key">created</span><span>{{ age(meta.createdAt) }}</span>
               </span>
             }
             <span class="tag">
@@ -42,6 +42,11 @@
     </div>
     <div class="page-header__actions">
       <cerebro-index-picker #picker inputId="index-settings-picker" [index]="loadedIndex()" (picked)="pick($event)" />
+      @if (resolvedIndex(); as current) {
+        <a class="btn" routerLink="/index_detail" [queryParams]="{ index: current }" queryParamsHandling="merge">
+          <i class="bi bi-database" aria-hidden="true"></i> Index details
+        </a>
+      }
     </div>
   </header>
 

@@ -357,6 +357,7 @@ export class SnapshotsComponent {
         await this.loadSnapshots(repository);
       } else {
         this.snapshots.set([]);
+        this.writeRepositoryParam(null);
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
@@ -427,6 +428,11 @@ export class SnapshotsComponent {
    */
   private rememberRepository(repository: string): void {
     writePreference(REPOSITORY_PREFERENCE, repository);
+    this.writeRepositoryParam(repository);
+  }
+
+  /** Replaces `?repository=` (null drops it) without adding a history entry. */
+  private writeRepositoryParam(repository: string | null): void {
     // A load that finishes after the user left must not navigate back here.
     if (this.destroyed || this.route.snapshot.queryParamMap.get('repository') === repository) {
       return;
@@ -613,7 +619,11 @@ export class SnapshotsComponent {
       this.repository(),
       readPreference(REPOSITORY_PREFERENCE) ?? '',
     ];
+    const requested = this.requestedRepository;
     this.requestedRepository = '';
+    if (requested && !repositories.includes(requested)) {
+      this.alerts.warn(`Repository ${requested} does not exist`);
+    }
     return candidates.find((name) => name && repositories.includes(name)) ?? repositories[0] ?? '';
   }
 

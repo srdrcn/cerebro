@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
@@ -47,6 +47,26 @@ describe('RepositoriesComponent', () => {
       ['cloud', 'backups'],
       ['local', '/snap/local'],
     ]);
+  });
+
+  it('opens the repository named in ?repository=', async () => {
+    await TestBed.inject(Router).navigateByUrl('/?repository=local');
+    const target = component();
+    await target.load();
+
+    expect(target.editing()).toBe('local');
+    expect(alerts.warn).not.toHaveBeenCalled();
+  });
+
+  it('reports an unknown ?repository= and drops it from the URL', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/?repository=gone&host=h');
+    const target = component();
+    await target.load();
+
+    expect(target.editing()).toBeNull();
+    expect(alerts.warn).toHaveBeenCalledWith('Repository gone does not exist');
+    await vi.waitFor(() => expect(router.url).toBe('/?host=h'));
   });
 
   it('loads a repository into the form with typed values and extra settings', async () => {

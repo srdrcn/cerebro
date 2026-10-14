@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -17,7 +18,8 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
-import { formatTimestamp, pluralize } from '../../core/format';
+import { formatRelative, pluralize } from '../../core/format';
+import { isRecord } from '../../core/json';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -92,10 +94,10 @@ export class IndexSettingsComponent implements PendingChangesAware {
   private readonly refreshService = inject(RefreshService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   readonly connection = inject(ConnectionService);
 
   readonly grouping = GROUPING;
-  readonly formatTimestamp = formatTimestamp;
   readonly addSuggestions = ADD_SUGGESTIONS;
   /** The `index` query parameter (an index, or an alias resolving to one). */
   readonly index = toSignal(this.route.queryParamMap.pipe(map((params) => params.get('index') ?? '')), {
@@ -115,6 +117,8 @@ export class IndexSettingsComponent implements PendingChangesAware {
   readonly saving = signal(false);
   /** Why the settings could not be loaded, as Elasticsearch put it. */
   readonly loadError = signal<string | undefined>(undefined);
+  /** Reference time of relative dates, moved on every load. */
+  readonly now = signal(Date.now());
 
   readonly quickPicks = QUICK_PICKS;
   readonly overridden = computed(() => (this.rows() ?? []).filter((row) => row.origin === 'index').length);
@@ -127,6 +131,8 @@ export class IndexSettingsComponent implements PendingChangesAware {
   private lastResponse = '';
   /** A Back/Forward switch to another index waits for the discard dialog. */
   private confirmingSwitch = false;
+  /** History position of the entry showing the loaded index (see `historyPosition`). */
+  private loadedPosition: number | undefined;
 
   constructor() {
     effect(() => {
@@ -144,6 +150,8 @@ export class IndexSettingsComponent implements PendingChangesAware {
             return;
           }
           this.reset(index);
+        } else {
+          this.loadedPosition = this.historyPosition();
         }
         if (host && index) {
           void this.load(index);
@@ -164,6 +172,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
       if (sequence !== this.loadSequence || index !== this.index()) {
         return;
       }
+      this.now.set(Date.now());
       const serialized = JSON.stringify(response);
       if (serialized === this.lastResponse && this.state() === 'ready') {
         return;
@@ -202,6 +211,10 @@ export class IndexSettingsComponent implements PendingChangesAware {
         this.alerts.error(failureMessage(`Could not load the settings of ${index}`, error), error);
       }
     }
+  }
+
+  age(date: Date): string {
+    return formatRelative(date.getTime(), this.now());
   }
 
   retry(): void {
@@ -317,21 +330,44 @@ export class IndexSettingsComponent implements PendingChangesAware {
           void this.load(index);
         }
       } else {
-        // A new entry rather than a replaced one: after Back, the history
-        // looks as before (the edited index is the latest entry again) and
-        // another Back asks again instead of leaving the page.
-        await this.router.navigate([], {
-          relativeTo: this.route,
-          queryParams: { index: this.loadedIndex() || null },
-          queryParamsHandling: 'merge',
-        });
+        this.restoreHistoryEntry();
       }
     } finally {
       this.confirmingSwitch = false;
     }
   }
 
+  /**
+   * Puts the edited index back in the URL after a declined Back/Forward. With
+   * the router's `computed` cancel resolution every entry carries its
+   * position, so the browser simply steps back to the edited entry and the
+   * history stays exactly as it was. Without positions, a new entry for the
+   * edited index is pushed instead, so another Back asks again rather than
+   * leaving the page.
+   */
+  private restoreHistoryEntry(): void {
+    const loaded = this.loadedPosition;
+    const current = this.historyPosition();
+    if (loaded !== undefined && current !== undefined && loaded !== current) {
+      this.location.historyGo(loaded - current);
+      return;
+    }
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { index: this.loadedIndex() || null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  /** Position of the current history entry, as recorded by the router (`computed` mode only). */
+  private historyPosition(): number | undefined {
+    const state: unknown = this.location.getState();
+    const position = isRecord(state) ? state['ɵrouterPageId'] : undefined;
+    return typeof position === 'number' ? position : undefined;
+  }
+
   private reset(index: string): void {
+    this.loadedPosition = this.historyPosition();
     this.loadedIndex.set(index);
     this.loadSequence++;
     this.lastResponse = '';

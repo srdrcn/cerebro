@@ -39,7 +39,9 @@ import {
 import {
   NEW_POLICY_BODY,
   analyzePolicyBody,
+  canRetryStep,
   filterExplain,
+  indexBatches,
   filterPolicies,
   needsAttention,
   normalizeExplain,
@@ -191,6 +193,9 @@ export class IlmComponent implements PendingChangesAware {
       this.explainSort.reverse(),
     ),
   );
+  /** Failed steps among the listed rows that a manual retry can restart. */
+  readonly retryableRows = computed(() => this.visibleExplainRows().filter(canRetryStep));
+  readonly retryingSteps = signal(false);
 
   /** Policy requested through ?policy=, opened once the list has loaded. */
   private pendingSelection: string | null = null;
@@ -530,6 +535,7 @@ export class IlmComponent implements PendingChangesAware {
 
   readonly usageLabel = usageLabel;
   readonly needsAttention = needsAttention;
+  readonly canRetryStep = canRetryStep;
   readonly pluralize = pluralize;
   readonly formatDate = formatDate;
 
@@ -640,6 +646,55 @@ export class IlmComponent implements PendingChangesAware {
 
   retryExplain(): void {
     void this.explain(this.explainedTarget() ?? this.explainTarget());
+  }
+
+  retryStep(row: ExplainRow): void {
+    void this.retrySteps([row]);
+  }
+
+  retryListedSteps(): void {
+    void this.retrySteps(this.retryableRows());
+  }
+
+  /**
+   * Moves indices in the ERROR step back to the step that failed
+   * (`POST <indices>/_ilm/retry`), then explains the target again.
+   */
+  private async retrySteps(rows: readonly ExplainRow[]): Promise<void> {
+    const indices = rows.filter(canRetryStep).map((row) => row.index);
+    if (indices.length === 0 || this.retryingSteps()) {
+      return;
+    }
+    const single = indices.length === 1 ? indices[0] : null;
+    const confirmed = await this.dialogs.confirm({
+      title: single ? `Retry the failed step of ${single}?` : `Retry the failed steps of ${pluralize(indices.length, 'index', 'indices')}?`,
+      message: `ILM moves ${single ? 'the index' : 'each index'} back to the step that failed and runs it again. Fix the cause first (for example a missing setting or alias), or the step fails again.`,
+      items: single ? [] : indices,
+      confirmLabel: single ? 'Retry step' : `Retry ${pluralize(indices.length, 'step')}`,
+    });
+    if (!confirmed) {
+      return;
+    }
+    this.retryingSteps.set(true);
+    let retried = 0;
+    try {
+      for (const batch of indexBatches(indices)) {
+        await this.api.post<unknown>('ilm/retry', { indices: batch });
+        retried += batch.split(',').length;
+      }
+      this.alerts.success(single ? `Retrying the failed step of ${single}` : `Retrying the failed steps of ${pluralize(retried, 'index', 'indices')}`);
+    } catch (error: unknown) {
+      const action = single
+        ? `Could not retry the failed step of ${single}`
+        : `Could not retry the failed steps of ${pluralize(indices.length - retried, 'index', 'indices')}`;
+      this.alerts.error(failureMessage(action, error), error);
+    } finally {
+      this.retryingSteps.set(false);
+    }
+    const target = this.explainedTarget();
+    if (target !== null && !this.destroyed) {
+      await this.explain(target, true);
+    }
   }
 
   showExplainJson(row: ExplainRow): void {

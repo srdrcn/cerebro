@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Location } from '@angular/common';
+import { Router, provideRouter, withRouterConfig } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
@@ -65,5 +66,41 @@ describe('IndexSettingsComponent', () => {
       expect.objectContaining({ confirmLabel: 'Discard and switch', items: ['index.number_of_replicas'] }),
     );
     expect(target.drafts()).toEqual({});
+  });
+
+  it('steps back to the edited index when a Back/Forward switch is declined', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([], withRouterConfig({ canceledNavigationResolution: 'computed' })),
+        // The settings never arrive, so the drafts set below stay pending.
+        { provide: ClusterApiService, useValue: { post: vi.fn(() => new Promise(() => undefined)) } },
+        { provide: AlertService, useValue: alerts },
+        { provide: DialogService, useValue: dialogs },
+      ],
+    });
+    dialogs.confirm.mockResolvedValue(false);
+    const router = TestBed.inject(Router);
+    const location = TestBed.inject(Location);
+    const position = (): unknown => (location.getState() as Record<string, unknown> | null)?.['ɵrouterPageId'];
+
+    // Listens to popstate, as the bootstrapped app does.
+    router.initialNavigation();
+    await router.navigateByUrl('/?index=products');
+    const edited = position();
+    const target = component();
+    TestBed.tick();
+    expect(target.loadedIndex()).toBe('products');
+    target.drafts.set({ 'index.number_of_replicas': { value: '2', scope: 'persistent' } });
+
+    // The history entry after the edited one, as Forward would show it.
+    await router.navigateByUrl('/?index=customers');
+    TestBed.tick();
+
+    await vi.waitFor(() => expect(router.url).toBe('/?index=products'));
+    expect(position()).toBe(edited);
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+    expect(target.loadedIndex()).toBe('products');
+    expect(target.pending().length).toBe(1);
   });
 });

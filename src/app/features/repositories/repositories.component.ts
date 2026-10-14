@@ -8,7 +8,7 @@ import {
   untracked,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
@@ -74,6 +74,7 @@ export class RepositoriesComponent {
   private readonly dialogs = inject(DialogService);
   private readonly refreshService = inject(RefreshService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   readonly connection = inject(ConnectionService);
 
   readonly filterThreshold = FILTER_THRESHOLD;
@@ -199,10 +200,19 @@ export class RepositoriesComponent {
       );
       this.repositories.set(sorted);
       this.failed.set(false);
-      const requested = sorted.find((repository) => repository.name === this.requested);
+      const name = this.requested;
       this.requested = '';
+      const requested = sorted.find((repository) => repository.name === name);
       if (requested) {
         this.edit(requested);
+      } else if (name) {
+        this.alerts.warn(`Repository ${name} does not exist`);
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: { repository: null },
+          queryParamsHandling: 'merge',
+          replaceUrl: true,
+        });
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {

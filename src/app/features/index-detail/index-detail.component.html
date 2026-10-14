@@ -248,7 +248,15 @@
         }
 
         <div class="card detail-card">
-          <div #tablist class="tabs detail-tabs" role="tablist" aria-label="Index sections">
+          <div
+            #tablist
+            class="tabs detail-tabs"
+            [class.is-overflow-start]="tabsOverflow().start"
+            [class.is-overflow-end]="tabsOverflow().end"
+            role="tablist"
+            aria-label="Index sections"
+            (scroll)="measureTabs()"
+          >
             @for (definition of tabs; track definition.key) {
               <button
                 type="button"

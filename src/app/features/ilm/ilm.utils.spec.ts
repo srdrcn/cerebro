@@ -3,10 +3,12 @@ import { ExplainRow, IlmPoliciesResponse } from './ilm.models';
 import {
   NEW_POLICY_BODY,
   analyzePolicyBody,
+  canRetryStep,
   describeAction,
   filterExplain,
   filterPolicies,
   formatSizeValue,
+  indexBatches,
   isManagedPolicy,
   normalizeExplain,
   normalizeExplainEntry,
@@ -369,6 +371,20 @@ describe('lifecycle status', () => {
     const healthy = normalizeExplainEntry('x', { step: 'check-rollover-ready', failed_step_retry_count: 0 });
     expect(healthy.retrying).toBe(false);
     expect(needsAttention(healthy)).toBe(false);
+  });
+
+  it('offers a manual retry only for indices in the ERROR step', () => {
+    const rows = normalizeExplain(RESPONSE);
+    expect(rows.filter(canRetryStep).map((row) => row.index)).toEqual(['tmp-broken']);
+    const unmanaged = normalizeExplainEntry('x', { managed: false, step: 'ERROR' });
+    expect(canRetryStep(unmanaged)).toBe(false);
+  });
+
+  it('splits retried indices into request-sized batches', () => {
+    expect(indexBatches([])).toEqual([]);
+    expect(indexBatches(['a', 'b', 'c'])).toEqual(['a,b,c']);
+    expect(indexBatches(['aaaa', 'bbbb', 'cccc'], 9)).toEqual(['aaaa,bbbb', 'cccc']);
+    expect(indexBatches(['a-very-long-index-name', 'b'], 5)).toEqual(['a-very-long-index-name', 'b']);
   });
 
   it('filters by state and text', () => {

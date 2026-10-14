@@ -604,7 +604,7 @@
   top: 0;
   bottom: 0;
   width: 40%;
-  border-radius: 2px;
+  border-radius: var(--radius-full);
   background: var(--accent);
   animation: rest-progress 1.1s var(--ease-out) infinite;
 }
