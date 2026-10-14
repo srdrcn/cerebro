@@ -333,13 +333,93 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
     }
   }
 
-  // FIXME: ES > 5.X does not support indices with special characters, so this could be removed
   private def encoded(text: String): String = URLEncoder.encode(text, "UTF-8")
 
   override def catMaster(target: ElasticServer): Future[ElasticResponse] = {
     val path = "/_cat/master"
     execute(s"$path?format=json", "GET", None, target)
   }
+
+  def allocationExplain(request: Option[JsValue], target: ElasticServer) = {
+    val path = "/_cluster/allocation/explain?include_disk_info=true"
+    execute(path, "POST", request.map(_.toString), target, request.map(_ => JsonContentType).toSeq)
+  }
+
+  def getIndexTemplates(target: ElasticServer) =
+    execute("/_index_template", "GET", None, target)
+
+  def putIndexTemplate(name: String, template: JsValue, target: ElasticServer) =
+    execute(s"/_index_template/${encoded(name)}", "PUT", Some(template.toString), target, Seq(JsonContentType))
+
+  def deleteIndexTemplate(name: String, target: ElasticServer) =
+    execute(s"/_index_template/${encoded(name)}", "DELETE", None, target)
+
+  def simulateIndexTemplate(name: String, target: ElasticServer) =
+    execute(s"/_index_template/_simulate/${encoded(name)}", "POST", None, target)
+
+  def getComponentTemplates(target: ElasticServer) =
+    execute("/_component_template", "GET", None, target)
+
+  def putComponentTemplate(name: String, template: JsValue, target: ElasticServer) =
+    execute(s"/_component_template/${encoded(name)}", "PUT", Some(template.toString), target, Seq(JsonContentType))
+
+  def deleteComponentTemplate(name: String, target: ElasticServer) =
+    execute(s"/_component_template/${encoded(name)}", "DELETE", None, target)
+
+  def getIndexAliases(index: String, target: ElasticServer) =
+    execute(s"/${encoded(index)}/_alias", "GET", None, target)
+
+  def getIndexShards(index: String, target: ElasticServer) = {
+    val columns = "index,shard,prirep,state,docs,store,ip,node,unassigned.reason,unassigned.for"
+    execute(s"/_cat/shards/${encoded(index)}?format=json&bytes=b&h=$columns", "GET", None, target)
+  }
+
+  def getTasks(target: ElasticServer) =
+    execute("/_tasks?detailed=true&group_by=none", "GET", None, target)
+
+  def cancelTask(taskId: String, target: ElasticServer) =
+    execute(s"/_tasks/${encoded(taskId)}/_cancel", "POST", None, target)
+
+  def getDataStreams(target: ElasticServer) =
+    execute("/_data_stream", "GET", None, target)
+
+  def getDataStreamStats(target: ElasticServer) =
+    execute("/_data_stream/_stats", "GET", None, target)
+
+  def rolloverDataStream(name: String, target: ElasticServer) =
+    execute(s"/${encoded(name)}/_rollover", "POST", None, target)
+
+  def deleteDataStream(name: String, target: ElasticServer) =
+    execute(s"/_data_stream/${encoded(name)}", "DELETE", None, target)
+
+  def getIlmPolicies(target: ElasticServer) =
+    execute("/_ilm/policy", "GET", None, target)
+
+  def putIlmPolicy(name: String, policy: JsValue, target: ElasticServer) = {
+    val body = Json.obj("policy" -> policy).toString
+    execute(s"/_ilm/policy/${encoded(name)}", "PUT", Some(body), target, Seq(JsonContentType))
+  }
+
+  def deleteIlmPolicy(name: String, target: ElasticServer) =
+    execute(s"/_ilm/policy/${encoded(name)}", "DELETE", None, target)
+
+  def explainIlm(index: String, target: ElasticServer) =
+    execute(s"/${encoded(index)}/_ilm/explain", "GET", None, target)
+
+  def getPipelines(target: ElasticServer) =
+    execute("/_ingest/pipeline", "GET", None, target)
+
+  def putPipeline(id: String, pipeline: JsValue, target: ElasticServer) =
+    execute(s"/_ingest/pipeline/${encoded(id)}", "PUT", Some(pipeline.toString), target, Seq(JsonContentType))
+
+  def deletePipeline(id: String, target: ElasticServer) =
+    execute(s"/_ingest/pipeline/${encoded(id)}", "DELETE", None, target)
+
+  def simulatePipeline(request: JsValue, verbose: Boolean, target: ElasticServer) =
+    execute(s"/_ingest/pipeline/_simulate?verbose=$verbose", "POST", Some(request.toString), target, Seq(JsonContentType))
+
+  def getRecoveries(activeOnly: Boolean, target: ElasticServer) =
+    execute(s"/_cat/recovery?format=json&bytes=b&time=ms&active_only=$activeOnly", "GET", None, target)
 }
 
 object HTTPElasticClient {

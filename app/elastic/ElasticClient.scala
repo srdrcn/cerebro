@@ -121,4 +121,62 @@ trait ElasticClient {
 
   def executeRequest(method: String, path: String, data: Option[JsValue], target: ElasticServer): Future[ElasticResponse]
 
+  // Shard allocation explain (explains the first unassigned shard without a request)
+  def allocationExplain(request: Option[JsValue], target: ElasticServer): Future[ElasticResponse]
+
+  // Composable index templates and component templates
+  def getIndexTemplates(target: ElasticServer): Future[ElasticResponse]
+
+  def putIndexTemplate(name: String, template: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def deleteIndexTemplate(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  def simulateIndexTemplate(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  def getComponentTemplates(target: ElasticServer): Future[ElasticResponse]
+
+  def putComponentTemplate(name: String, template: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def deleteComponentTemplate(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Index details
+  def getIndexAliases(index: String, target: ElasticServer): Future[ElasticResponse]
+
+  def getIndexShards(index: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Tasks
+  def getTasks(target: ElasticServer): Future[ElasticResponse]
+
+  def cancelTask(taskId: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Data streams
+  def getDataStreams(target: ElasticServer): Future[ElasticResponse]
+
+  def getDataStreamStats(target: ElasticServer): Future[ElasticResponse]
+
+  def rolloverDataStream(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  def deleteDataStream(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Index lifecycle management
+  def getIlmPolicies(target: ElasticServer): Future[ElasticResponse]
+
+  def putIlmPolicy(name: String, policy: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def deleteIlmPolicy(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  def explainIlm(index: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Ingest pipelines
+  def getPipelines(target: ElasticServer): Future[ElasticResponse]
+
+  def putPipeline(id: String, pipeline: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def deletePipeline(id: String, target: ElasticServer): Future[ElasticResponse]
+
+  def simulatePipeline(request: JsValue, verbose: Boolean, target: ElasticServer): Future[ElasticResponse]
+
+  // Shard recoveries
+  def getRecoveries(activeOnly: Boolean, target: ElasticServer): Future[ElasticResponse]
+
 }

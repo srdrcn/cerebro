@@ -84,6 +84,45 @@ POST        /snapshots/restore                        controllers.SnapshotsContr
 # Cat module
 POST        /cat                                      controllers.CatController.get
 
+# Shard allocation explain
+POST        /allocation/explain                       controllers.AllocationController.explain
+
+# Composable index templates and component templates
+POST        /index_templates                          controllers.ComposableTemplatesController.indexTemplates
+POST        /index_templates/save                     controllers.ComposableTemplatesController.saveIndexTemplate
+POST        /index_templates/delete                   controllers.ComposableTemplatesController.deleteIndexTemplate
+POST        /index_templates/simulate                 controllers.ComposableTemplatesController.simulateIndexTemplate
+POST        /component_templates                      controllers.ComposableTemplatesController.componentTemplates
+POST        /component_templates/save                 controllers.ComposableTemplatesController.saveComponentTemplate
+POST        /component_templates/delete               controllers.ComposableTemplatesController.deleteComponentTemplate
+
+# Index detail
+POST        /index_detail                             controllers.IndexDetailController.get
+
+# Tasks
+POST        /tasks                                    controllers.TasksController.list
+POST        /tasks/cancel                             controllers.TasksController.cancel
+
+# Data streams
+POST        /data_streams                             controllers.DataStreamsController.list
+POST        /data_streams/rollover                    controllers.DataStreamsController.rollover
+POST        /data_streams/delete                      controllers.DataStreamsController.delete
+
+# Index lifecycle management
+POST        /ilm/policies                             controllers.IlmController.policies
+POST        /ilm/policies/save                        controllers.IlmController.save
+POST        /ilm/policies/delete                      controllers.IlmController.delete
+POST        /ilm/explain                              controllers.IlmController.explain
+
+# Ingest pipelines
+POST        /pipelines                                controllers.PipelinesController.list
+POST        /pipelines/save                           controllers.PipelinesController.save
+POST        /pipelines/delete                         controllers.PipelinesController.delete
+POST        /pipelines/simulate                       controllers.PipelinesController.simulate
+
+# Shard recoveries
+POST        /recovery                                 controllers.RecoveryController.list
+
 # Auth
 POST        /auth/login                               controllers.AuthController.login
 POST        /auth/logout                              controllers.AuthController.logout

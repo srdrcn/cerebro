@@ -84,6 +84,50 @@ export const routes: Routes = [
         path: 'cat',
         loadComponent: () => import('./features/cat/cat.component').then((m) => m.CatComponent),
       },
+      {
+        path: 'allocation',
+        loadComponent: () =>
+          import('./features/allocation/allocation.component').then((m) => m.AllocationComponent),
+      },
+      {
+        path: 'tasks',
+        loadComponent: () => import('./features/tasks/tasks.component').then((m) => m.TasksComponent),
+      },
+      {
+        path: 'recovery',
+        loadComponent: () =>
+          import('./features/recovery/recovery.component').then((m) => m.RecoveryComponent),
+      },
+      {
+        path: 'index_detail',
+        loadComponent: () =>
+          import('./features/index-detail/index-detail.component').then(
+            (m) => m.IndexDetailComponent,
+          ),
+      },
+      {
+        path: 'index_templates',
+        loadComponent: () =>
+          import('./features/index-templates/index-templates.component').then(
+            (m) => m.IndexTemplatesComponent,
+          ),
+      },
+      {
+        path: 'data_streams',
+        loadComponent: () =>
+          import('./features/data-streams/data-streams.component').then(
+            (m) => m.DataStreamsComponent,
+          ),
+      },
+      {
+        path: 'ilm',
+        loadComponent: () => import('./features/ilm/ilm.component').then((m) => m.IlmComponent),
+      },
+      {
+        path: 'pipelines',
+        loadComponent: () =>
+          import('./features/pipelines/pipelines.component').then((m) => m.PipelinesComponent),
+      },
     ],
   },
   { path: '**', redirectTo: 'connect' },
