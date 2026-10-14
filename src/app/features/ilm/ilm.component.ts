@@ -41,7 +41,6 @@ import {
   analyzePolicyBody,
   canRetryStep,
   filterExplain,
-  indexBatches,
   filterPolicies,
   needsAttention,
   normalizeExplain,
@@ -289,6 +288,7 @@ export class IlmComponent implements PendingChangesAware {
       this.openPolicy(policy);
     } else {
       this.alerts.warn(`Lifecycle policy ${name} does not exist`);
+      this.updateUrl();
     }
   }
 
@@ -676,17 +676,12 @@ export class IlmComponent implements PendingChangesAware {
       return;
     }
     this.retryingSteps.set(true);
-    let retried = 0;
     try {
-      for (const batch of indexBatches(indices)) {
-        await this.api.post<unknown>('ilm/retry', { indices: batch });
-        retried += batch.split(',').length;
-      }
-      this.alerts.success(single ? `Retrying the failed step of ${single}` : `Retrying the failed steps of ${pluralize(retried, 'index', 'indices')}`);
+      // The backend sends long lists in batches that fit Elasticsearch's request line.
+      await this.api.post<unknown>('ilm/retry', { indices });
+      this.alerts.success(single ? `Retrying the failed step of ${single}` : `Retrying the failed steps of ${pluralize(indices.length, 'index', 'indices')}`);
     } catch (error: unknown) {
-      const action = single
-        ? `Could not retry the failed step of ${single}`
-        : `Could not retry the failed steps of ${pluralize(indices.length - retried, 'index', 'indices')}`;
+      const action = single ? `Could not retry the failed step of ${single}` : 'Could not retry the failed steps';
       this.alerts.error(failureMessage(action, error), error);
     } finally {
       this.retryingSteps.set(false);

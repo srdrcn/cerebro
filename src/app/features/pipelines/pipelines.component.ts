@@ -306,6 +306,7 @@ export class PipelinesComponent implements PendingChangesAware {
       this.openPipeline(pipeline);
     } else {
       this.alerts.warn(`Ingest pipeline ${id} does not exist`);
+      this.updateUrl();
     }
   }
 

@@ -519,28 +519,6 @@ export function canRetryStep(row: ExplainRow): boolean {
   return row.managed && row.step === 'ERROR';
 }
 
-/**
- * Splits index names into comma lists that each stay under `maxLength`, so a
- * bulk retry never builds a request line Elasticsearch rejects.
- */
-export function indexBatches(indices: readonly string[], maxLength = MAX_EXPLAIN_TARGET_LENGTH): string[] {
-  const batches: string[] = [];
-  let current = '';
-  for (const index of indices) {
-    const next = current ? `${current},${index}` : index;
-    if (current && next.length > maxLength) {
-      batches.push(current);
-      current = index;
-    } else {
-      current = next;
-    }
-  }
-  if (current) {
-    batches.push(current);
-  }
-  return batches;
-}
-
 export function filterExplain(rows: readonly ExplainRow[], filter: ExplainFilter, query = ''): ExplainRow[] {
   const needle = query.trim().toLocaleLowerCase();
   return rows.filter((row) => {
