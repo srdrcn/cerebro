@@ -113,6 +113,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/tasks/tasks.component').then((m) => m.TasksComponent),
       },
       {
+        path: 'performance',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/performance/performance.component').then((m) => m.PerformanceComponent),
+      },
+      {
         path: 'recovery',
         loadComponent: () =>
           import('./features/recovery/recovery.component').then((m) => m.RecoveryComponent),

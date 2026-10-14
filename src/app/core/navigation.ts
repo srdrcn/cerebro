@@ -56,6 +56,13 @@ export const NAVIGATION: readonly NavigationGroup[] = [
         keywords: 'tasks running cancel reindex merge jobs',
       },
       {
+        label: 'Performance',
+        route: '/performance',
+        icon: 'bi-speedometer2',
+        description: 'Hot threads, thread pools, pending tasks and slow logs',
+        keywords: 'performance hot threads cpu thread pool rejected queue pending tasks master slow log slowlog latency',
+      },
+      {
         label: 'Recoveries',
         route: '/recovery',
         icon: 'bi-arrow-repeat',

@@ -1,0 +1,420 @@
+<div class="stack">
+  <form class="card hot-form" novalidate (ngSubmit)="submit()" aria-labelledby="hot-form-title">
+    <div class="card-header">
+      <div class="row min-w-0">
+        <span class="card-icon" aria-hidden="true"><i class="bi bi-fire"></i></span>
+        <div class="min-w-0">
+          <h2 id="hot-form-title" class="card-title">Capture hot threads</h2>
+          <p class="card-subtitle">Elasticsearch samples every thread 10 times during the interval and reports the busiest ones per node.</p>
+        </div>
+      </div>
+    </div>
+    <div class="card-body hot-form__body">
+      <div class="field hot-form__node">
+        <label class="field-label" for="hot-node">Node</label>
+        <select id="hot-node" class="select" name="node" [ngModel]="node()" (ngModelChange)="node.set($event)" [attr.aria-describedby]="nodesFailed() ? 'hot-node-error' : null">
+          <option value="">All nodes</option>
+          @for (option of nodes(); track option.id) {
+            <option [value]="option.id">{{ option.name }}</option>
+          }
+        </select>
+        @if (nodesFailed()) {
+          <p class="field-hint" id="hot-node-error">
+            Could not list the nodes. <button type="button" class="link-button" (click)="retryNodes()">Try again</button>
+          </p>
+        }
+      </div>
+
+      <div class="field hot-form__type">
+        <span class="field-label" id="hot-type-label">Measure</span>
+        <div class="segmented" role="group" aria-labelledby="hot-type-label" aria-describedby="hot-type-hint">
+          @for (option of types; track option.key) {
+            <button type="button" [attr.aria-pressed]="type() === option.key" [title]="option.hint" (click)="type.set(option.key)">
+              {{ option.label }}
+            </button>
+          }
+        </div>
+        <p class="field-hint" id="hot-type-hint">{{ typeHint() }}</p>
+      </div>
+
+      <div class="field hot-form__threads">
+        <label class="field-label" for="hot-threads">Threads per node</label>
+        <input
+          #threadsInput
+          id="hot-threads"
+          class="input tabular"
+          name="threads"
+          type="number"
+          inputmode="numeric"
+          [min]="minThreads"
+          [max]="maxThreads"
+          step="1"
+          [ngModel]="threads()"
+          (ngModelChange)="setThreads($event)"
+          [class.is-invalid]="submitted() && !!threadsError()"
+          [attr.aria-invalid]="submitted() && !!threadsError()"
+          [attr.aria-describedby]="submitted() && threadsError() ? 'hot-threads-error' : null"
+        />
+        @if (submitted() && threadsError(); as message) {
+          <p class="field-error" id="hot-threads-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ message }}</p>
+        }
+      </div>
+
+      <div class="field hot-form__interval">
+        <label class="field-label" for="hot-interval">Interval</label>
+        <select id="hot-interval" class="select" name="interval" [ngModel]="interval()" (ngModelChange)="interval.set($event)">
+          @for (option of intervals; track option) {
+            <option [value]="option">{{ option }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="hot-form__actions">
+        <label class="switch">
+          <input type="checkbox" role="switch" name="ignoreIdle" [checked]="ignoreIdle()" (change)="ignoreIdle.set(!ignoreIdle())" />
+          Ignore idle threads
+        </label>
+        <div class="row-wrap hot-form__submit">
+          @if (capturing()) {
+            <span class="text-sm text-muted" id="hot-capture-note">Each node runs one capture at a time; wait for this one to finish.</span>
+          }
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [class.is-loading]="capturing()"
+            [disabled]="capturing()"
+            [attr.aria-describedby]="capturing() ? 'hot-capture-note' : null"
+          >
+            <i class="bi bi-record-circle" aria-hidden="true"></i> {{ capture() ? 'Capture again' : 'Capture' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{{ announcement() }}</p>
+
+  @if (capture(); as result) {
+    @if (captureError(); as reason) {
+      <div class="callout callout-warning" role="alert">
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        <div class="min-w-0">
+          <strong>Could not capture again.</strong> {{ reason }} The capture below is from {{ capturedLabel() }}.
+        </div>
+      </div>
+    }
+
+    <section class="card hot-results" aria-labelledby="hot-results-title" [attr.aria-busy]="capturing()" [class.is-stale]="capturing()">
+      <div class="card-header hot-results__header">
+        <div class="min-w-0">
+          <h2 id="hot-results-title" class="card-title">
+            Captured at <span class="tabular">{{ capturedLabel() }}</span>
+          </h2>
+          <p class="card-subtitle">{{ requestLabel() }}</p>
+        </div>
+        <div class="row-wrap hot-results__tools">
+          <div class="segmented segmented-sm" role="group" aria-label="View">
+            <button type="button" [attr.aria-pressed]="view() === 'readable'" (click)="view.set('readable')">
+              <i class="bi bi-card-list" aria-hidden="true"></i> Readable
+            </button>
+            <button type="button" [attr.aria-pressed]="view() === 'raw'" (click)="view.set('raw')">
+              <i class="bi bi-file-text" aria-hidden="true"></i> Raw text
+            </button>
+          </div>
+          <button type="button" class="btn btn-sm" (click)="copyRaw()">
+            <i class="bi bi-clipboard" aria-hidden="true"></i> Copy text
+          </button>
+        </div>
+      </div>
+
+      @if (view() === 'raw') {
+        <pre class="hot-raw" tabindex="0" aria-label="Hot threads as Elasticsearch returned them">{{ result.text }}</pre>
+      } @else {
+        <div class="card-body stack hot-results__body">
+          <dl class="hot-facts">
+            <div>
+              <dt>Nodes</dt>
+              <dd class="tabular">{{ summary().nodes | num }}</dd>
+            </div>
+            <div>
+              <dt>{{ result.request.type === 'cpu' ? 'Busy threads' : result.request.type === 'block' ? 'Blocked threads' : 'Threads' }}</dt>
+              <dd class="tabular">{{ summary().busy | num }}<span class="hot-facts__of"> of {{ summary().threads | num }}</span></dd>
+            </div>
+            <div>
+              <dt>Hottest thread</dt>
+              @if (summary().hottest; as hottest) {
+                <dd class="tabular">
+                  {{ loadLabel(hottest.thread) }}
+                  <span class="hot-facts__of">{{ hottest.thread.pool ?? 'other' }} on {{ hottest.node }}</span>
+                </dd>
+              } @else {
+                <dd>–</dd>
+              }
+            </div>
+          </dl>
+
+          @if (idleOnly()) {
+            <div class="callout callout-success hot-hint">
+              <i class="bi bi-check2-circle" aria-hidden="true"></i>
+              <div class="min-w-0">
+                <strong>Every {{ result.request.type === 'block' ? 'reported' : 'waiting' }} thread was idle, waiting for work: nothing is blocked.</strong>
+                <span class="text-secondary"> Parked workers always top a {{ result.request.type === 'block' ? 'block' : 'wait' }} capture when a pool has nothing to do.</span>
+              </div>
+            </div>
+          } @else if (hint(); as hint) {
+            <div class="callout callout-info hot-hint">
+              <i class="bi bi-lightbulb" aria-hidden="true"></i>
+              <div class="min-w-0">
+                <strong>{{ hint.lead }}</strong>
+                <span class="text-secondary"> ({{ hint.detail }}).</span>
+                {{ hint.text }}
+                @if (pools().length > 1) {
+                  <ul class="hot-pools" aria-label="Load by thread pool">
+                    @for (pool of pools(); track pool.pool) {
+                      <li class="tag">
+                        <span class="tag-key">{{ pool.pool ?? 'other' }}</span>
+                        <span class="tabular">{{ pluralize(pool.threads, 'thread') }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            </div>
+          }
+
+          @if (quietState(); as quiet) {
+            <cerebro-empty [icon]="quiet.icon" [heading]="quiet.heading" [text]="quiet.text" [compact]="true">
+              @if (quietCount() > 0) {
+                <button type="button" class="btn btn-sm" [attr.aria-pressed]="showQuiet()" (click)="showQuiet.set(!showQuiet())">
+                  {{ showQuiet() ? 'Hide' : 'Show' }} {{ pluralize(quietCount(), 'quiet thread') }}
+                </button>
+              }
+            </cerebro-empty>
+          }
+
+          @if (summary().busy > 0 || showQuiet()) {
+            <div class="hot-legend text-xs text-muted" aria-hidden="true">
+              <span><span class="hot-legend__swatch frame--elasticsearch"></span> Elasticsearch</span>
+              <span><span class="hot-legend__swatch frame--lucene"></span> Lucene</span>
+              <span><span class="hot-legend__swatch frame--jdk"></span> JDK and libraries</span>
+            </div>
+
+            @for (entry of shownNodes(); track entry.node.id || entry.node.name) {
+              <section class="hot-node" [attr.aria-labelledby]="'hot-node-' + $index">
+                <header class="hot-node__header">
+                  <h3 class="hot-node__title" [id]="'hot-node-' + $index">
+                    <i class="bi bi-hdd" aria-hidden="true"></i> {{ entry.node.name }}
+                  </h3>
+                  <span class="text-sm text-muted">
+                    @if (entry.threads.length > 0) {
+                      {{ pluralize(entry.threads.length, 'thread') }}
+                    } @else {
+                      No busy thread
+                    }
+                    @if (!showQuiet() && entry.quiet > 0) {
+                      · {{ entry.quiet | num }} quiet
+                    }
+                  </span>
+                  @if (entry.node.address) {
+                    <span class="text-xs text-muted mono hot-node__address">{{ entry.node.address }}</span>
+                  }
+                </header>
+
+                @if (entry.threads.length > 0) {
+                  <ol class="hot-threads" [attr.aria-label]="'Threads of ' + entry.node.name + ', busiest first'">
+                    @for (thread of entry.threads; track thread.key) {
+                      <li>
+                        <article class="hot-thread" [class]="'hot-thread ' + loadTone(thread)" [class.is-quiet]="!isBusyThread(thread)" [attr.aria-label]="loadLabel(thread) + ' ' + (thread.pool ?? thread.name)">
+                          <div class="hot-thread__head">
+                            <div class="hot-thread__load tabular">{{ loadLabel(thread) }}</div>
+                            <div class="min-w-0 hot-thread__identity">
+                              <div class="row-wrap hot-thread__tags">
+                                @if (thread.pool) {
+                                  <span class="badge badge-accent">{{ thread.pool }}</span>
+                                } @else {
+                                  <span class="badge badge-outline">no pool</span>
+                                }
+                                @if (thread.worker) {
+                                  <span class="text-sm text-muted mono">{{ thread.worker }}</span>
+                                }
+                                @if (thread.idle) {
+                                  <span class="badge" title="Every snapshot shows the thread parked or sleeping">Waiting for work</span>
+                                }
+                              </div>
+                              <div class="hot-thread__name mono truncate" [title]="thread.name">{{ thread.name }}</div>
+                            </div>
+                            <button
+                              type="button"
+                              class="btn btn-ghost btn-icon btn-sm"
+                              [attr.aria-label]="'Copy the stack of ' + thread.name"
+                              title="Copy stack"
+                              (click)="copyThread(entry.node, thread)"
+                            >
+                              <i class="bi bi-clipboard" aria-hidden="true"></i>
+                            </button>
+                          </div>
+
+                          @if (thread.allocatedBytes !== null) {
+                            <div class="hot-bar" aria-hidden="true">
+                              <span class="hot-bar__cpu" [style.width.%]="memoryWidth(thread)"></span>
+                            </div>
+                            <p class="hot-thread__usage text-xs text-muted">Allocated during the {{ result.request.interval }} interval</p>
+                          } @else {
+                            <div class="hot-bar" aria-hidden="true">
+                              @if (thread.cpuPercent !== null && thread.otherPercent !== null) {
+                                <span class="hot-bar__cpu" [style.width.%]="barWidth(thread.cpuPercent)"></span>
+                                <span class="hot-bar__other" [style.width.%]="barWidth(thread.otherPercent)"></span>
+                              } @else {
+                                <span class="hot-bar__cpu" [style.width.%]="barWidth(thread.percent)"></span>
+                              }
+                            </div>
+                            <p class="hot-thread__usage text-xs text-muted tabular">
+                              @if (thread.cpuPercent !== null && thread.otherPercent !== null) {
+                                <span class="hot-key hot-key--cpu" aria-hidden="true"></span> On CPU {{ thread.cpuPercent.toFixed(1) }}%
+                                <span class="hot-key hot-key--other" aria-hidden="true"></span>
+                                <span title="Runnable but not on a CPU: waiting for a core, for I/O in native code, or for the JVM">Other {{ thread.otherPercent.toFixed(1) }}%</span>
+                                @if (thread.usage) {
+                                  ·
+                                }
+                              } @else if (thread.cpuPercent !== null && thread.idlePercent !== null) {
+                                <span class="hot-key hot-key--cpu" aria-hidden="true"></span> On CPU {{ thread.cpuPercent.toFixed(1) }}%
+                                <span class="hot-key hot-key--idle" aria-hidden="true"></span>
+                                <span title="Network threads report the time they waited for traffic as idle">Idle {{ thread.idlePercent.toFixed(1) }}%</span>
+                              }
+                              {{ thread.usage }}
+                            </p>
+                          }
+
+                          @if (thread.focus; as focus) {
+                            <p class="hot-thread__focus text-sm">
+                              <span class="text-muted">{{ focus.kind === 'lucene' ? 'Top Lucene frame' : 'Top Elasticsearch frame' }}</span>
+                              <span class="mono" [title]="focus.className + '.' + focus.method">{{ focus.simpleName }}.{{ focus.method }}</span>
+                              @if (thread.focusGroup !== 0) {
+                                <span class="text-muted">(in another stack)</span>
+                              }
+                            </p>
+                          }
+
+                          @for (shown of visibleGroups(thread); track shown.index) {
+                            @let group = shown.group;
+                            @let groupIndex = shown.index;
+                            <div class="hot-stack" [class.hot-stack--folded]="group.kind !== 'work'">
+                              <div class="hot-stack__head">
+                                <span class="hot-stack__share" aria-hidden="true"><span [style.width.%]="groupShare(group)"></span></span>
+                                <span class="text-sm">{{ groupLabel(group) }}</span>
+                                @if (group.kind === 'work') {
+                                  <span class="text-xs text-muted">{{ pluralize(group.frames.length, 'frame') }}</span>
+                                } @else {
+                                  <button
+                                    type="button"
+                                    class="link-button text-xs"
+                                    [attr.aria-expanded]="!isFolded(thread, group, groupIndex)"
+                                    (click)="toggleFrames(thread, groupIndex)"
+                                  >
+                                    {{ isFolded(thread, group, groupIndex) ? 'Show' : 'Hide' }} {{ pluralize(group.frames.length, 'frame') }}
+                                  </button>
+                                }
+                              </div>
+                              @if (!isFolded(thread, group, groupIndex)) {
+                                <ol class="frames" [attr.aria-label]="groupLabel(group) + ', top of the stack first'">
+                                  @for (frame of visibleFrames(thread, group, groupIndex); track $index) {
+                                    <li class="frame" [class]="'frame frame--' + frame.kind" [title]="frame.raw">
+                                      @if (frame.className) {
+                                        <span class="frame__call"><span class="frame__class">{{ frame.simpleName }}</span>.<span class="frame__method">{{ frame.method }}</span></span>
+                                        <span class="frame__location">{{ frame.location }}</span>
+                                      } @else {
+                                        <span class="frame__call">{{ frame.raw }}</span>
+                                      }
+                                    </li>
+                                  }
+                                </ol>
+                              }
+                              @if (isCollapsible(group)) {
+                                <button
+                                  type="button"
+                                  class="link-button text-sm hot-stack__toggle"
+                                  [attr.aria-expanded]="expanded().has(groupKey(thread, groupIndex))"
+                                  (click)="toggleFrames(thread, groupIndex)"
+                                >
+                                  @if (expanded().has(groupKey(thread, groupIndex))) {
+                                    <i class="bi bi-chevron-up" aria-hidden="true"></i> Show the top {{ collapsedFrames }} frames only
+                                  } @else {
+                                    <i class="bi bi-chevron-down" aria-hidden="true"></i> Show all {{ group.frames.length }} frames
+                                  }
+                                </button>
+                              }
+                            </div>
+                          }
+                          @if (otherStacks(thread).length > 0) {
+                            <button
+                              type="button"
+                              class="btn btn-sm btn-ghost hot-stack__more"
+                              [attr.aria-expanded]="allStacks().has(thread.key)"
+                              (click)="toggleStacks(thread)"
+                            >
+                              <i class="bi" [class]="allStacks().has(thread.key) ? 'bi bi-dash-square' : 'bi bi-plus-square'" aria-hidden="true"></i>
+                              @if (allStacks().has(thread.key)) {
+                                Hide the other {{ otherStacks(thread).length === 1 ? 'stack' : 'stacks' }}
+                              } @else {
+                                Show {{ pluralize(otherStacks(thread).length, 'other stack') }}
+                                <span class="text-muted">({{ otherSnapshots(thread) }} of {{ thread.groups[0]?.total }} snapshots)</span>
+                              }
+                            </button>
+                          }
+                        </article>
+                      </li>
+                    }
+                  </ol>
+                }
+              </section>
+            }
+
+            @if (summary().busy > 0 && quietCount() > 0) {
+              <button type="button" class="btn btn-sm hot-quiet-toggle" [attr.aria-pressed]="showQuiet()" (click)="showQuiet.set(!showQuiet())">
+                <i class="bi" [class]="showQuiet() ? 'bi bi-eye-slash' : 'bi bi-eye'" aria-hidden="true"></i>
+                {{ showQuiet() ? 'Hide' : 'Show' }} {{ pluralize(quietCount(), 'quiet thread') }} (under {{ busyPercent }}%)
+              </button>
+            }
+          }
+
+          @if (result.unparsed > 0) {
+            <p class="text-xs text-muted">
+              <i class="bi bi-info-circle" aria-hidden="true"></i>
+              {{ pluralize(result.unparsed, 'line') }} could not be read; the raw text has everything.
+            </p>
+          }
+        </div>
+      }
+    </section>
+  } @else if (captureError(); as reason) {
+    <div class="card">
+      <cerebro-empty icon="bi-exclamation-triangle" heading="Could not capture hot threads" [text]="reason">
+        <button type="button" class="btn btn-sm" [class.is-loading]="capturing()" [disabled]="capturing()" (click)="submit()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+        <button type="button" class="btn btn-sm btn-ghost" (click)="restoreDefaults()">Restore default options</button>
+      </cerebro-empty>
+    </div>
+  } @else if (capturing() || !waitingForCapture()) {
+    <div class="card loading-block" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      {{ capturing() ? 'Capturing hot threads for ' + interval() + '…' : 'Loading the nodes…' }}
+    </div>
+  } @else {
+    <div class="card">
+      <cerebro-empty
+        icon="bi-record-circle"
+        heading="Ready to capture"
+        [text]="
+          nodes().length > 0
+            ? 'This cluster has ' + pluralize(nodes().length, 'node') + '. A capture samples every thread of each node 10 times, so it only runs when you ask: pick a node to keep it light, then choose Capture.'
+            : 'A capture samples every thread of each node 10 times, so it only runs when you ask. Choose Capture to start.'
+        "
+      >
+        <button type="button" class="btn btn-sm btn-primary" (click)="submit()">
+          <i class="bi bi-record-circle" aria-hidden="true"></i> Capture
+        </button>
+      </cerebro-empty>
+    </div>
+  }
+</div>

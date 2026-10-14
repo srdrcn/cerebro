@@ -1,0 +1,194 @@
+<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{{ announcement() }}</p>
+
+@if (tasks(); as list) {
+  @if (staleReason(); as reason) {
+    <div class="callout callout-warning pending-stale" role="alert">
+      <i class="bi bi-wifi-off" aria-hidden="true"></i>
+      <div class="min-w-0">
+        <strong>Could not refresh the pending tasks.</strong>
+        Showing data from {{ loadedAt() | date: 'HH:mm:ss' }}. {{ reason }}
+      </div>
+      <button type="button" class="btn btn-sm pending-stale__retry" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+      </button>
+    </div>
+  }
+
+  <div class="stat-grid pending-stats">
+    <div class="stat" [class.stat--warn]="summary().total >= 10">
+      <div class="stat__label"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Pending</div>
+      <div class="stat__value">{{ summary().total | num }}</div>
+      <div class="stat__meta">Cluster changes waiting for the master</div>
+    </div>
+    <div class="stat">
+      <div class="stat__label"><i class="bi bi-play-circle" aria-hidden="true"></i> Executing</div>
+      <div class="stat__value">{{ summary().executing | num }}</div>
+      <div class="stat__meta">The master runs one at a time</div>
+    </div>
+    <div class="stat" [class.stat--warn]="(summary().oldest?.timeInQueueMillis ?? 0) >= slowMillis">
+      <div class="stat__label"><i class="bi bi-stopwatch" aria-hidden="true"></i> Longest wait</div>
+      @if (summary().oldest; as oldest) {
+        <div class="stat__value tabular">{{ formatDuration(oldest.timeInQueueMillis) }}</div>
+        <div class="stat__meta" [title]="oldest.source">{{ oldest.source }}</div>
+      } @else {
+        <div class="stat__value">–</div>
+        <div class="stat__meta">Nothing waiting</div>
+      }
+    </div>
+    <div class="stat">
+      <div class="stat__label"><i class="bi bi-lightning" aria-hidden="true"></i> Urgent or immediate</div>
+      <div class="stat__value">{{ summary().urgent | num }}</div>
+      <div class="stat__meta">Run before normal priority</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header pending-toolbar">
+      @if (list.length > 0) {
+        <div class="toolbar">
+          <cerebro-search [(value)]="query" placeholder="Filter by source or priority" ariaLabel="Filter pending tasks by source, priority or insert order" />
+        </div>
+      } @else {
+        <h2 class="card-title">Master task queue</h2>
+      }
+      <div class="row pending-toolbar__end">
+        <span class="live-indicator text-sm text-muted" [attr.aria-busy]="loading()">
+          @if (loading()) {
+            <span class="spinner" aria-hidden="true"></span> Updating…
+          } @else if (staleReason()) {
+            <span class="dot dot-yellow" aria-hidden="true"></span> Last updated {{ loadedAt() | date: 'HH:mm:ss' }}
+          } @else {
+            <span class="dot dot-green dot-pulse" aria-hidden="true"></span> Updated {{ loadedAt() | date: 'HH:mm:ss' }}
+          }
+        </span>
+        <span class="count-label">
+          @if (query().trim()) {
+            <strong>{{ visible().length | num }}</strong> of {{ list.length | num }} {{ list.length | plural: 'task' }}
+          } @else {
+            <strong>{{ list.length | num }}</strong> {{ list.length | plural: 'task' }}
+          }
+        </span>
+        <button type="button" class="btn btn-sm btn-ghost" (click)="showAllJson()">
+          <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+        </button>
+      </div>
+    </div>
+
+    @if (list.length === 0) {
+      <cerebro-empty
+        icon="bi-check2-circle"
+        heading="No pending cluster tasks"
+        text="The elected master has applied every cluster change: creating indices, updating mappings, allocating shards and changing settings would wait here. This list updates automatically."
+      />
+    } @else {
+      <div class="table-wrap">
+        <table class="data-table pending-table" [attr.aria-busy]="loading()">
+          <caption class="visually-hidden">Cluster state changes waiting for the elected master.</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="num" [attr.aria-sort]="sort.ariaSort('queue')">
+                <button
+                  type="button"
+                  class="sort-button"
+                  [class.is-active]="sort.isActive('queue')"
+                  title="The order the master runs the queue in: executing first, then by priority"
+                  (click)="sort.sortBy('queue')"
+                >
+                  Queue <i class="bi" [class]="'bi ' + sort.icon('queue')" aria-hidden="true"></i>
+                </button>
+              </th>
+              <th scope="col" [attr.aria-sort]="sort.ariaSort('priority')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('priority')" (click)="sort.sortBy('priority')">
+                  Priority <i class="bi" [class]="'bi ' + sort.icon('priority')" aria-hidden="true"></i>
+                </button>
+              </th>
+              <th scope="col">Source</th>
+              <th scope="col" class="num col-wide" [attr.aria-sort]="sort.ariaSort('time')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('time')" (click)="sort.sortBy('time')">
+                  Time in queue <i class="bi" [class]="'bi ' + sort.icon('time')" aria-hidden="true"></i>
+                </button>
+              </th>
+              <th scope="col" class="col-wide">Status</th>
+              <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (task of visible(); track task.order) {
+              <tr [class.is-executing]="task.executing">
+                <td class="num tabular text-muted">{{ task.position + 1 | num }}</td>
+                <td><span [class]="priorityBadge(task)">{{ task.priority.toLowerCase() }}</span></td>
+                <th scope="row" class="source-cell">
+                  <span class="source-cell__text">{{ task.source || '–' }}</span>
+                  <span class="source-cell__meta text-xs text-muted">
+                    <span class="source-cell__narrow" [class.text-warning]="task.timeInQueueMillis >= slowMillis">
+                      {{ formatDuration(task.timeInQueueMillis) }} in queue ·
+                      @if (task.executing) {
+                        <span class="text-success">executing</span>
+                      } @else {
+                        waiting
+                      }
+                      ·
+                    </span>
+                    insert order {{ task.order }}
+                  </span>
+                </th>
+                <td class="num tabular nowrap col-wide" [class.text-warning]="task.timeInQueueMillis >= slowMillis">
+                  {{ formatDuration(task.timeInQueueMillis) }}
+                </td>
+                <td class="nowrap col-wide">
+                  @if (task.executing) {
+                    <span class="badge badge-green"><span class="dot dot-green dot-sm dot-pulse" aria-hidden="true"></span> Executing</span>
+                  } @else {
+                    <span class="text-muted">Waiting</span>
+                  }
+                </td>
+                <td class="actions">
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-icon btn-sm"
+                    [attr.aria-label]="'View JSON of pending task ' + task.order"
+                    title="View JSON"
+                    (click)="showJson(task)"
+                  >
+                    <i class="bi bi-braces" aria-hidden="true"></i>
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6">
+                  <cerebro-empty icon="bi-funnel" heading="No matching pending tasks" text="No pending task matches the filter." [compact]="true">
+                    <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+                  </cerebro-empty>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    <p class="card-footer pending-footer text-sm text-muted">
+      <i class="bi bi-info-circle" aria-hidden="true"></i>
+      <span>
+        Every change to the cluster state goes through this queue on the elected master, highest priority first. A few tasks for a moment are
+        normal; a queue that stays long usually means too many indices or shards, frequent mapping updates, or a master node that is short of
+        CPU or heap.
+      </span>
+    </p>
+  </div>
+} @else if (loadError(); as reason) {
+  <div class="card">
+    <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load pending tasks" [text]="reason">
+      <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="retry()">
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+      </button>
+    </cerebro-empty>
+  </div>
+} @else {
+  <div class="stat-grid pending-stats" aria-hidden="true">
+    @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+      <div class="stat"><span class="skeleton" style="height: 62px"></span></div>
+    }
+  </div>
+  <div class="card loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Loading pending tasks…</div>
+}
