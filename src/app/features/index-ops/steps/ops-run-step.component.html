@@ -1,0 +1,455 @@
+@if (resize(); as run) {
+  <div class="ops-sections">
+    @switch (run.phase) {
+      @case ('sending') {
+        <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Sending the {{ resizeLabel() }} request…</div>
+      }
+      @case ('failed') {
+        <div class="callout callout-danger" role="alert">
+          <i class="bi bi-x-circle" aria-hidden="true"></i>
+          <div><strong>Elasticsearch refused the {{ resizeLabel() }}.</strong> {{ run.error }}</div>
+        </div>
+      }
+      @default {
+        @let stuck = stuckShard();
+        <div class="ops-result" [class]="'ops-result tone-' + (run.phase === 'done' ? 'green' : stuck !== null ? 'red' : 'blue')">
+          <span class="ops-result__icon" aria-hidden="true">
+            @if (run.phase === 'done') {
+              <i class="bi bi-check-lg"></i>
+            } @else if (stuck !== null) {
+              <i class="bi bi-exclamation-lg"></i>
+            } @else {
+              <span class="spinner"></span>
+            }
+          </span>
+          <div class="min-w-0">
+            <h3 class="ops-result__title">
+              @if (run.phase === 'done') {
+                <span class="mono">{{ run.target }}</span> is green
+              } @else if (stuck !== null) {
+                Primary shard {{ stuck }} of <span class="mono">{{ run.target }}</span> cannot be allocated
+              } @else {
+                <span class="mono">{{ run.target }}</span> was created; its shards are starting
+              }
+            </h3>
+            <p class="ops-result__text">
+              @if (run.phase === 'done') {
+                Every shard copy is started: the index is ready.
+              } @else if (stuck !== null) {
+                The index stays red until it is. Common causes: the node is past the high disk watermark, allocation filters
+                inherited from the source, or allocation retries ran out.
+                <a routerLink="/allocation" [queryParams]="linkTo({ index: run.target, shard: '' + stuck, primary: 'true' })">Shard allocation</a>
+                explains why; the page keeps following the shards.
+              } @else {
+                Elasticsearch recovers the shards from the source; the page follows them.
+              }
+            </p>
+          </div>
+        </div>
+
+        @if (run.recovery; as recovery) {
+          <div class="ops-progress" role="status" aria-live="off">
+            <div class="ops-progress__head">
+              <span><strong>{{ recovery.started | num }} of {{ recovery.total | num }}</strong> shard copies started</span>
+              <span class="text-secondary tabular">{{ recovery.primariesStarted | num }} of {{ recovery.primaries | num }} {{ recovery.primaries | plural: 'primary' : 'primaries' }}</span>
+            </div>
+            <cerebro-meter [value]="recovery.percent" [warn]="101" [danger]="101" [label]="'Shard copies of ' + run.target + ' started'" />
+            @if (recovery.unassigned > 0 && recovery.primariesStarted === recovery.primaries) {
+              <p class="text-sm text-secondary">
+                {{ recovery.unassigned | num }} {{ recovery.unassigned === 1 ? 'replica waits' : 'replicas wait' }} for a node.
+                If they stay unassigned,
+                <a routerLink="/allocation" [queryParams]="linkTo({ index: run.target, shard: '0', primary: 'false' })">Shard allocation</a>
+                explains why; the index is usable meanwhile.
+              </p>
+            }
+          </div>
+        } @else {
+          <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Waiting for {{ run.target }} to appear…</div>
+        }
+
+        <section class="ops-section" aria-labelledby="ops-finish-title">
+          <div class="ops-section__head">
+            <h3 id="ops-finish-title" class="section-title" tabindex="-1"><i class="bi bi-flag" aria-hidden="true"></i> Finish</h3>
+          </div>
+          <ul class="ops-finish">
+            @if (store.sourceDeleted()) {
+              <li class="ops-finish__item">
+                <i class="bi bi-trash3 text-muted" aria-hidden="true"></i>
+                <span class="ops-finish__text"><span class="mono">{{ run.source.name }}</span> was deleted.</span>
+              </li>
+            } @else {
+              <li class="ops-finish__item">
+                <i class="bi" [class]="releaseRequest() ? 'bi bi-unlock' : 'bi bi-check-circle text-success'" aria-hidden="true"></i>
+                <span class="ops-finish__text">
+                  @if (releaseRequest()) {
+                    <span class="mono">{{ run.source.name }}</span> still {{ sourceChanges() }} (set by this wizard).
+                  } @else if (otherRestrictions().length === 0) {
+                    <span class="mono">{{ run.source.name }}</span> accepts writes and has no node requirement.
+                  } @else {
+                    Nothing this wizard set on <span class="mono">{{ run.source.name }}</span> is left.
+                  }
+                </span>
+                @if (releaseRequest()) {
+                  <button
+                    type="button"
+                    class="btn btn-sm"
+                    [class.is-loading]="store.finishBusy() === 'release'"
+                    [disabled]="store.finishBusy() !== null"
+                    (click)="release()"
+                  >
+                    Allow writes again
+                  </button>
+                }
+              </li>
+              @for (note of otherRestrictions(); track note) {
+                <li class="ops-finish__item">
+                  <i class="bi bi-info-circle" aria-hidden="true"></i>
+                  <span class="ops-finish__text">{{ note }}</span>
+                  <a class="btn btn-sm" routerLink="/index_settings" [queryParams]="linkTo({ index: run.source.name })">Index settings</a>
+                </li>
+              }
+              @if (run.source.dataStream) {
+                <li class="ops-finish__item">
+                  <i class="bi bi-water" aria-hidden="true"></i>
+                  <span class="ops-finish__text">
+                    <span class="mono">{{ run.source.name }}</span> is a backing index of <span class="mono">{{ run.source.dataStream }}</span>,
+                    so it is not offered for deletion: its documents would leave the data stream, and
+                    <span class="mono">{{ run.target }}</span> is not part of it. To swap them, send
+                    <span class="mono">POST _data_stream/_modify</span> with <span class="mono">remove_backing_index</span> and
+                    <span class="mono">add_backing_index</span> in the REST console.
+                  </span>
+                  <a class="btn btn-sm" routerLink="/data_streams" [queryParams]="connection.hostQuery()">Data streams</a>
+                </li>
+              } @else {
+                <li class="ops-finish__item">
+                  <i class="bi bi-trash3" aria-hidden="true"></i>
+                  <span class="ops-finish__text">
+                    Keep only the new index: delete <span class="mono">{{ run.source.name }}</span>
+                    @if (run.source.docs !== null) {
+                      ({{ run.source.docs | num }} {{ run.source.docs | plural: 'document' }}, {{ run.source.totalSize | bytes }}).
+                    }
+                    @if (run.phase !== 'done') {
+                      <span class="text-warning">Wait until {{ run.target }} is green.</span>
+                    }
+                  </span>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-danger-soft"
+                    [class.is-loading]="store.finishBusy() === 'delete'"
+                    [disabled]="store.finishBusy() !== null || run.phase !== 'done'"
+                    (click)="deleteSource()"
+                  >
+                    Delete {{ run.source.name }}
+                  </button>
+                </li>
+              }
+            }
+          </ul>
+          <div class="row-wrap">
+            <a class="btn btn-sm" routerLink="/index_detail" [queryParams]="linkTo({ index: run.target })">
+              <i class="bi bi-box" aria-hidden="true"></i> Open {{ run.target }}
+            </a>
+            <a class="btn btn-sm" routerLink="/recovery" [queryParams]="linkTo({ index: run.target })">
+              <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Recoveries
+            </a>
+          </div>
+        </section>
+      }
+    }
+  </div>
+} @else if (rollover(); as run) {
+  <div class="ops-sections">
+    @switch (run.phase) {
+      @case ('sending') {
+        <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Rolling over {{ run.target }}…</div>
+      }
+      @case ('failed') {
+        <div class="callout callout-danger" role="alert">
+          <i class="bi bi-x-circle" aria-hidden="true"></i>
+          <div><strong>Elasticsearch refused the rollover.</strong> {{ run.error }}</div>
+        </div>
+      }
+      @default {
+        @if (run.preview; as preview) {
+          <div class="ops-result" [class]="'ops-result tone-' + (preview.rolledOver ? 'green' : 'yellow')">
+            <span class="ops-result__icon" aria-hidden="true"><i class="bi" [class]="preview.rolledOver ? 'bi bi-check-lg' : 'bi bi-pause'"></i></span>
+            <div class="min-w-0">
+              <h3 class="ops-result__title">{{ preview.rolledOver ? 'Rolled over' : 'Not rolled over' }}</h3>
+              <p class="ops-result__text">
+                @if (preview.rolledOver && run.implicitWrite) {
+                  <span class="mono">{{ run.target }}</span> now points to <span class="mono">{{ preview.newIndex }}</span> only:
+                  <span class="mono">{{ preview.oldIndex }}</span> keeps its documents but is no longer in the alias.
+                } @else if (preview.rolledOver) {
+                  New documents for <span class="mono">{{ run.target }}</span> now go to <span class="mono">{{ preview.newIndex }}</span>;
+                  <span class="mono">{{ preview.oldIndex }}</span> keeps the documents it has.
+                } @else {
+                  None of the conditions is met, so <span class="mono">{{ preview.oldIndex }}</span> stays the write index.
+                }
+              </p>
+            </div>
+          </div>
+          @if (preview.conditions.length > 0) {
+            <ul class="ops-conditions-result">
+              @for (condition of preview.conditions; track condition.key) {
+                <li>
+                  <span class="badge" [class]="condition.met ? 'badge badge-green' : 'badge badge-outline'">{{ condition.met ? 'Met' : 'Not met' }}</span>
+                  {{ condition.label }} <span class="mono">{{ condition.value }}</span>
+                </li>
+              }
+            </ul>
+          }
+          <div class="row-wrap">
+            @if (preview.rolledOver && preview.newIndex) {
+              <a class="btn btn-sm" routerLink="/index_detail" [queryParams]="linkTo({ index: preview.newIndex })">
+                <i class="bi bi-box" aria-hidden="true"></i> Open {{ preview.newIndex }}
+              </a>
+            }
+            @if (run.targetKind === 'alias') {
+              <a class="btn btn-sm" routerLink="/aliases" [queryParams]="connection.hostQuery()"><i class="bi bi-tags" aria-hidden="true"></i> Aliases</a>
+            } @else {
+              <a class="btn btn-sm" routerLink="/data_streams" [queryParams]="connection.hostQuery()"><i class="bi bi-water" aria-hidden="true"></i> Data streams</a>
+            }
+          </div>
+        }
+      }
+    }
+  </div>
+} @else if (reindex(); as run) {
+  <div class="ops-sections">
+    @switch (run.phase) {
+      @case ('starting') {
+        <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Starting the reindex…</div>
+      }
+      @case ('failed') {
+        <div class="callout callout-danger" role="alert">
+          <i class="bi bi-x-circle" aria-hidden="true"></i>
+          <div><strong>The reindex did not start.</strong> {{ run.error }}</div>
+        </div>
+      }
+      @case ('lost') {
+        <div class="callout callout-danger" role="alert">
+          <i class="bi bi-question-octagon" aria-hidden="true"></i>
+          <div>
+            <strong>Elasticsearch no longer knows this task.</strong>
+            Its node left the cluster or the result was not stored ({{ run.error }}).
+            Check the documents in
+            @if (run.dest) {
+              <span class="mono">{{ run.dest }}</span>
+            } @else {
+              the destination
+            }
+            and run the reindex again;
+            “Keep” for the documents the destination already has avoids copying them twice.
+          </div>
+        </div>
+        <div class="row-wrap">
+          @if (run.dest) {
+            <a class="btn btn-sm" routerLink="/index_detail" [queryParams]="linkTo({ index: run.dest })">
+              <i class="bi bi-box" aria-hidden="true"></i> Open {{ run.dest }}
+            </a>
+          }
+          <a class="btn btn-sm" routerLink="/tasks" [queryParams]="connection.hostQuery()"><i class="bi bi-activity" aria-hidden="true"></i> Tasks</a>
+        </div>
+      }
+      @default {
+        @let progress = run.progress;
+        @let outcome = outcomes[progress?.outcome ?? 'running'];
+        <div class="ops-result" [class]="'ops-result tone-' + outcome.tone">
+          <span class="ops-result__icon" aria-hidden="true">
+            @if (!progress || progress.outcome === 'running') {
+              <span class="spinner"></span>
+            } @else {
+              <i class="bi" [class]="'bi ' + outcome.icon"></i>
+            }
+          </span>
+          <div class="min-w-0">
+            <h3 class="ops-result__title">{{ run.cancelling && progress?.outcome === 'running' ? 'Cancelling the reindex…' : outcome.title }}</h3>
+            <p class="ops-result__text">
+              @if (progress?.description; as description) {
+                {{ sentence(description) }}.
+              }
+              Task
+              <button type="button" class="link-button mono" title="Copy the task id" (click)="copyTaskId()">{{ run.taskId }}</button>
+            </p>
+          </div>
+          @if (progress?.outcome === 'running' || !progress) {
+            <button
+              type="button"
+              class="btn btn-sm btn-danger-soft ops-result__action"
+              [class.is-loading]="run.cancelling"
+              [disabled]="run.cancelling"
+              (click)="store.cancelTask()"
+            >
+              Cancel reindex
+            </button>
+          }
+        </div>
+
+        @if (run.stale) {
+          <div class="callout callout-warning" role="status">
+            <i class="bi bi-wifi-off" aria-hidden="true"></i>
+            <div>Could not read the progress: {{ run.stale }} The reindex keeps running on the cluster; the page tries again.</div>
+          </div>
+        }
+
+        @if (progress) {
+          @let written = copied(progress);
+          <div class="ops-progress" [class]="'ops-progress' + (progressTone(progress) ? ' ops-progress--tone tone-' + progressTone(progress) : '')">
+            <div class="ops-progress__head">
+              <span>
+                <strong>{{ progress.processed | num }}</strong>
+                @if (progress.total !== null) {
+                  of {{ progress.total | num }}
+                }
+                {{ (progress.total ?? progress.processed) | plural: 'document' }}
+                @if (written < progress.processed) {
+                  processed · <strong>{{ written | num }}</strong> written
+                }
+                @if (progress.pendingSlices > 0) {
+                  <span class="text-secondary">({{ progress.pendingSlices }} {{ progress.pendingSlices | plural: 'slice' }} starting)</span>
+                }
+              </span>
+              <span class="text-secondary tabular">{{ percentLabel(progress.percent) }}</span>
+            </div>
+            <cerebro-meter
+              [value]="progress.percent ?? 0"
+              [warn]="101"
+              [danger]="101"
+              [label]="'Reindex progress'"
+            />
+          </div>
+
+          <div class="stat-grid ops-stats">
+            <div class="stat">
+              <div class="stat__label">Created</div>
+              <div class="stat__value">{{ progress.created | num }}</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Updated</div>
+              <div class="stat__value">{{ progress.updated | num }}</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Deleted</div>
+              <div class="stat__value">{{ progress.deleted | num }}</div>
+              @if (progress.noops > 0) {
+                <div class="stat__meta">{{ progress.noops | num }} unchanged (noop)</div>
+              }
+            </div>
+            <div class="stat">
+              <div class="stat__label">Version conflicts</div>
+              <div class="stat__value" [class.text-warning]="progress.versionConflicts > 0">{{ progress.versionConflicts | num }}</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Rate</div>
+              <div class="stat__value">{{ rate(progress.rate) }}</div>
+              <div class="stat__meta">
+                {{ progress.batches | num }} {{ progress.batches | plural: 'batch' : 'batches' }}
+                @if (progress.slices) {
+                  · {{ progress.slices | num }} {{ progress.slices | plural: 'slice' }}
+                }
+                · {{ throttle(progress) }}
+              </div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">{{ progress.completed ? 'Took' : 'Time left' }}</div>
+              <div class="stat__value">{{ progress.completed ? (progress.runningMillis | duration) : eta(progress.etaMillis) }}</div>
+              <div class="stat__meta">
+                @if (!progress.completed && progress.runningMillis >= 1000) {
+                  Running for {{ progress.runningMillis | duration }}
+                }
+                @if (progress.throttledMillis > 0) {
+                  @if (!progress.completed && progress.runningMillis >= 1000) {
+                    ·
+                  }
+                  Throttled {{ progress.throttledMillis | duration }}
+                }
+              </div>
+            </div>
+          </div>
+
+          @if (progress.error) {
+            <div class="callout callout-danger" role="alert">
+              <i class="bi bi-x-circle" aria-hidden="true"></i>
+              <div><strong>The task failed.</strong> {{ progress.error }}</div>
+            </div>
+          }
+          @if (progress.cancelReason) {
+            <p class="text-sm text-secondary">Cancelled {{ progress.cancelReason }}. Documents copied so far stay in {{ run.dest }}.</p>
+          }
+
+          @if (progress.failures.length > 0) {
+            <section class="ops-section" aria-labelledby="ops-failures-title">
+              <div class="ops-section__head">
+                <h3 id="ops-failures-title" class="section-title text-danger">
+                  <i class="bi bi-x-octagon" aria-hidden="true"></i> Failures
+                  @if (failureIndex(); as index) {
+                    <span class="ops-failures__index">in <span class="mono">{{ index }}</span></span>
+                  }
+                </h3>
+                <span class="count-label">
+                  <strong>{{ progress.failures.length | num }}</strong> {{ progress.failures.length | plural: 'failure' }}
+                  @if (failureGroups().length > 1) {
+                    · {{ failureGroups().length | num }} kinds
+                  }
+                </span>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table data-table--compact">
+                  <caption class="visually-hidden">Documents that could not be copied, grouped by reason</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" class="num">Documents</th>
+                      @if (failureIndex() === undefined) {
+                        <th scope="col">Index</th>
+                      }
+                      <th scope="col" class="num">Status</th>
+                      <th scope="col">Reason</th>
+                      <th scope="col">Document ids</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (group of failureGroups().slice(0, 20); track $index) {
+                      <tr>
+                        <td class="num tabular">{{ group.count | num }}</td>
+                        @if (failureIndex() === undefined) {
+                          <td class="mono ops-failure-index">{{ group.index ?? '–' }}</td>
+                        }
+                        <td class="num tabular">{{ group.status ?? '–' }}</td>
+                        <td class="ops-failure-reason">{{ group.reason }}</td>
+                        <td class="mono ops-failure-ids">
+                          {{ group.ids.length > 0 ? group.ids.join(', ') : '–' }}{{ group.count > group.ids.length && group.ids.length > 0 ? ', …' : '' }}
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              @if (failureGroups().length > 20) {
+                <p class="ops-section__hint">{{ failureGroups().length - 20 | num }} more kinds: View JSON lists every failure.</p>
+              }
+              @if (progress.versionConflicts > 0 && store.reindex().conflicts === 'abort') {
+                <p class="text-sm text-secondary">
+                  Version conflicts stopped the copy.
+                  <button type="button" class="link-button" (click)="store.retryWithProceed()">Run it again with “On version conflicts: Proceed”</button>
+                  to skip the documents the destination already has.
+                </p>
+              }
+            </section>
+          }
+        }
+
+        <div class="row-wrap">
+          @if (progress?.completed) {
+            <a class="btn btn-sm" routerLink="/index_detail" [queryParams]="linkTo({ index: run.dest })">
+              <i class="bi bi-box" aria-hidden="true"></i> Open {{ run.dest }}
+            </a>
+          }
+          <a class="btn btn-sm" routerLink="/tasks" [queryParams]="connection.hostQuery()"><i class="bi bi-activity" aria-hidden="true"></i> Tasks</a>
+          @if (run.raw) {
+            <button type="button" class="btn btn-sm btn-ghost" (click)="showTask()"><i class="bi bi-braces" aria-hidden="true"></i> View JSON</button>
+          }
+        </div>
+      }
+    }
+  </div>
+}

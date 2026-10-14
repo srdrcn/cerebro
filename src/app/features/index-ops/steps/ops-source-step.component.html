@@ -1,0 +1,319 @@
+@if (store.indices() === undefined || !store.catalogLoaded()) {
+  <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Loading the indices of the cluster…</div>
+} @else if (isResize()) {
+  <div class="ops-sections">
+    <div class="field ops-picker">
+      <label class="field-label" for="ops-source-index">Source index</label>
+      <select
+        id="ops-source-index"
+        class="select"
+        data-source-field
+        aria-describedby="ops-source-hint"
+        [value]="store.source()"
+        (change)="pickIndex($any($event.target).value)"
+      >
+        <option value="" [selected]="!store.source()">Choose an index…</option>
+        @if (store.source() && !groups().regular.includes(store.source()) && !groups().system.includes(store.source())) {
+          <option [value]="store.source()" selected>{{ store.source() }}</option>
+        }
+        @if (groups().regular.length > 0) {
+          <optgroup label="Indices">
+            @for (name of groups().regular; track name) {
+              <option [value]="name" [selected]="name === store.source()">{{ name }}</option>
+            }
+          </optgroup>
+        }
+        @if (groups().system.length > 0) {
+          <optgroup label="System and hidden indices">
+            @for (name of groups().system; track name) {
+              <option [value]="name" [selected]="name === store.source()">{{ name }}</option>
+            }
+          </optgroup>
+        }
+      </select>
+      <p id="ops-source-hint" class="field-hint">The new index is created next to it; the source itself keeps its documents.</p>
+    </div>
+
+    @if (store.source()) {
+      @switch (store.sourceLookup().state) {
+        @case ('loading') {
+          <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Loading {{ store.source() }}…</div>
+        }
+        @case ('missing') {
+          <div class="callout callout-danger" role="alert">
+            <i class="bi bi-question-circle" aria-hidden="true"></i>
+            <div><strong>Index not found.</strong> No index named “{{ store.source() }}” exists on this cluster. Choose another one.</div>
+          </div>
+        }
+        @case ('error') {
+          @if (store.sourceLookup(); as lookup) {
+            <div class="callout callout-danger" role="alert">
+              <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+              <div class="min-w-0">
+                <strong>{{ store.sourceCandidates().length > 0 ? 'Pick an index.' : 'Could not load ' + store.source() + '.' }}</strong> {{ lookup.state === 'error' ? lookup.reason : '' }}
+                <div class="ops-callout-actions row-wrap">
+                  @for (name of store.sourceCandidates(); track name) {
+                    <button type="button" class="chip-toggle mono" (click)="pickIndex(name)">{{ name }}</button>
+                  } @empty {
+                    <button type="button" class="btn btn-sm" (click)="store.retrySource()">
+                      <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                    </button>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        }
+        @case ('ready') {
+          @if (store.sourceIndex(); as index) {
+            <section class="ops-section" aria-labelledby="ops-source-title">
+              <div class="ops-subject">
+                <h3 id="ops-source-title" class="ops-subject__name">{{ index.name }}</h3>
+                <span class="badge" [class]="'badge badge-' + (healthTone(index.health) === 'gray' ? 'outline' : healthTone(index.health))">
+                  {{ index.open === false ? 'Closed' : healthLabel(index.health) }}
+                </span>
+                @if (index.writeBlocked) {
+                  <span class="badge badge-blue"><i class="bi bi-lock" aria-hidden="true"></i> Writes blocked</span>
+                }
+                @if (index.requiredNode) {
+                  <span class="badge badge-purple"><i class="bi bi-pin-map" aria-hidden="true"></i> Requires {{ index.requiredNode }}</span>
+                }
+                @if (index.dataStream) {
+                  <span class="badge badge-outline"><i class="bi bi-water" aria-hidden="true"></i> {{ index.dataStream }}</span>
+                }
+                <a class="ops-subject__link text-sm" routerLink="/index_detail" [queryParams]="{ host: connection.host(), index: index.name }">
+                  Index details
+                </a>
+              </div>
+              <dl class="ops-facts">
+                <div><dt>Documents</dt><dd>{{ index.docs | num }}</dd></div>
+                <div><dt>Primary size</dt><dd>{{ index.primarySize | bytes }}</dd></div>
+                <div><dt>Total size</dt><dd>{{ index.totalSize | bytes }}</dd></div>
+                <div><dt>Primary shards</dt><dd>{{ index.primaries | num }}</dd></div>
+                <div><dt>Replicas</dt><dd>{{ index.replicas | num }}</dd></div>
+                <div>
+                  <dt>Aliases</dt>
+                  <dd class="text-sm">{{ index.aliases.length > 0 ? index.aliases.join(', ') : 'None' }}</dd>
+                </div>
+              </dl>
+              @if (index.open === false) {
+                <div class="callout callout-info">
+                  <i class="bi bi-lock" aria-hidden="true"></i>
+                  <div>{{ index.name }} is closed. It can be resized as it is (Elasticsearch 7.2 and later); the new index is created open.</div>
+                </div>
+              }
+            </section>
+          }
+        }
+      }
+    } @else if (groups().regular.length > 0) {
+      <div class="ops-section">
+        <p class="ops-section__hint">Or jump to one of these:</p>
+        <div class="ops-quick">
+          @for (name of groups().regular.slice(0, 10); track name) {
+            <button type="button" class="chip-toggle mono" (click)="pickIndex(name)">{{ name }}</button>
+          }
+        </div>
+      </div>
+    } @else {
+      <p class="ops-section__hint">This cluster has no index to copy.</p>
+    }
+  </div>
+} @else if (store.operation() === 'rollover') {
+  <div class="ops-sections">
+    @if (store.rolloverTargets().length === 0) {
+      <div class="ops-empty">
+        <p class="ops-section__hint">
+          No alias and no data stream exists yet. A rollover needs an alias with a write index or a data stream.
+        </p>
+        <div class="row-wrap">
+          <a class="btn btn-sm" routerLink="/aliases" [queryParams]="connection.hostQuery()"><i class="bi bi-tags" aria-hidden="true"></i> Aliases</a>
+          <a class="btn btn-sm" routerLink="/data_streams" [queryParams]="connection.hostQuery()"><i class="bi bi-water" aria-hidden="true"></i> Data streams</a>
+        </div>
+      </div>
+    } @else {
+      <div class="field ops-picker">
+        <label class="field-label" for="ops-source-target">Alias or data stream</label>
+        <select
+          id="ops-source-target"
+          class="select"
+          data-source-field
+          aria-describedby="ops-target-hint"
+          [value]="store.source()"
+          (change)="pickTarget($any($event.target).value)"
+        >
+          <option value="" [selected]="!store.source()">Choose an alias or a data stream…</option>
+          @if (store.source() && !store.rolloverTarget()) {
+            <option [value]="store.source()" selected>{{ store.source() }}</option>
+          }
+          @if (aliasTargets().length > 0) {
+            <optgroup label="Aliases">
+              @for (target of aliasTargets(); track target.name) {
+                <option [value]="target.name" [selected]="target.name === store.source()">
+                  {{ target.name }} {{ target.writeIndex ? '→ ' + target.writeIndex : '(no write index)' }}
+                </option>
+              }
+            </optgroup>
+          }
+          @if (streamTargets().length > 0) {
+            <optgroup label="Data streams">
+              @for (target of streamTargets(); track target.name) {
+                <option [value]="target.name" [selected]="target.name === store.source()">{{ target.name }}</option>
+              }
+            </optgroup>
+          }
+          @if (hiddenTargets().length > 0) {
+            <optgroup label="Hidden and system">
+              @for (target of hiddenTargets(); track target.name) {
+                <option [value]="target.name" [selected]="target.name === store.source()">{{ target.name }}</option>
+              }
+            </optgroup>
+          }
+        </select>
+        <p id="ops-target-hint" class="field-hint">
+          {{ rollable() | num }} of {{ store.rolloverTargets().length | num }} can be rolled over; an alias needs a write index (set with
+          <span class="mono">is_write_index</span>, or implied when it points to one index).
+        </p>
+      </div>
+
+      @if (store.source()) {
+        @if (store.rolloverTarget(); as target) {
+          <section class="ops-section" aria-labelledby="ops-target-title">
+            <div class="ops-subject">
+              <h3 id="ops-target-title" class="ops-subject__name">{{ target.name }}</h3>
+              <span class="badge badge-outline">
+                <i class="bi" [class]="target.kind === 'alias' ? 'bi bi-tags' : 'bi bi-water'" aria-hidden="true"></i>
+                {{ target.kind === 'alias' ? 'Alias' : 'Data stream' }}
+              </span>
+            </div>
+            @if (target.problem) {
+              <div class="callout callout-danger" role="alert">
+                <i class="bi bi-x-circle" aria-hidden="true"></i>
+                <div>
+                  <strong>{{ target.problem }}.</strong> Mark one of its indices as the write index on the
+                  <a routerLink="/aliases" [queryParams]="connection.hostQuery()">Aliases</a> page first.
+                </div>
+              </div>
+            }
+            <dl class="ops-facts">
+              <div>
+                <dt>Write index</dt>
+                <dd class="mono text-sm">{{ target.writeIndex ?? 'None' }}</dd>
+              </div>
+              <div>
+                <dt>{{ target.kind === 'alias' ? 'Indices' : 'Backing indices' }}</dt>
+                <dd>{{ target.indices.length | num }}</dd>
+              </div>
+            </dl>
+          </section>
+        } @else {
+          <div class="callout callout-danger" role="alert">
+            <i class="bi bi-question-circle" aria-hidden="true"></i>
+            <div><strong>Not found.</strong> No alias or data stream named “{{ store.source() }}” exists. Choose another one.</div>
+          </div>
+        }
+      }
+    }
+  </div>
+} @else {
+  <div class="ops-sections">
+    <div class="ops-fields">
+      <div class="field col-span-all">
+        <label class="field-label" for="ops-sources">Source indices</label>
+        <input
+          id="ops-sources"
+          class="input input-mono"
+          data-source-field
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="e.g. logs-2026.10.*, customers"
+          aria-describedby="ops-sources-hint"
+          [value]="store.reindex().sources"
+          (input)="setSources($any($event.target).value)"
+        />
+        <p id="ops-sources-hint" class="field-hint">
+          Indices, aliases, data streams or patterns with *, separated by commas. Prefix a pattern with - to leave indices out.
+        </p>
+      </div>
+      @if (addable().length > 0) {
+        <div class="field">
+          <label class="field-label" for="ops-add-source">Add an index</label>
+          <select #add id="ops-add-source" class="select" (change)="addSource(add)">
+            <option value="">Choose an index to add…</option>
+            @for (name of addable(); track name) {
+              <option [value]="name">{{ name }}</option>
+            }
+          </select>
+        </div>
+      }
+    </div>
+
+    <section class="ops-section" aria-labelledby="ops-matches-title" [attr.aria-busy]="store.sourcesLookup().state === 'loading'">
+      <div class="ops-section__head">
+        <h3 id="ops-matches-title" class="section-title">Matching indices</h3>
+        @if (sourceIndices().length > 0) {
+          <span class="count-label">
+            <strong>{{ sourceIndices().length | num }}</strong> {{ sourceIndices().length | plural: 'index' : 'indices' }} ·
+            {{ sourceDocs() | num }} {{ (sourceDocs() ?? 0) | plural: 'document' }} · {{ sourceSize() | bytes }}
+          </span>
+        }
+      </div>
+      @switch (store.sourcesLookup().state) {
+        @case ('idle') {
+          <p class="ops-section__hint">Type the sources above to see which indices they match.</p>
+        }
+        @case ('loading') {
+          <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Looking up the sources…</div>
+        }
+        @case ('error') {
+          @if (store.sourcesLookup(); as lookup) {
+            <div class="callout callout-danger" role="alert">
+              <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+              <div>{{ lookup.state === 'error' ? lookup.reason : '' }}</div>
+            </div>
+          }
+        }
+        @default {
+          @if (sourceIndices().length === 0) {
+            <div class="callout callout-warning" role="status">
+              <i class="bi bi-search" aria-hidden="true"></i>
+              <div>No index matches “{{ store.reindex().sources.trim() }}”.</div>
+            </div>
+          } @else {
+            <div class="table-wrap">
+              <table class="data-table data-table--compact ops-mini-table">
+                <caption class="visually-hidden">Indices the reindex reads</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Index</th>
+                    <th scope="col">Health</th>
+                    <th scope="col" class="num">Documents</th>
+                    <th scope="col" class="num">Primary size</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (index of sourceIndices().slice(0, 50); track index.name) {
+                    <tr>
+                      <td class="mono">{{ index.name }}</td>
+                      <td>
+                        <span class="row ops-health">
+                          <span class="dot" [class]="'dot dot-' + healthTone(index.health)" aria-hidden="true"></span>
+                          {{ index.open === false ? 'Closed' : healthLabel(index.health) }}
+                        </span>
+                      </td>
+                      <td class="num">{{ index.docs | num }}</td>
+                      <td class="num">{{ index.primarySize | bytes }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (sourceIndices().length > 50) {
+              <p class="ops-section__hint">And {{ sourceIndices().length - 50 | num }} more.</p>
+            }
+          }
+        }
+      }
+    </section>
+  </div>
+}

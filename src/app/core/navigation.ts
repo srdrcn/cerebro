@@ -89,6 +89,13 @@ export const NAVIGATION: readonly NavigationGroup[] = [
         keywords: 'new add mappings',
       },
       {
+        label: 'Index operations',
+        route: '/index_ops',
+        icon: 'bi-tools',
+        description: 'Shrink, split, clone, roll over or reindex an index',
+        keywords: 'shrink split clone rollover reindex resize copy shards wizard',
+      },
+      {
         label: 'Index details',
         route: '/index_detail',
         icon: 'bi-box',

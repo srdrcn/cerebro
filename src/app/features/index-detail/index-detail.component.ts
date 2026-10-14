@@ -164,6 +164,11 @@ export class IndexDetailComponent {
     return detail ? dataStreamOf(detail.name) : null;
   });
 
+  /** The data stream, or the alias this index is the write index of, that "Roll over…" opens. */
+  readonly rolloverTarget = computed(
+    () => this.dataStream() ?? this.aliases().find((alias) => alias.isWriteIndex === true)?.name ?? null,
+  );
+
   readonly mapping = computed(() => mappingInfo(this.detail()?.mappings ?? null));
   readonly visibleFields = computed(() => filterMappingFields(this.mapping().fields, this.mappingQuery()));
   readonly leafFieldCount = computed(() => countLeafFields(this.mapping().fields));
@@ -508,6 +513,11 @@ export class IndexDetailComponent {
   }
 
   // ---- Table helpers -----------------------------------------------------------
+
+  /** Query params of the index operations wizard (`/index_ops?op=&index=`). */
+  indexOpsParams(op: string, index: string): Record<string, string | null> {
+    return { ...this.connection.hostQuery(), op, index };
+  }
 
   explainParams(row: ShardRow): Record<string, string | number | boolean | null> {
     return { ...this.connection.hostQuery(), ...explainQuery(this.name(), row) };

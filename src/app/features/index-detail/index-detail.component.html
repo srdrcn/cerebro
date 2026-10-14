@@ -87,6 +87,26 @@
             </button>
           }
           <div class="menu-separator" role="separator"></div>
+          @if (settings()?.primaries !== 1) {
+            <a class="menu-item" role="menuitem" routerLink="/index_ops" [queryParams]="indexOpsParams('shrink', current.name)">
+              <i class="bi bi-arrows-angle-contract" aria-hidden="true"></i> Shrink…
+            </a>
+          }
+          <a class="menu-item" role="menuitem" routerLink="/index_ops" [queryParams]="indexOpsParams('split', current.name)">
+            <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i> Split…
+          </a>
+          <a class="menu-item" role="menuitem" routerLink="/index_ops" [queryParams]="indexOpsParams('clone', current.name)">
+            <i class="bi bi-copy" aria-hidden="true"></i> Clone…
+          </a>
+          <a class="menu-item" role="menuitem" routerLink="/index_ops" [queryParams]="indexOpsParams('reindex', current.name)">
+            <i class="bi bi-arrow-left-right" aria-hidden="true"></i> Reindex…
+          </a>
+          @if (rolloverTarget(); as target) {
+            <a class="menu-item" role="menuitem" routerLink="/index_ops" [queryParams]="indexOpsParams('rollover', target)">
+              <i class="bi bi-skip-forward" aria-hidden="true"></i> Roll over…
+            </a>
+          }
+          <div class="menu-separator" role="separator"></div>
           @if (settings()?.closed) {
             <button type="button" class="menu-item" role="menuitem" [disabled]="busy() !== null" (click)="run('open')">
               <i class="bi bi-unlock" aria-hidden="true"></i> Open index

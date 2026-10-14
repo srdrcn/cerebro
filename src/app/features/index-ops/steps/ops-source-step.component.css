@@ -1,0 +1,26 @@
+.ops-picker {
+  max-width: 560px;
+}
+
+.ops-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ops-subject__link {
+  margin-left: auto;
+}
+
+.ops-callout-actions {
+  margin-top: var(--space-2);
+}
+
+.ops-empty {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.ops-health {
+  gap: 6px;
+}

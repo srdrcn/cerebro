@@ -60,6 +60,12 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'index_ops',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/index-ops/index-ops.component').then((m) => m.IndexOpsComponent),
+      },
+      {
         path: 'analysis',
         loadComponent: () =>
           import('./features/analysis/analysis.component').then((m) => m.AnalysisComponent),

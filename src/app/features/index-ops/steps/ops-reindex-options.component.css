@@ -1,0 +1,17 @@
+.ops-inline .input-sm {
+  width: 110px;
+}
+
+.ops-dest-field {
+  max-width: 560px;
+}
+
+.ops-fixed {
+  color: var(--text-2);
+}
+
+.ops-external {
+  margin-left: 2px;
+  color: var(--text-3);
+  font-size: 0.85em;
+}
