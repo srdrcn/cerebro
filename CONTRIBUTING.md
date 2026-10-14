@@ -16,11 +16,11 @@ Before getting started on a pull request(be it a new feature or a bug fix), plea
 Even though I'm open to feature requests, I might not always agree on the value a feature might bring. And I would hate to waste someone else's time.
 
 Once working on a pull request, please:
-- include the generated css/js files(grunt build)
+- include the generated Angular browser assets (`npm run build`)
 - add tests that validate your changes
 - squash your development commits to keep only important commits(fix typo, wrong indent should not be part of git history)
 - rebase it against development before submiting
-- make sure all tests pass(sbt test / grunt test)
+- make sure all checks pass (`npm run typecheck`, `npm test`, `npm run build`, and `sbt test`)
 
 ## Development
 
@@ -39,11 +39,11 @@ $ sbt
 (Server started, use Ctrl+D to stop and go back to the console...)
 ```
 
-Make sure you also run Grunt in order to build the js/css artifcats as you change the code.
+Run the Angular development build in another terminal while changing the web application:
 
 ```sh
-$ grunt watch
-Running "watch" task
-Waiting...(node:20784) DeprecationWarning: process.EventEmitter is deprecated. 
-Use require('events') instead.
+npm ci
+npm start
 ```
+
+Production builds write deterministic assets to `public/js` with `npm run build`.

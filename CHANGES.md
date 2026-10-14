@@ -328,3 +328,21 @@ First cerebro release.
 
 #### Security updates
 - Bump socket.io to 2.4.1
+
+### Unreleased
+
+#### Security updates
+
+- Migrate the backend to Play 3.0.11, Pekko, Scala 2.13.18 and a Java 17 baseline.
+- Align Jackson 2.18.10, Logback 1.5.38 and SQLite JDBC 3.53.2.1 to patched releases.
+- Replace AngularJS, Bootstrap 3, Grunt, Karma and PhantomJS with Angular 22, Bootstrap 5 and Vitest.
+- Restore Play CSRF, allowed-host and security-header filters; require a production application secret.
+- Harden session cookies, redirects and LDAP filter construction.
+- Add npm, staged-JAR and legacy-bundle security gates to CI.
+- Add a non-root Wolfi/OpenJDK 17 multiarch image and zero-finding container gates for amd64 and arm64.
+- Upgrade transitive `lz4-java` to 1.11.1 for CVE-2026-59949.
+
+#### Compatibility
+
+- Preserve the existing cluster endpoints, response envelopes, SQLite REST history and all 13 UI workflows.
+- Preserve legacy `#!/...` bookmarks by rewriting them to Angular hash routes before startup.

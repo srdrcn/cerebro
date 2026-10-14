@@ -1,13 +1,26 @@
 Cerebro
 ------------
 [![Docker Pulls](https://img.shields.io/docker/pulls/lmenezes/cerebro.svg)](https://hub.docker.com/r/lmenezes/cerebro)
-![build](https://github.com/lmenezes/cerebro/workflows/build/badge.svg?branch=master)
+[![build and security](https://github.com/lmenezes/cerebro/actions/workflows/scala.yml/badge.svg?branch=master)](https://github.com/lmenezes/cerebro/actions/workflows/scala.yml)
 
-cerebro is an open source(MIT License) elasticsearch web admin tool built using Scala, Play Framework, AngularJS and Bootstrap.
+cerebro is an open source (MIT License) Elasticsearch administration tool built with Scala, Play Framework and Angular.
 
 ### Requirements
 
-cerebro needs Java 11 or newer to run.
+cerebro needs Java 17 or newer to run. Building the web application from source also requires a Node.js version supported by Angular 22 (`^22.22.3`, `^24.15.0`, or `>=26`).
+
+### Building from source
+
+```sh
+npm ci
+npm run typecheck
+npm test
+npm run build
+sbt test
+sbt stage
+```
+
+The Angular build writes the browser bundle to `public/js`; Play packages that output with the backend distribution.
 
 ### Installation
 - Download from [https://github.com/lmenezes/cerebro/releases](https://github.com/lmenezes/cerebro/releases)
@@ -28,7 +41,18 @@ Access on http://localhost:9000
 
 ### Docker
 
-You can find the official docker images in the official [docker hub repo](https://hub.docker.com/r/lmenezes/cerebro/).
+The hardened multi-architecture image is published at [chosenwar/cerebro](https://hub.docker.com/r/chosenwar/cerebro/):
+
+```sh
+docker volume create cerebro-data
+docker run --rm \
+  -p 9000:9000 \
+  -v cerebro-data:/var/lib/cerebro \
+  -e CEREBRO_SECRET='replace-with-a-long-random-secret' \
+  chosenwar/cerebro:0.9.4-secure
+```
+
+Both `linux/amd64` and `linux/arm64` are published. The final Wolfi/OpenJDK 17 image runs as UID/GID `65532`, includes SBOM/provenance attestations, and was scanned with Trivy 0.74.0 at all severities with zero known OS or Java-library findings on August 26, 2026.
 
 Visit [cerebro-docker](https://github.com/lmenezes/cerebro-docker) for further information. 
 
@@ -98,6 +122,8 @@ There are some examples of configuration in the [examples folder](./examples).
 #### Other settings
 
 Other settings are exposed through the **conf/application.conf** file found on the application directory.
+
+Production deployments must provide a unique application secret through `CEREBRO_SECRET` or `-Dplay.http.secret.key`. When Cerebro is served through HTTPS, also set `CEREBRO_COOKIE_SECURE=true`. If the external hostname is not one of Play's local defaults, set `CEREBRO_ALLOWED_HOST` to that hostname.
 
 It is also possible to use an alternate configuration file defined on a different location:
 

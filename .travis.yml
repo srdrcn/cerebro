@@ -1,9 +1,14 @@
 language: scala
 
-scala:
-  - 2.13.4
-
 jdk:
-  - openjdk11
+  - openjdk17
 
-script: sbt ++$TRAVIS_SCALA_VERSION test
+before_script:
+  - nvm install 24.15.0
+  - npm ci
+
+script:
+  - npm run typecheck
+  - npm test
+  - npm run build
+  - sbt test

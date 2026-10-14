@@ -1,6 +1,6 @@
 <configuration>
 
-    <conversionRule conversionWord="coloredLevel" converterClass="play.api.libs.logback.ColoredLevel"/>
+    <conversionRule conversionWord="coloredLevel" class="play.api.libs.logback.ColoredLevel"/>
 
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
         <file>${application.home:-.}/logs/application.log</file>
@@ -16,6 +16,7 @@
     </appender>
 
     <logger name="play" level="INFO"/>
+    <logger name="org.apache.pekko" level="WARN"/>
     <logger name="application" level="INFO"/>
 
     <!-- Off these ones as they are annoying, and anyway we manage configuration ourself -->

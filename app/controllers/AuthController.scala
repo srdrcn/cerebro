@@ -2,16 +2,17 @@ package controllers
 
 import javax.inject.{Inject, Singleton}
 
-import akka.actor.ActorSystem
 import controllers.auth.{AuthAction, AuthenticationModule}
 import forms.LoginForm
 import play.api.Configuration
 import play.api.mvc.InjectedController
 
+import java.net.URI
+import scala.util.Try
+
 
 @Singleton
-class AuthController @Inject()(system: ActorSystem,
-                               authentication: AuthenticationModule,
+class AuthController @Inject()(authentication: AuthenticationModule,
                                configuration: Configuration)
   extends InjectedController {
 
@@ -25,7 +26,7 @@ class AuthController @Inject()(system: ActorSystem,
       request.session.get(AuthAction.SESSION_USER).map { user =>
         request.session.get(AuthAction.REDIRECT_URL) match {
           case Some(url) =>
-            Redirect(url, play.api.http.Status.SEE_OTHER)
+            Redirect(safeRedirectTarget(url), play.api.http.Status.SEE_OTHER)
           case None =>
             Redirect(routes.Application.index())
         }
@@ -48,12 +49,12 @@ class AuthController @Inject()(system: ActorSystem,
           case Some(username) =>
             val resp =
               request.session.get(AuthAction.REDIRECT_URL) match {
-                case Some(url) => Redirect(url, play.api.http.Status.SEE_OTHER)
+                case Some(url) => Redirect(safeRedirectTarget(url), play.api.http.Status.SEE_OTHER)
                 case None => Redirect(routes.Application.index())
               }
             resp.withSession(AuthAction.SESSION_USER -> username)
           case None =>
-            Redirect(routes.AuthController.index()).flashing(LOGIN_MSG -> "Incorrect username or password")
+            Redirect(routes.AuthController.index).flashing(LOGIN_MSG -> "Incorrect username or password")
         }
       }
     )
@@ -70,4 +71,17 @@ object AuthController {
   private val log = org.slf4j.LoggerFactory.getLogger(classOf[AuthController])
 
   final val LOGIN_MSG = "login-msg"
+
+  private[controllers] def safeRedirectTarget(target: String): String = {
+    val isLocalPath = target.startsWith("/") &&
+      !target.startsWith("//") &&
+      !target.contains('\\') &&
+      !target.exists(_.isControl)
+
+    val isRelativeUri = Try(new URI(target)).toOption.exists { uri =>
+      !uri.isAbsolute && uri.getRawAuthority == null
+    }
+
+    if (isLocalPath && isRelativeUri) target else routes.Application.index().url
+  }
 }

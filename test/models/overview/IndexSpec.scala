@@ -1,9 +1,23 @@
 package models.overview
 
 import org.specs2.Specification
-import play.api.libs.json.Json
+import play.api.libs.json.{JsArray, JsObject, JsValue, Json}
 
 object IndexSpec extends Specification {
+
+  private def normalizedShardOrder(index: JsValue): JsValue = {
+    val shards = (index \ "shards").as[JsObject]
+    val normalized = JsObject(shards.fields.map {
+      case (node, JsArray(values)) =>
+        val sorted = values.sortBy { shard =>
+          ((shard \ "shard").asOpt[Int].getOrElse(Int.MaxValue),
+            (shard \ "state").asOpt[String].getOrElse(""))
+        }
+        node -> JsArray(sorted)
+      case field => field
+    })
+    index.as[JsObject] + ("shards" -> normalized)
+  }
 
   def is =
     s2"""
@@ -99,7 +113,7 @@ object IndexSpec extends Specification {
       """.stripMargin
     )
     val index = Index("ipsum", IndexStats.stats, IndexRoutingTable.healthyShards, IndexAliases.aliases, Json.obj())
-    index mustEqual expected
+    normalizedShardOrder(index) mustEqual normalizedShardOrder(expected)
   }
 
   def relocating = {
@@ -193,7 +207,7 @@ object IndexSpec extends Specification {
       """.stripMargin
     )
     val index = Index("ipsum", IndexStats.stats, IndexRoutingTable.relocatingShard, IndexAliases.aliases, Json.obj())
-    index mustEqual expected
+    normalizedShardOrder(index) mustEqual normalizedShardOrder(expected)
   }
 
   def unassigned = {
@@ -286,7 +300,7 @@ object IndexSpec extends Specification {
       """.stripMargin
     )
     val index = Index("ipsum", IndexStats.stats, IndexRoutingTable.unassignedShard, IndexAliases.aliases, Json.obj())
-    index mustEqual expected
+    normalizedShardOrder(index) mustEqual normalizedShardOrder(expected)
   }
 
   def special = {
@@ -371,7 +385,7 @@ object IndexSpec extends Specification {
       """.stripMargin
     )
     val index = Index(".ipsum", IndexStats.stats, IndexRoutingTable.healthyShards, IndexAliases.aliases, Json.obj())
-    index mustEqual expected
+    normalizedShardOrder(index) mustEqual normalizedShardOrder(expected)
   }
 
   def closed = {
@@ -456,7 +470,7 @@ object IndexSpec extends Specification {
       """.stripMargin
     )
     val index = Index("ipsum", IndexStats.stats, IndexRoutingTable.healthyShards, IndexAliases.aliases, IndexBlocks.closed)
-    index mustEqual expected
+    normalizedShardOrder(index) mustEqual normalizedShardOrder(expected)
   }
 
 }

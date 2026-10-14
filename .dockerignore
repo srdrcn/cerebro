@@ -1,0 +1,17 @@
+.git
+.gitignore
+.github
+.travis.yml
+.DS_Store
+.idea
+.vscode
+node_modules
+target
+project/target
+project/project
+logs
+tmp
+cerebro.db
+public/js
+*.iml
+*.log

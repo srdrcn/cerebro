@@ -1,39 +1,138 @@
-name: build
+name: build-and-security
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-security-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build_backend:
-
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up JDK 1.8
-      uses: actions/setup-java@v1
-      with:
-        java-version: 1.8
-    - name: Run tests
-      run: sbt test
+      - name: Check out source
+        uses: actions/checkout@v4
 
-  build_frontend:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: npm
 
-    runs-on: ubuntu-latest
+      - name: Install frontend dependencies
+        run: npm ci
 
-    strategy:
-      matrix:
-        node-version: [10.x, 12.x, 14.x]
+      - name: Type-check frontend
+        run: npm run typecheck
 
-    steps:
-    - uses: actions/checkout@v2
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
-      with:
-        node-version: ${{ matrix.node-version }}
-    - run: npm ci
-    - run: npm run build --if-present
-    - run: npm test
+      - name: Test frontend
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Audit complete npm dependency tree
+        run: npm run audit
+
+      - name: Report production-only npm audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Reject legacy vulnerable frontend bundles
+        shell: bash
+        run: |
+          if rg -n "AngularJS v1\.|angular\.module\(['\"]cerebro|ng-app=|ng-controller=|Bootstrap v3\." public; then
+            echo "Legacy AngularJS or Bootstrap 3 content remains in packaged assets."
+            exit 1
+          fi
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: sbt
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Test and stage backend
+        run: sbt -batch clean test stage
+
+      # Pinned to trivy-action v0.36.0. Use the immutable commit because older
+      # mutable Trivy Action tags were compromised in March 2026.
+      - name: Scan staged JVM runtime
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: fs
+          scan-ref: target/universal/stage/lib
+          scanners: vuln
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build amd64 container archive
+        run: >-
+          docker buildx build
+          --platform linux/amd64
+          --provenance=false
+          --sbom=false
+          --output type=docker,dest=/tmp/cerebro-amd64.tar
+          .
+
+      - name: Build arm64 container archive
+        run: >-
+          docker buildx build
+          --platform linux/arm64
+          --provenance=false
+          --sbom=false
+          --output type=docker,dest=/tmp/cerebro-arm64.tar
+          .
+
+      - name: Scan complete amd64 image at every severity
+        run: >-
+          docker run --rm
+          -v /tmp/cerebro-amd64.tar:/scan/image.tar:ro
+          -v /tmp/trivy-cache:/root/.cache/
+          aquasec/trivy:0.74.0 image
+          --quiet
+          --input /scan/image.tar
+          --scanners vuln
+          --pkg-types os,library
+          --detection-priority comprehensive
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          --ignore-unfixed=false
+          --ignorefile /dev/null
+          --exit-on-eol 1
+          --exit-code 1
+
+      - name: Scan complete arm64 image at every severity
+        run: >-
+          docker run --rm
+          -v /tmp/cerebro-arm64.tar:/scan/image.tar:ro
+          -v /tmp/trivy-cache:/root/.cache/
+          aquasec/trivy:0.74.0 image
+          --quiet
+          --input /scan/image.tar
+          --scanners vuln
+          --pkg-types os,library
+          --detection-priority comprehensive
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          --ignore-unfixed=false
+          --ignorefile /dev/null
+          --exit-on-eol 1
+          --exit-code 1

@@ -1,0 +1,11 @@
+{
+  // The complete production and development dependency tree is a merge gate.
+  // Any future exception must name an exact GHSA/path and include notes plus
+  // an expiry date; broad module-level allowlists are not accepted.
+  "package-manager": "npm",
+  "high": true,
+  "skip-dev": false,
+  "pass-enoaudit": false,
+  "report-type": "summary",
+  "allowlist": []
+}

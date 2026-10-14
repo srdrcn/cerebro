@@ -1,30 +1,39 @@
 package controllers.auth.ldap
 
-import java.util.Hashtable
-
 import com.google.inject.Inject
-import com.sun.jndi.ldap.LdapCtxFactory
 import controllers.auth.AuthService
 import javax.naming._
 import javax.naming.directory.SearchControls
+import javax.naming.ldap.{InitialLdapContext, LdapContext}
 import play.api.{Configuration, Logger}
+
+import java.util.Hashtable
 
 import scala.util.control.NonFatal
 
 class LDAPAuthService @Inject()(globalConfig: Configuration) extends AuthService {
 
+  import LDAPAuthService.escapeFilterValue
+
   private val log = Logger(this.getClass)
 
   private final val config = new LDAPAuthConfig(globalConfig.get[Configuration]("auth.settings"))
 
-  def checkUserAuth(username: String, password: String): Boolean = {
-    val props = new Hashtable[String, String]()
-    props.put(Context.SECURITY_PRINCIPAL, config.userTemplate.format(username, config.baseDN))
+  private def openContext(principal: String, password: String, followReferrals: Boolean = false): LdapContext = {
+    val props = new Hashtable[String, Object]()
+    props.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
+    props.put(Context.PROVIDER_URL, config.url)
+    props.put(Context.SECURITY_AUTHENTICATION, config.method)
+    props.put(Context.SECURITY_PRINCIPAL, principal)
     props.put(Context.SECURITY_CREDENTIALS, password)
+    if (followReferrals) props.put(Context.REFERRAL, "follow")
+    new InitialLdapContext(props, null)
+  }
 
+  def checkUserAuth(username: String, password: String): Boolean = {
     try {
-      LdapCtxFactory.getLdapCtxInstance(config.url, props)
-      true
+      val context = openContext(config.userTemplate.format(username, config.baseDN), password)
+      try true finally context.close()
     } catch {
       case e: AuthenticationException =>
         log.info(s"login of $username failed with: ${e.getMessage}")
@@ -36,18 +45,15 @@ class LDAPAuthService @Inject()(globalConfig: Configuration) extends AuthService
   }
 
   def checkGroupMembership(username: String, groupConfig: LDAPGroupSearchConfig): Boolean = {
-    val props = new Hashtable[String, String]()
-    props.put(Context.SECURITY_PRINCIPAL, groupConfig.bindDN)
-    props.put(Context.SECURITY_CREDENTIALS, groupConfig.bindPwd)
-    props.put(Context.REFERRAL, "follow")
-    val user     = groupConfig.userAttrTemplate.format(username, config.baseDN)
+    val user     = escapeFilterValue(groupConfig.userAttrTemplate.format(username, config.baseDN))
     val controls = new SearchControls()
     controls.setSearchScope(SearchControls.SUBTREE_SCOPE)
     try {
-      val context = LdapCtxFactory.getLdapCtxInstance(config.url, props)
-      val search = context.search(groupConfig.baseDN,s"(& (${groupConfig.userAttr}=$user)(${groupConfig.group}))", controls)
-      context.close()
-      search.hasMore()
+      val context = openContext(groupConfig.bindDN, groupConfig.bindPwd, followReferrals = true)
+      try {
+        val search = context.search(groupConfig.baseDN, s"(& (${groupConfig.userAttr}=$user)(${groupConfig.group}))", controls)
+        try search.hasMore finally search.close()
+      } finally context.close()
     } catch {
       case e: AuthenticationException =>
         log.info(s"User $username doesn't fulfill condition (${groupConfig.group}) : ${e.getMessage}")
@@ -66,4 +72,16 @@ class LDAPAuthService @Inject()(globalConfig: Configuration) extends AuthService
     if (isValidUser) Some(username) else None
   }
 
+}
+
+object LDAPAuthService {
+  private[ldap] def escapeFilterValue(value: String): String =
+    value.flatMap {
+      case '\u0000' => "\\00"
+      case '*'      => "\\2a"
+      case '('      => "\\28"
+      case ')'      => "\\29"
+      case '\\'     => "\\5c"
+      case char     => char.toString
+    }
 }

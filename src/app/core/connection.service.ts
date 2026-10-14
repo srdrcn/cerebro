@@ -1,0 +1,109 @@
+import { DOCUMENT } from '@angular/common';
+import { computed, inject, Injectable, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { NoClusterConnectionError } from './api-envelope';
+import { RefreshService } from './refresh.service';
+
+export interface ConnectionSnapshot {
+  readonly host: string;
+  readonly username?: string;
+  readonly password?: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class ConnectionService {
+  private readonly document = inject(DOCUMENT);
+  private readonly router = inject(Router);
+  private readonly refreshService = inject(RefreshService);
+  private readonly initialHost = this.hostFromHash();
+
+  private readonly hostState = signal<string | undefined>(this.initialHost);
+  private readonly usernameState = signal<string | undefined>(undefined);
+  private readonly passwordState = signal<string | undefined>(undefined);
+
+  readonly host = this.hostState.asReadonly();
+  readonly username = this.usernameState.asReadonly();
+  readonly connected = computed(() => this.hostState() !== undefined);
+
+  connect(host: string, username?: string, password?: string): void {
+    const normalizedHost = host.trim();
+    if (!normalizedHost) {
+      throw new Error('An Elasticsearch host is required');
+    }
+
+    this.hostState.set(normalizedHost);
+    this.usernameState.set(username || undefined);
+    this.passwordState.set(password || undefined);
+    this.writeHostToHash(normalizedHost);
+    this.refreshService.refresh();
+  }
+
+  disconnect(): void {
+    const previousHost = this.hostState();
+    this.hostState.set(undefined);
+    this.usernameState.set(undefined);
+    this.passwordState.set(undefined);
+    void this.router.navigate(['/connect'], {
+      queryParams: previousHost ? { host: previousHost } : {},
+      replaceUrl: true,
+    });
+  }
+
+  snapshot(): ConnectionSnapshot {
+    const host = this.hostState();
+    if (!host) {
+      throw new NoClusterConnectionError();
+    }
+
+    const username = this.usernameState();
+    const password = this.passwordState();
+    return {
+      host,
+      ...(username ? { username } : {}),
+      ...(password ? { password } : {}),
+    };
+  }
+
+  private hostFromHash(): string | undefined {
+    const location = this.document.defaultView?.location;
+    if (!location) {
+      return undefined;
+    }
+
+    const queryIndex = location.hash.indexOf('?');
+    if (queryIndex < 0) {
+      return undefined;
+    }
+
+    const host = new URLSearchParams(location.hash.slice(queryIndex + 1)).get(
+      'host',
+    );
+    return host?.trim() || undefined;
+  }
+
+  private writeHostToHash(host: string): void {
+    const view = this.document.defaultView;
+    if (!view) {
+      return;
+    }
+
+    const currentHash = view.location.hash || '#/connect';
+    const queryIndex = currentHash.indexOf('?');
+    const currentRoute =
+      queryIndex >= 0 ? currentHash.slice(0, queryIndex) : currentHash;
+    const route = currentRoute && currentRoute !== '#' ? currentRoute : '#/connect';
+    const params = new URLSearchParams(
+      queryIndex >= 0 ? currentHash.slice(queryIndex + 1) : '',
+    );
+    params.set('host', host);
+    params.delete('unauthorized');
+
+    const query = params.toString();
+    const hash = `${route}${query ? `?${query}` : ''}`;
+    view.history.replaceState(
+      null,
+      '',
+      `${view.location.pathname}${view.location.search}${hash}`,
+    );
+  }
+}

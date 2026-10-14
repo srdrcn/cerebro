@@ -1,0 +1,140 @@
+:host {
+  display: block;
+}
+
+.nodes-page {
+  padding: 1rem;
+}
+
+.node-filters,
+.nodes-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface-1);
+}
+
+.node-filters {
+  padding: 0.8rem;
+}
+
+.form-label {
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+fieldset {
+  min-width: 0;
+}
+
+.role-filters {
+  min-height: 31px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.8rem;
+}
+
+.form-check-inline {
+  margin-right: 0;
+}
+
+.nodes-table-wrap {
+  overflow: auto;
+}
+
+.table {
+  --bs-table-bg: var(--surface-1);
+  --bs-table-hover-bg: var(--surface-2);
+  --bs-table-border-color: var(--border);
+  min-width: 860px;
+  font-size: 0.78rem;
+}
+
+th {
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.node-identity {
+  width: 30%;
+  min-width: 250px;
+  color: var(--text);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.node-badges {
+  display: grid;
+  width: 1rem;
+  color: var(--accent);
+}
+
+.min-width-0 {
+  min-width: 0;
+}
+
+.node-name {
+  max-width: 220px;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.node-host,
+.detail-stat {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+.node-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.main-stat,
+.detail-stat {
+  display: block;
+  white-space: nowrap;
+}
+
+.main-stat {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.empty-stat,
+.empty-state {
+  color: var(--muted);
+}
+
+.empty-state {
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+
+@media (max-width: 767.98px) {
+  .nodes-page {
+    padding: 0.75rem;
+  }
+}
