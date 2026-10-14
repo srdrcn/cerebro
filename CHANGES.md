@@ -333,6 +333,9 @@ First cerebro release.
 
 #### New features
 
+- Live activity: the overview shows indexing and search rates, search latency, heap and CPU over the last minutes, and the nodes page adds per-node charts with thread pool queues and rejections (`/nodes?node=` opens a node).
+- Performance page: hot threads parsed into readable cards with the busiest pool explained, live thread pools with new rejections highlighted, the master's pending tasks, and a slow log threshold editor with presets that verifies what it applied.
+- Index operations wizard: shrink, split, clone, roll over and reindex with live preflight checks (write block, shard placement, disk, document limits, exact split counts), a review of the exact requests, and progress tracking with cancel and finishing actions; reachable from the Actions menu of index details.
 - Cluster doctor: a one click health check of the whole cluster. It finds unassigned shards, replicas that can never be allocated, indices without replicas, nodes above the disk watermarks (with headroom), read-only blocks, oversized and over-sharded indices, the shard limit, ILM errors, heap and old-generation memory pressure, garbage collection, tripped circuit breakers, disabled allocation, transient settings and upgrade deprecations, shows Elasticsearch's health report on 8.7+, explains each problem and offers a confirmed one-click fix or a link to the page that handles it.
 - Shard allocation explain: why a shard is unassigned or stays on its node, with every node's deciders, reachable from the overview's shard menus and the unassigned-shards warning.
 - Index details page with overview, settings, mappings, statistics, aliases and shards tabs.
@@ -365,6 +368,8 @@ First cerebro release.
 - Repeated identical errors (for example while the cluster is unreachable) no longer flood the screen.
 - Disabling and enabling shard allocation from the overview writes the persistent setting and clears the transient one, so no leftover transient value overrides later persistent changes. Unknown allocation kinds are rejected.
 - Pipelines, ILM policies, templates and other resources whose name contains a space can be updated and deleted (the space was sent as "+").
+- Text responses (for example `GET _cat/health` in the REST console) no longer fail with a JSON parse error.
+- Index lists ask Elasticsearch for names only and the index picker no longer reloads them on every refresh.
 - The `?host=` of the URL now always decides which cluster is shown (Back/Forward, bookmarks, pasted links).
 - Cancelling "Switch cluster" because of unsaved edits keeps the page connected.
 - Requests without a target host are answered with 400 "Missing required parameter host" instead of a 500.

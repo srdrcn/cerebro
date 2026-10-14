@@ -7,11 +7,13 @@ cerebro is an open source (MIT License) Elasticsearch administration tool built 
 
 ### Features
 
-- Cluster overview with the shard allocation map: open, close, refresh, flush, force merge and delete indices, relocate shards and toggle shard allocation.
+- Cluster overview with the shard allocation map: open, close, refresh, flush, force merge and delete indices, relocate shards and toggle shard allocation, plus live indexing, search, latency, heap and CPU charts.
 - Cluster doctor: one click health check that finds disk watermark, shard, replica, read-only block, ILM, JVM, settings and upgrade deprecation problems, explains them and offers a fix (including Elasticsearch's own health report on 8.7+).
-- Nodes view with roles, versions and heap, disk, CPU and load usage.
+- Nodes view with roles, versions, heap, disk, CPU and load usage, and live per-node activity charts with thread pool queues and rejections.
+- Performance: readable hot threads, live thread pools, the master's pending tasks and a slow log threshold editor with presets.
 - REST console with JSON editor, request history, saved requests (with export and import) and "copy as cURL".
 - Index details (settings, mappings, statistics, aliases, shards), index creation, aliases, cluster and index settings editors.
+- Index operations wizard: shrink, split, clone, roll over and reindex with live preflight checks, a review of the exact requests and progress tracking.
 - Composable index templates, component templates and legacy templates.
 - Data streams, index lifecycle (ILM) policies and ingest pipelines with simulation.
 - Shard allocation explain, live shard recoveries and a task manager with cancellation.

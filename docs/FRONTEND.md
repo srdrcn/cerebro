@@ -47,6 +47,8 @@ src/
 | `layout.ts` | `STACKED_LAYOUT_QUERY` (the 1180px breakpoint of rule 11), `isStackedLayout()`, `revealWhenStacked(element, { onlyBelowFold? })`: after a pick in a master/detail list, scrolls the editor or detail into view when the layout is stacked. Never repeat the breakpoint in TypeScript. |
 | `names.ts` | `validateResourceName(name, noun)` (template, snapshot and repository names) and the invalid character lists for resource and index names. ILM policy and pipeline ids follow their own rules in their features. |
 | `shards.ts` | `unassignedReason(reason)`: label and explanation of an `unassigned.reason`. |
+| `MetricsService` | Live node activity. `attach(destroyRef?)` returns a release function; it samples `metrics/nodes` on refresh ticks only while something is attached, keeps the history across pages and resets it on host change. Signals `history`, `cluster`, `nodes`, `latest`, `ready`, `sampling`, `failed`, `lastError`, `late`, `interval`, `paused`; `sampleNow()`. |
+| `metrics.ts` | Pure sampling logic: `parseNodeMetrics`, `buildHistory` (rates from each node's own timestamps, latencies Δtime/Δcount, cluster sums rates and averages gauges, counter resets and gaps give `null`), `METRICS` definitions, `formatRate`, `formatLatency`, `metricParts`, `seriesTone`. |
 | `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
 | `pending-changes.guard.ts` | `PendingChangesAware` (`confirmDiscard()`) and the `confirmDiscardPendingChanges` route guard. |
 | `preferences.ts` | best-effort `localStorage` helpers for per-browser UI preferences; writes return `false` when the browser refused them. |
@@ -65,6 +67,7 @@ src/
 | `<cerebro-pager>` | "1–20 of 143" + previous/next: `[page] [pageSize] [total] noun (pageChange)`; helpers `clampPage()` and `pageSlice()`. |
 | `createSort()` | Sortable table state from `shared/sort-state.ts`: `sortBy`, `isActive`, `ariaSort` and `icon` for `.sort-button` headers. |
 | `dialog[cerebroModal]` | `ModalDialogDirective` for page-owned native dialogs: opens as a modal after the first render (`(opened)` to focus a field), turns Escape and backdrop clicks into `(dismiss)` so the page decides whether to close. `cerebroModal="manual"` + `open()` / `close()` for dialogs that stay rendered; `[dismissible]="false"` while a request runs keeps it open. |
+| `<cerebro-sparkline>` | Dependency-free SVG line for a series with gaps: `[points]`, `label` (required, starts the accessible summary), `[format]`, `tone` (`.tone-*` names or `accent`), `[height]`, `[domainMax]` (100 for percentages), `[minDomain]`, `[dot]` (off for inline sparklines under ~80px), `[showValue]`, `[focusable]` (arrow keys walk the points with a live readout; otherwise `role="img"` with a now/low/high summary). |
 | `<cerebro-index-picker>` | Header index select (`.context-picker`) that loads the index list itself, grouped into regular and system/hidden indices: `inputId`, `index`, `label`, `(picked)`. Through a template reference: `indices()`, `failed()`, `loadError()`, `groups()`, `retry()`, `focus()`, `revert()` (after a declined pick). |
 | `<cerebro-settings-editor>` | Settings table with filter, inline editing, pending changes and add-setting form, shared by cluster and index settings (`shared/settings-editor/`). |
 | Pipes | `bytes`, `num`, `compact`, `duration`, `plural` (`{{ n \| plural: 'index' : 'indices' }}`) from `shared/format.pipes`. |
@@ -87,6 +90,19 @@ src/
   `isUnknownEndpoint(error)` says the endpoint is unknown.
 * No feature imports another feature: a helper two pages need moves to
   `core/` (pure logic) or `shared/` (UI).
+* Live data (counters, health, tasks) reloads on `RefreshService.tick()`.
+  Data that only changes when someone edits it (settings, slow log
+  thresholds, the index list) loads when the page or tab opens, after a
+  change and on an explicit Reload, not on every tick.
+* Status text that grows on every tick ("last 3m 5s") stays outside
+  `role="status"`, so screen readers are not interrupted.
+* After a confirmed change that removes or disables its own button, move
+  focus to a stable heading (`tabindex="-1"`); never let it fall to `<body>`.
+* A change applied to many indices is verified by reading it back and
+  reported as "applied to N of M".
+* Deep links: `/nodes?node=`, `/index_detail?index=`, `/allocation?index=&shard=&primary=`,
+  `/data_streams?name=`, `/ilm?policy=`, `/pipelines?pipeline=`,
+  `/performance?tab=`, `/index_ops?op=&index=`, `/create?name=&from=`.
 * Larger pages use `templateUrl` + `styleUrl`; page styles only contain
   layout specific to that page — everything reusable belongs to the design
   system.
@@ -185,8 +201,9 @@ on repositories) are plain `.btn` with an icon, placed before any primary
 button; never `.btn-ghost` or `.btn-primary`.
 
 Menu items and buttons end with an ellipsis ("Restore…", "Rename…") only when
-they open a dialog that collects input. Actions that only ask for
-confirmation do not ("Delete", "Delete index"), nor do items that navigate.
+they open a dialog, or a wizard, that collects input before anything runs
+("Shrink…"). Actions that only ask for confirmation do not ("Delete",
+"Delete index"), nor do items that simply navigate.
 
 ### Master/detail editors
 
