@@ -14,6 +14,7 @@ object InsightControllersSpec extends MockedServices {
     s2"""
     Metrics, performance and index operation controllers should ${step(play.api.Play.start(application))}
       return node metrics                                $nodeMetrics
+      leave out indexing pressure before 7.9             $nodeMetricsBefore79
       return hot threads as text                         $hotThreads
       capture hot threads of one node with options       $hotThreadsOptions
       reject an unknown hot threads type                 $hotThreadsType
@@ -39,7 +40,15 @@ object InsightControllersSpec extends MockedServices {
 
   def nodeMetrics = {
     val metrics = Json.obj("nodes" -> Json.obj("n1" -> Json.obj("name" -> "es-node-1")))
-    client.nodeMetrics(server) returns Future.successful(Success(200, metrics))
+    client.nodeMetrics(true, server) returns Future.successful(Success(200, metrics))
+    ensure(post("/metrics/nodes"), 200, metrics)
+  }
+
+  def nodeMetricsBefore79 = {
+    val metrics = Json.obj("nodes" -> Json.obj("n1" -> Json.obj("name" -> "es-node-1")))
+    val unknownMetric = Json.obj("error" -> Json.obj("reason" -> "request [/_nodes/stats] contains unrecognized metric: [indexing_pressure]"))
+    client.nodeMetrics(true, server) returns Future.successful(Error(400, unknownMetric))
+    client.nodeMetrics(false, server) returns Future.successful(Success(200, metrics))
     ensure(post("/metrics/nodes"), 200, metrics)
   }
 

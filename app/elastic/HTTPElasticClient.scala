@@ -414,16 +414,24 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
   def retryFailedAllocations(target: ElasticServer) =
     execute("/_cluster/reroute?retry_failed=true&filter_path=acknowledged", "POST", None, target)
 
-  def nodeMetrics(target: ElasticServer) = {
+  def nodeMetrics(includeIndexingPressure: Boolean, target: ElasticServer) = {
+    val pressure = Seq(
+      "indexing_pressure.memory.total.coordinating_rejections",
+      "indexing_pressure.memory.total.primary_rejections",
+      "indexing_pressure.memory.total.replica_rejections"
+    )
     val fields = Seq(
-      "name", "roles", "timestamp",
+      "name", "roles", "timestamp", "jvm.uptime_in_millis",
       "indices.indexing.index_total", "indices.indexing.index_time_in_millis",
       "indices.search.query_total", "indices.search.query_time_in_millis", "indices.search.fetch_total",
-      "indices.get.total", "indices.docs.count", "indices.store.size_in_bytes",
-      "jvm.mem.heap_used_percent", "os.cpu.percent", "os.cpu.load_average", "process.cpu.percent",
-      "thread_pool.write", "thread_pool.search"
-    ).map(field => s"nodes.*.$field").mkString(",")
-    execute(s"/_nodes/stats/indices,jvm,os,process,thread_pool?filter_path=$fields", "GET", None, target)
+      "indices.get.total", "jvm.mem.heap_used_percent",
+      "os.cpu.percent", "os.cpu.load_average", "os.load_average", "process.cpu.percent",
+      "thread_pool.write", "thread_pool.search", "thread_pool.bulk"
+    ) ++ (if (includeIndexingPressure) pressure else Seq.empty)
+    val filter = ("_nodes" +: fields.map(field => s"nodes.*.$field")).mkString(",")
+    val metrics = "indices,jvm,os,process,thread_pool" + (if (includeIndexingPressure) ",indexing_pressure" else "")
+    // Only the index statistics the charts use, and a bound on slow nodes.
+    execute(s"/_nodes/stats/$metrics/indexing,search,get?timeout=10s&filter_path=$filter", "GET", None, target)
   }
 
   def hotThreads(node: Option[String], threads: Int, interval: String, kind: String, ignoreIdle: Boolean,

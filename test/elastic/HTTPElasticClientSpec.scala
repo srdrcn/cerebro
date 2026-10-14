@@ -97,7 +97,8 @@ object HTTPElasticClientSpec extends Specification {
       "/_nodes/_all/hot_threads?threads=3&interval=500ms&type=cpu&ignore_idle_threads=true") and
       (record(_.hotThreads(Some("es node"), 5, "2s", "wait", false, server)).uri mustEqual
         "/_nodes/es%20node/hot_threads?threads=5&interval=2s&type=wait&ignore_idle_threads=false") and
-      (record(_.nodeMetrics(server)).uri must startWith("/_nodes/stats/indices,jvm,os,process,thread_pool?filter_path=nodes.*.name,")) and
+      (record(_.nodeMetrics(true, server)).uri must startWith("/_nodes/stats/indices,jvm,os,process,thread_pool,indexing_pressure/indexing,search,get?timeout=10s&filter_path=_nodes,nodes.*.name,")) and
+      (record(_.nodeMetrics(false, server)).uri must not(contain("indexing_pressure"))) and
       (record(_.resizeIndex("shrink", "logs", "logs small", Json.obj(), server)) mustEqual Call("/logs/_shrink/logs%20small", "POST", Some("{}"))) and
       (record(_.rollover("logs-write", None, Json.obj(), true, server)).uri mustEqual "/logs-write/_rollover?dry_run=true") and
       (record(_.rollover("logs-write", Some("logs-000002"), Json.obj(), false, server)).uri mustEqual "/logs-write/_rollover/logs-000002?dry_run=false") and

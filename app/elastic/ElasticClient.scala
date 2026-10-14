@@ -181,8 +181,8 @@ trait ElasticClient {
 
   def retryFailedAllocations(target: ElasticServer): Future[ElasticResponse]
 
-  // Live metrics
-  def nodeMetrics(target: ElasticServer): Future[ElasticResponse]
+  // Live metrics; indexing pressure exists from Elasticsearch 7.9
+  def nodeMetrics(includeIndexingPressure: Boolean, target: ElasticServer): Future[ElasticResponse]
 
   // Performance diagnosis
   def hotThreads(node: Option[String], threads: Int, interval: String, kind: String, ignoreIdle: Boolean,
