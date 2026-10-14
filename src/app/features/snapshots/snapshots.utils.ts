@@ -1,4 +1,4 @@
-import { formatDate, matchesText } from '../../core/format';
+import { formatDate, textMatcher } from '../../core/format';
 import { isRecord } from '../../core/json';
 import { validateResourceName } from '../../core/names';
 import { SnapshotRecord, SnapshotState } from './snapshots.models';
@@ -94,15 +94,18 @@ export function snapshotKey(snapshot: SnapshotRecord): string {
   return snapshot.uuid || snapshot.snapshot;
 }
 
+/** Compiles a filter that matches the snapshot name or any index it contains. */
+export function snapshotMatcher(query: string): (snapshot: SnapshotRecord) => boolean {
+  if (!query.trim()) {
+    return () => true;
+  }
+  const matches = textMatcher(query);
+  return (snapshot) => matches(snapshot.snapshot) || snapshotIndices(snapshot).some(matches);
+}
+
 /** Matches the snapshot name or any index it contains. */
 export function matchesSnapshot(snapshot: SnapshotRecord, query: string): boolean {
-  if (!query.trim()) {
-    return true;
-  }
-  return (
-    matchesText(snapshot.snapshot, query) ||
-    snapshotIndices(snapshot).some((index) => matchesText(index, query))
-  );
+  return snapshotMatcher(query)(snapshot);
 }
 
 export function filterSnapshots(
@@ -110,9 +113,8 @@ export function filterSnapshots(
   query: string,
   hiddenStates: ReadonlySet<string>,
 ): SnapshotRecord[] {
-  return snapshots.filter(
-    (snapshot) => !hiddenStates.has(snapshot.state ?? '') && matchesSnapshot(snapshot, query),
-  );
+  const matches = snapshotMatcher(query);
+  return snapshots.filter((snapshot) => !hiddenStates.has(snapshot.state ?? '') && matches(snapshot));
 }
 
 /**

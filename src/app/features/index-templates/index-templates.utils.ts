@@ -1,7 +1,8 @@
 import { ClusterApiError } from '../../core/api-envelope';
 import { elasticsearchReason } from '../../core/errors';
-import { matchesText, pluralize } from '../../core/format';
+import { pluralize, textMatcher } from '../../core/format';
 import { JsonRecord, isRecord, stringList } from '../../core/json';
+import { isManagedTemplate } from '../../core/templates';
 import {
   AliasEntry,
   BodyCheck,
@@ -30,14 +31,6 @@ function finiteNumber(value: unknown): number | null {
 /* ------------------------------------------------------------------ */
 /* Template facts                                                      */
 /* ------------------------------------------------------------------ */
-
-/**
- * Built-in templates installed by Elasticsearch, Fleet or Kibana: system
- * names (".") and everything that carries `_meta.managed: true`.
- */
-export function isManagedTemplate(name: string, meta: unknown): boolean {
-  return name.startsWith('.') || (isRecord(meta) && meta['managed'] === true);
-}
 
 export function indexPatterns(body: IndexTemplateBody | undefined): string[] {
   return stringList(body?.index_patterns);
@@ -164,7 +157,7 @@ export function componentTemplateRow(
 
 /**
  * Search over name, patterns, component names and the description, with the
- * regex-or-substring semantics of the other filters (`matchesText`). Managed
+ * regex-or-substring semantics of the other filters (`textMatcher`). Managed
  * templates are left out unless asked for. Sorted by name with user
  * templates first.
  */
@@ -173,7 +166,7 @@ export function filterRows(
   query: string,
   showManaged: boolean,
 ): TemplateRow[] {
-  const matches = (value: string): boolean => matchesText(value, query);
+  const matches = textMatcher(query);
   return rows
     .filter((row) => showManaged || !row.managed)
     .filter(

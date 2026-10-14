@@ -141,7 +141,7 @@
 
 .token-source mark.is-active {
   border-bottom-color: var(--accent);
-  border-radius: 3px 3px 0 0;
+  border-radius: var(--radius-2xs) var(--radius-2xs) 0 0;
   background: var(--accent-soft-strong);
   color: var(--accent-text);
 }

@@ -20,10 +20,12 @@ import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize, sentence } from '../../core/format';
 import { JsonRecord, isRecord } from '../../core/json';
+import { revealWhenStacked } from '../../core/layout';
 import { validateResourceName } from '../../core/names';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { saveLabel, saveMode } from '../../core/save-mode';
+import { isManagedTemplate } from '../../core/templates';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
@@ -55,7 +57,6 @@ import {
   indexPatterns,
   indexTemplateRow,
   isDataStreamTemplate,
-  isManagedTemplate,
   isUnknownEndpoint,
   kindParam,
   metaDescription,
@@ -468,7 +469,7 @@ export class IndexTemplatesComponent implements PendingChangesAware {
     }
     const entry = this.bodyOf(kind, name);
     if (!entry) {
-      this.alerts.warn(`The ${KIND_NOUN[kind]} ${name} does not exist`);
+      this.alerts.warn(`${sentence(KIND_NOUN[kind])} ${name} does not exist`);
       return;
     }
     if (!(await this.confirmDiscard()) || this.saving()) {
@@ -766,7 +767,7 @@ export class IndexTemplatesComponent implements PendingChangesAware {
     const kind = this.tab();
     const entry = this.bodyOf(kind, name);
     if (!entry) {
-      this.alerts.warn(`The ${KIND_NOUN[kind]} ${name} does not exist`);
+      this.alerts.warn(`${sentence(KIND_NOUN[kind])} ${name} does not exist`);
       this.syncUrl();
       return;
     }
@@ -811,10 +812,7 @@ export class IndexTemplatesComponent implements PendingChangesAware {
 
   /** On the single-column layout the editor sits below the list. */
   private revealEditor(): void {
-    const card = this.editorCard()?.nativeElement;
-    if (card && globalThis.matchMedia?.('(max-width: 1180px)').matches) {
-      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    revealWhenStacked(this.editorCard()?.nativeElement);
   }
 
   private revealPreview(): void {

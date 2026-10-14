@@ -34,7 +34,7 @@
 
       @if (templates(); as all) {
         @if (all.length > 0) {
-          <div class="list-toolbar">
+          <div class="list-card__toolbar">
             <cerebro-search
               [(value)]="query"
               [small]="true"
@@ -42,14 +42,14 @@
               ariaLabel="Filter templates by name or index pattern"
             />
             @if (managedCount() > 0) {
-              <label class="switch managed-switch">
+              <label class="switch list-card__switch">
                 <input type="checkbox" [ngModel]="showManaged()" (ngModelChange)="showManaged.set($event)" />
                 Show managed templates
                 <span class="count">{{ managedCount() }}</span>
               </label>
             }
           </div>
-          <ul class="list template-list" aria-label="Legacy templates" [attr.aria-busy]="loading() || saving() ? true : null">
+          <ul class="list list-card__list" aria-label="Legacy templates" [attr.aria-busy]="loading() || saving() ? true : null">
             @for (row of rows(); track row.name) {
               <li>
                 <button
@@ -153,7 +153,7 @@
       </p>
     </div>
 
-    <div #editorCard class="card editor-card" role="region" aria-labelledby="template-editor-title">
+    <div #editorCard class="card card--sticky-footer editor-card" role="region" aria-labelledby="template-editor-title">
       <div class="card-header editor-card__header">
         <span class="card-icon" aria-hidden="true">
           <i class="bi" [class.bi-plus-lg]="selected() === null" [class.bi-pencil]="selected() !== null"></i>
@@ -302,7 +302,7 @@
       </div>
 
       <div class="card-footer card-footer--between">
-        <span class="footer-keys text-muted">
+        <span class="footer-keys">
           <kbd>Ctrl</kbd><kbd>Enter</kbd> to save
         </span>
         <div class="row footer-buttons">

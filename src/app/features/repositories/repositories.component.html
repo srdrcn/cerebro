@@ -5,33 +5,31 @@
       <p class="page-subtitle">Storage locations that snapshots are written to and restored from.</p>
     </div>
     <div class="page-header__actions">
-      <a class="btn btn-ghost" routerLink="/snapshot" [queryParams]="connection.hostQuery()">
+      <a class="btn" routerLink="/snapshot" [queryParams]="connection.hostQuery()">
         <i class="bi bi-camera" aria-hidden="true"></i> Snapshots
       </a>
     </div>
   </header>
 
-  <div class="layout-sidebar-start">
+  <div class="layout-sidebar-start repositories-layout">
     <!-- Registered repositories -->
-    <div class="card repo-list-card">
+    <div class="card list-card">
       <div class="card-header">
-        <div class="min-w-0">
-          <h2 class="card-title"><i class="bi bi-database" aria-hidden="true"></i> Registered</h2>
-          @if (repositories(); as all) {
-            <span class="count-label">
-              @if (query() && all.length > filterThreshold) {
-                <strong>{{ views().length | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'repository' : 'repositories' }}
-              } @else {
-                <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'repository' : 'repositories' }}
-              }
-            </span>
-          }
-        </div>
+        <h2 class="card-title spacer"><i class="bi bi-database" aria-hidden="true"></i> Registered</h2>
+        @if (repositories(); as all) {
+          <span class="count-label">
+            @if (query().trim() && all.length > filterThreshold) {
+              <strong>{{ views().length | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'repository' : 'repositories' }}
+            } @else {
+              <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'repository' : 'repositories' }}
+            }
+          </span>
+        }
         <button
           type="button"
           class="btn btn-sm btn-soft"
           [disabled]="saving() || blankForm()"
-          (click)="newRepository()"
+          (click)="startNew()"
         >
           <i class="bi bi-plus-lg" aria-hidden="true"></i> New repository
         </button>
@@ -39,7 +37,7 @@
 
       @if (repositories(); as all) {
         @if (all.length > filterThreshold) {
-          <div class="repo-filter">
+          <div class="list-card__toolbar">
             <cerebro-search [(value)]="query" [small]="true" placeholder="Filter repositories" ariaLabel="Filter repositories by name" />
           </div>
         }
@@ -51,7 +49,7 @@
             [compact]="true"
           />
         } @else {
-          <ul class="list" aria-label="Snapshot repositories">
+          <ul class="list list-card__list" aria-label="Snapshot repositories">
             @for (item of views(); track item.record.name) {
               <li
                 class="list-item repo-item"
@@ -63,7 +61,7 @@
                   class="repo-item__select"
                   [attr.aria-current]="editing() === item.record.name ? 'true' : null"
                   [attr.aria-label]="'Edit repository ' + item.record.name"
-                  (click)="edit(item.record)"
+                  (click)="select(item.record)"
                 >
                   <span class="list-item__icon" aria-hidden="true"><i [class]="'bi ' + item.icon"></i></span>
                   <span class="list-item__body">
@@ -80,7 +78,7 @@
                   <cerebro-menu [label]="'Actions for ' + item.record.name" align="end">
                     <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
                     <div class="menu-label">{{ item.record.name }}</div>
-                    <button type="button" class="menu-item" (click)="edit(item.record)">
+                    <button type="button" class="menu-item" (click)="select(item.record)">
                       <i class="bi bi-pencil" aria-hidden="true"></i> Edit settings
                     </button>
                     <a
@@ -95,7 +93,7 @@
                     </button>
                     <div class="menu-separator" role="separator"></div>
                     <button type="button" class="menu-item menu-item--danger" (click)="remove(item.record)">
-                      <i class="bi bi-trash" aria-hidden="true"></i> Delete…
+                      <i class="bi bi-trash" aria-hidden="true"></i> Delete
                     </button>
                   </cerebro-menu>
                 }

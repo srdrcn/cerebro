@@ -7,7 +7,6 @@
 /* ------------------------------------------------------------------ */
 
 .assignments-card {
-  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
   container: assignments / inline-size;
 }
 

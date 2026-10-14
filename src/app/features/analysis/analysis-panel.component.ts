@@ -16,7 +16,7 @@ import { FormsModule } from '@angular/forms';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { DialogService } from '../../core/dialog.service';
-import { elasticsearchReason, failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { readJsonPreference, writeJsonPreference } from '../../core/preferences';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -309,7 +309,7 @@ export class AnalysisPanelComponent {
         return;
       }
       this.run.set(null);
-      this.runError.set(elasticsearchReason(error) ?? 'The cluster could not analyze the text.');
+      this.runError.set(readableReason(error) ?? 'The cluster could not analyze the text.');
       this.alerts.error(failureMessage(`Could not analyze the text with ${request.target}`, error), error);
     } finally {
       if (sequence === this.analyzeSequence) {

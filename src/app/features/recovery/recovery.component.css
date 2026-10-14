@@ -223,7 +223,7 @@
 .rec-step {
   width: 22px;
   height: 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--surface-3);
 }
 

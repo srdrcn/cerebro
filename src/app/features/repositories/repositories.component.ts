@@ -1,20 +1,24 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   effect,
   inject,
   signal,
   untracked,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
+import { skip } from 'rxjs';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { elasticsearchReason, failureMessage, readableReason } from '../../core/errors';
-import { matchesText } from '../../core/format';
+import { textMatcher } from '../../core/format';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
@@ -58,17 +62,35 @@ interface RepositoryView {
   readonly snapshotsQuery: Record<string, string | null>;
 }
 
+/**
+ * Comparable snapshot of the form: settings left empty and blank extra rows
+ * do not count as changes.
+ */
+function formState(
+  name: string,
+  type: string,
+  settings: RepositorySettings,
+  extras: readonly RepositoryExtraSetting[],
+): string {
+  const filled = Object.entries(settings)
+    .filter(([, value]) => value !== '' && value !== undefined)
+    .sort(([left], [right]) => left.localeCompare(right));
+  const rows = extras.filter((extra) => extra.key || extra.value).map((extra) => [extra.key, extra.value]);
+  return JSON.stringify([name, type, filled, rows]);
+}
+
 /** Lists with more entries than this get a filter field. */
 const FILTER_THRESHOLD = 6;
 
 @Component({
   selector: 'cerebro-repositories',
   imports: [EmptyStateComponent, FormsModule, MenuComponent, NumberPipe, PluralPipe, RouterLink, SearchInputComponent],
+  host: { '(window:beforeunload)': 'onBeforeUnload($event)' },
   templateUrl: './repositories.component.html',
   styleUrl: './repositories.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class RepositoriesComponent {
+export class RepositoriesComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
@@ -99,16 +121,17 @@ export class RepositoriesComponent {
   /** Why Elasticsearch rejected the last save, shown next to the form. */
   readonly saveError = signal<string | null>(null);
 
-  readonly views = computed<RepositoryView[]>(() =>
-    (this.repositories() ?? [])
-      .filter((repository) => matchesText(repository.name, this.query()))
+  readonly views = computed<RepositoryView[]>(() => {
+    const matches = textMatcher(this.query());
+    return (this.repositories() ?? [])
+      .filter((repository) => matches(repository.name))
       .map((record) => ({
         record,
         icon: repositoryTypeInfo(record.type)?.icon ?? 'bi-database',
         summary: repositorySummary(record),
         snapshotsQuery: { ...this.connection.hostQuery(), repository: record.name },
-      })),
-  );
+      }));
+  });
 
   readonly typeOptions = computed<TypeOption[]>(() => {
     const options: TypeOption[] = REPOSITORY_TYPES.map((info) => ({ ...info }));
@@ -130,6 +153,13 @@ export class RepositoriesComponent {
   /** The form is already an empty "Register repository" form. */
   readonly blankForm = computed(
     () => this.editing() === null && !this.name() && !this.type() && this.extras().length === 0,
+  );
+
+  /** What the form held when it was last opened or saved. */
+  private readonly baseline = signal(formState('', '', {}, []));
+  /** The form differs from the repository it was opened with (or from an empty form). */
+  readonly dirty = computed(
+    () => !this.saving() && formState(this.name(), this.type(), this.settings(), this.extras()) !== this.baseline(),
   );
 
   readonly nameError = computed(() => validateRepositoryName(this.name()));
@@ -176,15 +206,72 @@ export class RepositoriesComponent {
 
   private loadSequence = 0;
   private nextExtraId = 0;
+  private destroyed = false;
   /** `?repository=` from the Snapshots page, opened once it is loaded. */
   private requested = this.route.snapshot.queryParamMap.get('repository') ?? '';
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => (this.destroyed = true));
     effect(() => {
       this.refreshService.tick();
       if (this.connection.connected()) {
         untracked(() => void this.load());
       }
+    });
+    // Later links and history entries (the first one is read above).
+    this.route.queryParamMap.pipe(skip(1), takeUntilDestroyed()).subscribe((params) => this.applyParams(params));
+  }
+
+  /**
+   * Follows a link or history entry that names a repository. A link without
+   * one (the sidebar, the palette) keeps the open repository and writes it
+   * back, so the URL always describes the page.
+   */
+  private applyParams(params: ParamMap): void {
+    const name = params.get('repository');
+    if (name !== null && name !== this.editing()) {
+      const repositories = this.repositories();
+      if (!repositories) {
+        this.requested = name;
+        return;
+      }
+      const repository = repositories.find((item) => item.name === name);
+      if (repository) {
+        void this.select(repository).then(() => this.syncUrl());
+      } else {
+        this.alerts.warn(`Repository ${name} does not exist`);
+        this.syncUrl();
+      }
+      return;
+    }
+    if (name !== this.editing()) {
+      this.syncUrl();
+    }
+  }
+
+  /** Asks the browser to confirm closing the tab while the form holds unsaved edits. */
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.dirty()) {
+      event.preventDefault();
+    }
+  }
+
+  /**
+   * Resolves `true` when the form holds nothing unsaved or the user agreed to
+   * drop it. Used when picking another repository and by the route guard.
+   */
+  async confirmDiscard(): Promise<boolean> {
+    if (!this.dirty()) {
+      return true;
+    }
+    const editing = this.editing();
+    const subject = editing ? `repository ${editing}` : 'the new repository';
+    return this.dialogs.confirm({
+      title: 'Discard unsaved changes?',
+      message: `Your changes to ${subject} have not been saved and will be lost.`,
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+      tone: 'danger',
     });
   }
 
@@ -204,15 +291,15 @@ export class RepositoriesComponent {
       this.requested = '';
       const requested = sorted.find((repository) => repository.name === name);
       if (requested) {
-        this.edit(requested);
+        // Opening from the URL never discards edits typed while the list loaded.
+        if (!this.dirty()) {
+          this.edit(requested);
+        } else {
+          this.syncUrl();
+        }
       } else if (name) {
         this.alerts.warn(`Repository ${name} does not exist`);
-        void this.router.navigate([], {
-          relativeTo: this.route,
-          queryParams: { repository: null },
-          queryParamsHandling: 'merge',
-          replaceUrl: true,
-        });
+        this.syncUrl();
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
@@ -225,6 +312,26 @@ export class RepositoriesComponent {
 
   // ---- Form ----
 
+  /** Opens a repository from the list, asking first when the form holds unsaved edits. */
+  async select(repository: RepositoryRecord): Promise<void> {
+    if (this.saving() || (this.editing() === repository.name && !this.dirty())) {
+      return;
+    }
+    if (await this.confirmDiscard()) {
+      this.edit(repository);
+    }
+  }
+
+  /** "New repository": an empty form, asking first when edits would be lost. */
+  async startNew(): Promise<void> {
+    if (this.saving()) {
+      return;
+    }
+    if (await this.confirmDiscard()) {
+      this.newRepository();
+    }
+  }
+
   edit(repository: RepositoryRecord): void {
     const normalized = normalizeRepositorySettings(repository.type, repository.settings);
     this.editing.set(repository.name);
@@ -235,6 +342,8 @@ export class RepositoriesComponent {
     this.revealed.set(new Set());
     this.submitted.set(false);
     this.saveError.set(null);
+    this.baseline.set(formState(repository.name, repository.type, this.settings(), this.extras()));
+    this.syncUrl();
   }
 
   newRepository(focus = true): void {
@@ -246,6 +355,8 @@ export class RepositoriesComponent {
     this.revealed.set(new Set());
     this.submitted.set(false);
     this.saveError.set(null);
+    this.baseline.set(formState('', '', {}, []));
+    this.syncUrl();
     if (focus) {
       setTimeout(() => document.getElementById('repository-name')?.focus());
     }
@@ -427,6 +538,21 @@ export class RepositoriesComponent {
     if (culprit !== null) {
       document.getElementById(`repository-extra-key-${culprit}`)?.focus();
     }
+  }
+
+  /** Keeps the open repository in the URL so it can be reloaded and shared. */
+  private syncUrl(): void {
+    if (this.destroyed) {
+      return;
+    }
+    this.router
+      .navigate([], {
+        relativeTo: this.route,
+        queryParams: { repository: this.editing() },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      })
+      .catch(() => false);
   }
 
   private setField(key: string, value: RepositorySettingValue): void {

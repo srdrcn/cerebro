@@ -728,10 +728,6 @@
   }
 
   .response-pane {
-    scroll-margin-top: calc(var(--topbar-height) + var(--space-3));
-  }
-
-  .response-pane {
     height: min(72svh, 680px);
     min-height: 400px;
   }

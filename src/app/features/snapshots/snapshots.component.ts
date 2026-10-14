@@ -501,11 +501,7 @@ export class SnapshotsComponent {
   }
 
   async copyName(snapshot: SnapshotRecord): Promise<void> {
-    await this.clipboard.copy(
-      snapshot.snapshot,
-      () => this.alerts.success('Snapshot name copied'),
-      (error) => this.alerts.error('Could not copy to clipboard', error),
-    );
+    await this.clipboard.copyAndNotify(snapshot.snapshot, 'snapshot name');
   }
 
   openRestore(snapshot: SnapshotRecord): void {

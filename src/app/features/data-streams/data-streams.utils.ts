@@ -1,4 +1,6 @@
-import { matchesText } from '../../core/format';
+import { ClusterApiError } from '../../core/api-envelope';
+import { elasticsearchReason, readableReason } from '../../core/errors';
+import { textMatcher } from '../../core/format';
 import { HealthTone, healthLabel, healthTone } from '../../core/health';
 import {
   BackingIndexRow,
@@ -130,8 +132,9 @@ export function isInternal(row: StreamRow): boolean {
 export function filterRows(rows: readonly StreamRow[], query: string, showInternal: boolean): StreamRow[] {
   const raw = query.trim();
   const needle = raw.toLocaleLowerCase();
+  const pattern = textMatcher(raw);
   const matches = (value: string | null): boolean =>
-    value !== null && (value.toLocaleLowerCase().includes(needle) || matchesText(value, raw));
+    value !== null && (value.toLocaleLowerCase().includes(needle) || pattern(value));
   return rows.filter(
     (row) =>
       (showInternal || !isInternal(row)) &&
@@ -264,4 +267,26 @@ export function relinkExpanded(
     expanded.add(next);
   }
   return expanded;
+}
+
+/**
+ * Whether a failed request reached an Elasticsearch without the data stream
+ * APIs (before 7.9): an unknown endpoint, not an unreachable host or a
+ * missing privilege.
+ */
+export function isUnknownEndpoint(error: unknown): boolean {
+  if (error instanceof ClusterApiError && (error.status === 404 || error.status === 405)) {
+    return true;
+  }
+  const reason = elasticsearchReason(error) ?? '';
+  return /no handler found|incorrect HTTP method|index name \[_data_stream\]/i.test(reason);
+}
+
+/**
+ * The reason shown in the error state, or `undefined` when the page should
+ * fall back to its own sentence with the "needs Elasticsearch 7.9" hint (no
+ * reason, or an Elasticsearch that does not know the endpoint).
+ */
+export function loadErrorReason(error: unknown): string | undefined {
+  return isUnknownEndpoint(error) ? undefined : readableReason(error);
 }

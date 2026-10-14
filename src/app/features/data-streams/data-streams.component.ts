@@ -37,6 +37,7 @@ import {
   isInternal,
   keepsStreamLink,
   linkedStreamMissing,
+  loadErrorReason,
   missingStreamMessage,
   nextBackingIndex,
   relinkExpanded,
@@ -76,6 +77,8 @@ export class DataStreamsComponent {
   readonly stats = signal<DataStreamStats | null>(null);
   readonly loading = signal(false);
   readonly failed = signal(false);
+  /** Reason of the failed load; `undefined` shows the version hint instead. */
+  readonly loadError = signal<string | undefined>(undefined);
   readonly now = signal(Date.now());
 
   readonly query = signal('');
@@ -180,10 +183,12 @@ export class DataStreamsComponent {
       this.streams.set(Array.isArray(response?.data_streams) ? response.data_streams : []);
       this.stats.set(response?.stats ?? null);
       this.failed.set(false);
+      this.loadError.set(undefined);
       this.revealPending();
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
+        this.loadError.set(loadErrorReason(error));
         this.alerts.error(failureMessage('Could not load data streams', error), error);
       }
     } finally {

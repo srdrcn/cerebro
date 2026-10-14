@@ -10,7 +10,7 @@ import { RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
-import { failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { AnalysisPanelComponent } from './analysis-panel.component';
@@ -35,9 +35,9 @@ import { asNames } from './analysis.utils';
           <cerebro-empty
             icon="bi-exclamation-triangle"
             heading="Could not load indices"
-            text="Analysis runs against an index, but the cluster did not return its list of open indices."
+            [text]="loadError() ?? 'Analysis runs against an index, but the cluster did not return its list of open indices.'"
           >
-            <button type="button" class="btn btn-sm" (click)="load()">
+            <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
               <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
             </button>
           </cerebro-empty>
@@ -79,6 +79,7 @@ export class AnalysisComponent {
   readonly loading = signal(false);
   readonly loaded = signal(false);
   readonly failed = signal(false);
+  readonly loadError = signal<string | undefined>(undefined);
 
   private loadSequence = 0;
 
@@ -104,10 +105,12 @@ export class AnalysisComponent {
         }
         this.loaded.set(true);
         this.failed.set(false);
+        this.loadError.set(undefined);
       }
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
+        this.loadError.set(readableReason(error));
         this.alerts.error(failureMessage('Could not load the open indices', error), error);
       }
     } finally {

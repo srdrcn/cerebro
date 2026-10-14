@@ -413,11 +413,7 @@ export class AliasesComponent implements PendingChangesAware {
   }
 
   copyFilter(record: AliasRecord): void {
-    void this.clipboard.copy(
-      prettyJson(record.filter),
-      () => this.alerts.success(`Copied the filter of ${record.alias}`),
-      (error: unknown) => this.alerts.error('Could not copy to the clipboard', error),
-    );
+    void this.clipboard.copyAndNotify(prettyJson(record.filter), `filter of ${record.alias}`);
   }
 
   indexLinkParams(index: string): Record<string, string | null> {

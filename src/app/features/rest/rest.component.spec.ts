@@ -14,12 +14,12 @@ describe('RestComponent', () => {
   const post = vi.fn();
   const rawPost = vi.fn();
   const confirm = vi.fn();
-  const copy = vi.fn();
+  const copyAndNotify = vi.fn();
   const alerts = { error: vi.fn(), info: vi.fn(), warn: vi.fn(), success: vi.fn() };
   const host = signal('http://localhost:9200');
 
   beforeEach(() => {
-    for (const mock of [post, rawPost, confirm, copy, ...Object.values(alerts)]) {
+    for (const mock of [post, rawPost, confirm, copyAndNotify, ...Object.values(alerts)]) {
       mock.mockReset();
     }
     host.set('http://localhost:9200');
@@ -42,7 +42,7 @@ describe('RestComponent', () => {
         { provide: ElementRef, useValue: new ElementRef(document.createElement('cerebro-rest')) },
         { provide: ClusterApiService, useValue: { post, rawPost } },
         { provide: AlertService, useValue: alerts },
-        { provide: ClipboardService, useValue: { copy } },
+        { provide: ClipboardService, useValue: { copyAndNotify } },
         { provide: DialogService, useValue: { confirm } },
         RestSavedStore,
         {
@@ -193,10 +193,9 @@ describe('RestComponent', () => {
 
     await target.copyAsCurl();
 
-    expect(copy).toHaveBeenCalledWith(
+    expect(copyAndNotify).toHaveBeenCalledWith(
       expect.stringContaining("--url 'http://localhost:9200/products/_search'"),
-      expect.any(Function),
-      expect.any(Function),
+      'cURL command',
     );
   });
 

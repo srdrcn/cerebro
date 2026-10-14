@@ -20,7 +20,6 @@ import {
   ignoredComponents,
   indexPatterns,
   indexTemplateRow,
-  isManagedTemplate,
   isUnknownEndpoint,
   kindParam,
   mappingFields,
@@ -102,14 +101,6 @@ const appMappings: ComponentTemplateEntry = {
 };
 
 describe('template facts', () => {
-  it('detects managed templates by name or _meta.managed', () => {
-    expect(isManagedTemplate('.kibana', undefined)).toBe(true);
-    expect(isManagedTemplate('logs', { managed: true })).toBe(true);
-    expect(isManagedTemplate('logs', { managed: 'true' })).toBe(false);
-    expect(isManagedTemplate('app-events', { owner: 'x' })).toBe(false);
-    expect(isManagedTemplate('app-events', null)).toBe(false);
-  });
-
   it('reads index patterns as a list', () => {
     expect(indexPatterns(appEvents.index_template)).toEqual(['app-events-*']);
     expect(indexPatterns({ index_patterns: 'one-*' })).toEqual(['one-*']);

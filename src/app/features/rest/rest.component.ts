@@ -17,6 +17,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage } from '../../core/errors';
+import { revealWhenStacked } from '../../core/layout';
 import { pluralize } from '../../core/format';
 import {
   readJsonPreference,
@@ -586,11 +587,7 @@ export class RestComponent {
   }
 
   async copyBody(): Promise<void> {
-    await this.clipboard.copy(
-      this.body(),
-      () => this.alerts.success('Request body copied to the clipboard'),
-      (error) => this.alerts.error(failureMessage('Could not copy the request body', error), error),
-    );
+    await this.clipboard.copyAndNotify(this.body(), 'request body');
   }
 
   async copyAsCurl(): Promise<void> {
@@ -618,11 +615,7 @@ export class RestComponent {
       return;
     }
 
-    await this.clipboard.copy(
-      command,
-      () => this.alerts.success('cURL command copied to the clipboard'),
-      (error) => this.alerts.error(failureMessage('Could not copy the cURL command', error), error),
-    );
+    await this.clipboard.copyAndNotify(command, 'cURL command');
   }
 
   restore(entry: RestHistoryEntry): void {
@@ -1018,11 +1011,7 @@ export class RestComponent {
     if (!response) {
       return;
     }
-    await this.clipboard.copy(
-      response.text,
-      () => this.alerts.success('Response copied to the clipboard'),
-      (error) => this.alerts.error(failureMessage('Could not copy the response', error), error),
-    );
+    await this.clipboard.copyAndNotify(response.text, 'response');
   }
 
   statusToneOf(status: number | null): StatusTone {
@@ -1068,15 +1057,7 @@ export class RestComponent {
 
   /** In the stacked layout the response is below the fold: bring it into view. */
   private revealResponse(): void {
-    const pane = this.responsePane()?.nativeElement;
-    const view = globalThis.window;
-    if (!pane || !view?.matchMedia?.('(max-width: 1180px)').matches) {
-      return;
-    }
-    const rect = pane.getBoundingClientRect();
-    if (rect.top > view.innerHeight * 0.6) {
-      pane.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    revealWhenStacked(this.responsePane()?.nativeElement, { onlyBelowFold: true });
   }
 
   private focusPath(): void {

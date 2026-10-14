@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
-import { matchesText } from '../../core/format';
+import { textMatcher } from '../../core/format';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { Origin, ResolvedView } from './index-templates.models';
@@ -425,17 +425,13 @@ export class ResolvedTemplateComponent {
 
   /** Regex-or-substring filter, like every other filter of the app. */
   readonly visibleSettings = computed(() => {
-    const query = this.filter();
-    return this.view().settings.filter(
-      (entry) => matchesText(entry.key, query) || matchesText(entry.value, query),
-    );
+    const matches = textMatcher(this.filter());
+    return this.view().settings.filter((entry) => matches(entry.key) || matches(entry.value));
   });
 
   readonly visibleFields = computed(() => {
-    const query = this.filter();
-    return this.view().fields.filter(
-      (entry) => matchesText(entry.path, query) || matchesText(entry.type, query),
-    );
+    const matches = textMatcher(this.filter());
+    return this.view().fields.filter((entry) => matches(entry.path) || matches(entry.type));
   });
 
   /** Settings and mapping fields are filtered separately: switching clears the filter. */

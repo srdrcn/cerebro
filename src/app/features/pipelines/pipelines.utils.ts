@@ -1,5 +1,5 @@
 import { elasticsearchReason } from '../../core/errors';
-import { pluralize } from '../../core/format';
+import { pluralize, textMatcher } from '../../core/format';
 import { JsonRecord, isRecord } from '../../core/json';
 import { invalidCharacters } from '../../core/names';
 import {
@@ -64,23 +64,19 @@ export function normalizePipelines(response: PipelinesResponse | null | undefine
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
-/** Case-insensitive search over id and description; managed pipelines only on request. */
+/** Regex-or-substring search over id and description (`textMatcher`); managed pipelines only on request. */
 export function filterPipelines(
   pipelines: readonly PipelineSummary[],
   query: string,
   showManaged: boolean,
   keep: string | null = null,
 ): PipelineSummary[] {
-  const needle = query.trim().toLocaleLowerCase();
+  const matches = textMatcher(query);
   return pipelines.filter((pipeline) => {
     if (!showManaged && pipeline.managed && pipeline.id !== keep) {
       return false;
     }
-    return (
-      !needle ||
-      pipeline.id.toLocaleLowerCase().includes(needle) ||
-      (pipeline.description ?? '').toLocaleLowerCase().includes(needle)
-    );
+    return matches(pipeline.id) || (pipeline.description !== null && matches(pipeline.description));
   });
 }
 
@@ -227,7 +223,6 @@ export function processorViews(processors: unknown): ProcessorView[] {
 
 export const NEW_PIPELINE_BODY = JSON.stringify(
   {
-    description: 'Describe what this pipeline does',
     processors: [
       { lowercase: { field: 'level', ignore_missing: true } },
       { set: { field: 'ingested_at', value: '{{_ingest.timestamp}}' } },

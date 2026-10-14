@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ClusterApiError } from '../../core/api-envelope';
 import { RawRecoveryRow, Recovery } from './recovery.models';
 import {
   bytesRemaining,
@@ -298,11 +299,17 @@ describe('describeLoadError', () => {
     expect(describeLoadError({ status: 502, body: 'upstream down' })).toBe('Upstream down');
   });
 
-  it('falls back to the status, permissions or a connection hint', () => {
+  it('falls back to a privilege hint for 401/403 or a generic sentence', () => {
     expect(describeLoadError({ status: 403, body: {} })).toMatch(/monitor/);
-    expect(describeLoadError({ status: 500, body: {} })).toBe('The request failed with status 500.');
-    expect(describeLoadError(new Error('network'))).toBe('The cluster did not answer. Check the connection and try again.');
+    expect(describeLoadError(new ClusterApiError(401, {}))).toMatch(/monitor/);
+    expect(describeLoadError(new ClusterApiError(500, { error: 'Connection refused: localhost/127.0.0.1:9299' }))).toBe(
+      'Connection refused: localhost/127.0.0.1:9299',
+    );
+    expect(describeLoadError({ status: 500, body: {} })).toBe(
+      'The cluster did not answer the recovery request. Check that it is reachable and try again.',
+    );
+    expect(describeLoadError(new Error('network'))).toBe('Network');
     expect(describeLoadError('timeout')).toBe('Timeout');
-    expect(describeLoadError(undefined)).toBe('The request failed.');
+    expect(describeLoadError(undefined)).toMatch(/did not answer/);
   });
 });

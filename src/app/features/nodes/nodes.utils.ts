@@ -1,16 +1,25 @@
+import { textMatcher } from '../../core/format';
 import { isInternalAttribute } from '../../core/node-attributes';
 import { NodeSortField, NodesFilter, NodesNode } from './nodes.models';
 
-export function matchesNode(node: NodesNode, filter: NodesFilter): boolean {
-  const matchesName = node.name
-    .toLocaleLowerCase()
-    .includes(filter.name.trim().toLocaleLowerCase());
+/** Does `node` pass the name filter (regex or substring) and the role filter? */
+export function matchesNode(
+  node: NodesNode,
+  filter: NodesFilter,
+  matchesName: (value: string) => boolean = textMatcher(filter.name),
+): boolean {
   const matchesRole =
     (node.master && filter.master) ||
     (node.data && filter.data) ||
     (node.ingest && filter.ingest) ||
     (node.coordinating && filter.coordinating);
-  return matchesName && matchesRole;
+  return matchesName(node.name) && !!matchesRole;
+}
+
+/** The nodes that pass `filter`, compiling the name filter once. */
+export function filterNodes(nodes: readonly NodesNode[], filter: NodesFilter): NodesNode[] {
+  const matchesName = textMatcher(filter.name);
+  return nodes.filter((node) => matchesNode(node, filter, matchesName));
 }
 
 function sortValue(node: NodesNode, field: NodeSortField): string | number | null {

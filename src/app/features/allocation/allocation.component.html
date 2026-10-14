@@ -477,9 +477,11 @@
                       <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
                     </button>
                   }
-                  <button type="button" class="btn btn-sm btn-ghost" (click)="viewJson()">
-                    <i class="bi bi-braces" aria-hidden="true"></i> View response
-                  </button>
+                  @if (!current.failure.unreachable) {
+                    <button type="button" class="btn btn-sm btn-ghost" (click)="viewJson()">
+                      <i class="bi bi-braces" aria-hidden="true"></i> View response
+                    </button>
+                  }
                 </cerebro-empty>
               </div>
             }
@@ -503,7 +505,8 @@
       }
     </div>
 
-    <aside class="stack" aria-label="Cluster allocation status">
+    <section class="stack" aria-labelledby="alloc-status-title">
+      <h2 id="alloc-status-title" class="visually-hidden">Cluster allocation status</h2>
       <section class="card" aria-labelledby="alloc-unassigned-title">
         <div class="card-header">
           <h2 id="alloc-unassigned-title" class="card-title">
@@ -517,8 +520,8 @@
         </div>
         @if (copies() === undefined) {
           @if (copiesFailed()) {
-            <cerebro-empty [compact]="true" icon="bi-exclamation-triangle" heading="Could not load shards" text="The cluster did not answer the shard list request.">
-              <button type="button" class="btn btn-sm" (click)="loadClusterData()">
+            <cerebro-empty [compact]="true" icon="bi-exclamation-triangle" heading="Could not load shards" [text]="copiesError() ?? 'The cluster did not answer the shard list request.'">
+              <button type="button" class="btn btn-sm" [class.is-loading]="loadingCopies()" [disabled]="loadingCopies()" (click)="loadClusterData()">
                 <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
               </button>
             </cerebro-empty>
@@ -595,6 +598,6 @@
           </section>
         }
       }
-    </aside>
+    </section>
   </div>
 </section>

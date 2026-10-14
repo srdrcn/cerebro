@@ -502,12 +502,9 @@ export class IndexDetailComponent {
     }
   }
 
+  /** `what` in lower case, except names such as "UUID" (see ClipboardService.copyAndNotify). */
   copy(value: string, what: string): void {
-    void this.clipboard.copy(
-      value,
-      () => this.alerts.info(`${what} copied to the clipboard`),
-      (error) => this.alerts.error(`Could not copy the ${what.toLowerCase()}`, error),
-    );
+    void this.clipboard.copyAndNotify(value, what);
   }
 
   // ---- Table helpers -----------------------------------------------------------

@@ -17,7 +17,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { formatBytes, pluralize } from '../../core/format';
 import { healthLabel, healthTone } from '../../core/health';
 import { readPreference, writePreference } from '../../core/preferences';
@@ -187,6 +187,8 @@ export class OverviewComponent {
   readonly data = signal<OverviewData | undefined>(undefined);
   readonly loading = signal(false);
   readonly failed = signal(false);
+  /** Reason of the last failed load, for the error state and the stale-data callout. */
+  readonly loadError = signal<string | undefined>(undefined);
   /** Time of the last successful load, shown when a later refresh fails. */
   readonly loadedAt = signal<Date | undefined>(undefined);
   /** Keys of running operations: `allocation`, `bulk`, `index:<name>`. */
@@ -409,6 +411,7 @@ export class OverviewComponent {
       const data = normalizeOverview(raw);
       this.data.set(data);
       this.failed.set(false);
+      this.loadError.set(undefined);
       this.loadedAt.set(new Date());
       this.selected.set(stillRelocatable(data, this.selected()));
       if (!hasShardActivity({
@@ -424,6 +427,7 @@ export class OverviewComponent {
         return;
       }
       this.failed.set(true);
+      this.loadError.set(readableReason(error));
       // A network failure was already reported by ClusterApiService; AlertService skips it.
       this.alerts.error(failureMessage('Could not load the cluster overview', error), error);
     } finally {

@@ -98,6 +98,9 @@ export class AllocationComponent {
   readonly indices = signal<readonly string[] | undefined>(undefined);
   readonly copies = signal<readonly ShardCopy[] | undefined>(undefined);
   readonly copiesFailed = signal(false);
+  /** Reason of the failed shard list load, for its error state. */
+  readonly copiesError = signal<string | undefined>(undefined);
+  readonly loadingCopies = signal(false);
   /** Reason of the last failed shard list refresh while the older list stays on screen. */
   readonly copiesStale = signal<string | undefined>(undefined);
   /** Time of the last successful shard list load. */
@@ -272,6 +275,7 @@ export class AllocationComponent {
   /** Index names and shard copies (form options and the unassigned list). */
   async loadClusterData(): Promise<void> {
     const sequence = ++this.liveSequence;
+    this.loadingCopies.set(true);
     const [indices, shards] = await Promise.allSettled([
       this.api.post<readonly string[]>('commons/indices'),
       this.api.post<unknown>('cat', { api: 'shards' }),
@@ -279,6 +283,7 @@ export class AllocationComponent {
     if (sequence !== this.liveSequence) {
       return;
     }
+    this.loadingCopies.set(false);
     if (indices.status === 'fulfilled') {
       this.indices.set(Array.isArray(indices.value) ? indices.value : []);
     } else if (this.indices() === undefined) {
@@ -289,9 +294,11 @@ export class AllocationComponent {
       this.copies.set(parseShardCopies(shards.value));
       this.copiesAt.set(Date.now());
       this.copiesFailed.set(false);
+      this.copiesError.set(undefined);
       this.copiesStale.set(undefined);
     } else {
       this.copiesFailed.set(true);
+      this.copiesError.set(readableReason(shards.reason));
       if (this.copies() === undefined) {
         this.alerts.error(failureMessage('Could not load the shard list', shards.reason), shards.reason);
       } else {

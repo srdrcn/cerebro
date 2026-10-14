@@ -568,7 +568,11 @@ describe('errors', () => {
       index: 'i',
       shard: '9',
     });
-    expect(explainErrorDetails(new ClusterApiError(500, { error: 'plain text' }))).toEqual({ status: 500, reason: 'plain text' });
+    expect(explainErrorDetails(new ClusterApiError(500, { error: 'plain text' }))).toEqual({
+      status: 500,
+      reason: 'plain text',
+      unreachable: true,
+    });
     expect(explainErrorDetails(new ClusterApiError(502, 'Bad gateway'))).toEqual({ status: 502, reason: 'Bad gateway' });
     expect(explainErrorDetails('oops')).toEqual({ reason: 'oops' });
     expect(explainErrorDetails(null)).toEqual({});
@@ -612,6 +616,13 @@ describe('errors', () => {
     });
     expect(describeExplainError(new ClusterApiError(403, {}), null).title).toBe('Not allowed');
     expect(describeExplainError(new Error('network'), null).title).toBe('Could not reach the cluster');
+    expect(
+      describeExplainError(new ClusterApiError(500, { error: 'Connection refused: localhost/127.0.0.1:9299' }), null),
+    ).toEqual({
+      title: 'Could not reach the cluster',
+      message: 'Connection refused: localhost/127.0.0.1:9299',
+      unreachable: true,
+    });
     expect(describeExplainError(new ClusterApiError(500, {}), null).message).toBe('The request failed with status 500.');
   });
 });

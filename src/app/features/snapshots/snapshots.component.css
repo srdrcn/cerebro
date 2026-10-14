@@ -30,7 +30,6 @@
   /* The table adapts to the card, not the viewport: the card is narrow both
      next to the create form and on small screens. */
   container: snapshot-list / inline-size;
-  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
 }
 
 .snapshots-toolbar {

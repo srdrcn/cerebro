@@ -298,7 +298,7 @@
       <cerebro-empty
         icon="bi-exclamation-triangle"
         heading="Could not load data streams"
-        text="The cluster did not answer the data stream request. Data streams need Elasticsearch 7.9 or later."
+        [text]="loadError() ?? 'The cluster did not answer the data stream request. Data streams need Elasticsearch 7.9 or later.'"
       >
         <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
           <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again

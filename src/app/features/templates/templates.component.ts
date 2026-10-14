@@ -18,6 +18,7 @@ import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize } from '../../core/format';
+import { revealWhenStacked } from '../../core/layout';
 import { validateResourceName } from '../../core/names';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
@@ -210,7 +211,7 @@ export class TemplatesComponent implements PendingChangesAware {
     if (template) {
       await this.select(template);
     } else {
-      this.alerts.warn(`The template ${name} does not exist`);
+      this.alerts.warn(`Legacy template ${name} does not exist`);
     }
     // A cancelled discard keeps the current template: put it back in the URL.
     this.syncUrl();
@@ -452,7 +453,7 @@ export class TemplatesComponent implements PendingChangesAware {
     this.pendingName = null;
     const template = this.templates()?.find((item) => item.name === name);
     if (!template) {
-      this.alerts.warn(`The template ${name} does not exist`);
+      this.alerts.warn(`Legacy template ${name} does not exist`);
       this.syncUrl();
       return;
     }
@@ -489,9 +490,6 @@ export class TemplatesComponent implements PendingChangesAware {
 
   /** On the single-column layout the editor sits below the list. */
   private revealEditor(): void {
-    const card = this.editorCard()?.nativeElement;
-    if (card && globalThis.matchMedia?.('(max-width: 1180px)').matches) {
-      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    revealWhenStacked(this.editorCard()?.nativeElement);
   }
 }

@@ -349,7 +349,7 @@
                           <dd class="kv-copy">
                             <span class="mono truncate" [title]="meta.uuid ?? ''">{{ meta.uuid ?? '–' }}</span>
                             @if (meta.uuid) {
-                              <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Copy UUID" title="Copy UUID" (click)="copy(meta.uuid, 'UUID')">
+                              <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Copy UUID" title="Copy UUID" (click)="copy(meta.uuid, 'index UUID')">
                                 <i class="bi bi-clipboard" aria-hidden="true"></i>
                               </button>
                             }

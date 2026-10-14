@@ -118,7 +118,7 @@ describe('AnalysisPanelComponent', () => {
     panel.text.set('x');
     await panel.analyze();
 
-    expect(panel.runError()).toBe('failed to find analyzer [x]');
+    expect(panel.runError()).toBe('Failed to find analyzer [x]');
     expect(panel.run()).toBeNull();
     expect(alerts.error).toHaveBeenCalledOnce();
   });

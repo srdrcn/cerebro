@@ -82,34 +82,9 @@
 
 /* ---- Policy list ---- */
 
-.list-card {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.list-card .card-title .badge {
-  margin-left: 2px;
-}
-
-.list-toolbar {
-  display: grid;
-  gap: 10px;
-  padding: 10px var(--space-4);
-  border-bottom: 1px solid var(--border);
-}
-
-.list-toolbar cerebro-search {
-  width: 100%;
-}
-
-.policy-list {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
 .policy-item {
+  align-items: flex-start;
+  gap: 11px;
   padding: 11px var(--space-4);
 }
 
@@ -172,7 +147,6 @@
 
 .detail-column {
   min-width: 0;
-  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
 }
 
 .detail-header {
@@ -389,12 +363,6 @@
 
 /* ---- Editor ---- */
 
-.editor-card > .card-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-}
-
 .editor-card cerebro-code-editor {
   isolation: isolate;
 }
@@ -425,13 +393,6 @@
 .editor-status__message {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.footer-keys {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--text-xs);
 }
 
 .footer-buttons {
@@ -597,21 +558,9 @@
   box-shadow: inset 3px 0 0 var(--yellow);
 }
 
-@media (min-width: 1181px) {
-  .list-card {
-    position: sticky;
-    top: calc(var(--topbar-height) + var(--space-5));
-    max-height: calc(100svh - var(--topbar-height) - var(--space-10));
-  }
-}
-
 @media (max-width: 1180px) {
   .ilm-layout {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .policy-list {
-    max-height: 380px;
   }
 }
 
@@ -627,10 +576,6 @@
   .usage-section {
     padding-right: var(--space-4);
     padding-left: var(--space-4);
-  }
-
-  .footer-keys {
-    display: none;
   }
 
   .footer-buttons {

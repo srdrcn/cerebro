@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NodesNode } from './nodes.models';
 import {
   attributeEntries,
+  filterNodes,
   matchesNode,
   nodeRoles,
   prettyByteString,
@@ -55,6 +56,17 @@ describe('node filtering and sorting', () => {
         coordinating: false,
       }),
     ).toBe(false);
+  });
+
+  it('filters names with the app-wide regex-or-substring semantics', () => {
+    const roles = { master: true, data: true, ingest: true, coordinating: true };
+    const nodes = [node('es-hot-1', { data: true }), node('es-warm-1', { data: true }), node('kibana', { data: true })];
+
+    expect(filterNodes(nodes, { ...roles, name: '^es-' }).map((item) => item.name)).toEqual(['es-hot-1', 'es-warm-1']);
+    expect(filterNodes(nodes, { ...roles, name: 'hot|warm' }).map((item) => item.name)).toEqual(['es-hot-1', 'es-warm-1']);
+    // An invalid expression falls back to a plain substring.
+    expect(filterNodes(nodes, { ...roles, name: 'es-[' }).map((item) => item.name)).toEqual([]);
+    expect(filterNodes(nodes, { ...roles, name: '' })).toHaveLength(3);
   });
 
   it('sorts nested numeric fields in both directions', () => {

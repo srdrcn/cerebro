@@ -213,6 +213,9 @@ describe('policies', () => {
     expect(filterPolicies(policies, '', true)).toHaveLength(3);
     expect(filterPolicies(policies, 'DEMO', false).map((policy) => policy.name)).toEqual(['app-events-policy']);
     expect(filterPolicies(policies, 'built', true).map((policy) => policy.name)).toEqual(['30-days-default']);
+    // Regular expressions work as in every other filter; an invalid one falls back to a substring.
+    expect(filterPolicies(policies, '^app-', true).map((policy) => policy.name)).toEqual(['app-events-policy']);
+    expect(filterPolicies(policies, 'app-(', true)).toEqual([]);
     // The selected managed policy stays visible.
     expect(filterPolicies(policies, '', false, '30-days-default').map((policy) => policy.name)).toEqual([
       '30-days-default',
@@ -384,6 +387,7 @@ describe('lifecycle status', () => {
     expect(filterExplain(rows, 'managed')).toHaveLength(4);
     expect(filterExplain(rows, 'errors').map((row) => row.index)).toEqual(['tmp-broken', 'tmp-retrying']);
     expect(filterExplain(rows, 'all', 'APP-EVENTS').map((row) => row.index)).toEqual(['.ds-web-1', 'logs-new']);
+    expect(filterExplain(rows, 'all', '^tmp-').map((row) => row.index)).toEqual(['tmp-broken', 'tmp-retrying']);
   });
 
   it('sorts by phase, age and policy keeping empty values last', () => {

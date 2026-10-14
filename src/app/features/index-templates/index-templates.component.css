@@ -23,34 +23,6 @@
 
 /* ---- List ---- */
 
-.it-list-card {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.it-list-toolbar {
-  display: grid;
-  gap: 10px;
-  padding: 10px var(--space-4) 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.it-list-toolbar cerebro-search {
-  width: 100%;
-}
-
-.it-managed-switch {
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-
-.it-list {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
 .it-item {
   align-items: flex-start;
   gap: 11px;
@@ -137,45 +109,14 @@
   gap: 6px;
 }
 
-.it-list-note {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  margin: auto 0 0;
-  padding: 10px var(--space-4);
-  border-top: 1px solid var(--border);
-  border-bottom-left-radius: var(--radius-lg);
-  border-bottom-right-radius: var(--radius-lg);
-  background: var(--surface-2);
-  color: var(--text-3);
-  font-size: var(--text-xs);
-}
-
 /* ---- Editor ---- */
 
 .it-main {
   min-width: 0;
 }
 
-.it-editor,
-.it-preview {
-  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
-}
-
 .it-editor__header {
   flex-wrap: wrap;
-}
-
-/* Keeps Save reachable while scrolling long templates. */
-.it-editor > .card-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-}
-
-/* Fields focused with the keyboard stop above the sticky footer. */
-:host ::ng-deep .it-editor > .card-body :is(input, select, textarea, button) {
-  scroll-margin-bottom: calc(var(--control-height) + var(--space-10));
 }
 
 .it-editor__actions {
@@ -333,17 +274,6 @@ button.it-chip:focus-visible {
   gap: var(--space-2);
 }
 
-.it-footer__keys {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--text-xs);
-}
-
-.it-footer__keys kbd:last-of-type {
-  margin-right: 3px;
-}
-
 .it-footer__buttons {
   margin-left: auto;
 }
@@ -352,21 +282,9 @@ button.it-chip:focus-visible {
   align-items: flex-start;
 }
 
-@media (min-width: 1181px) {
-  .it-list-card {
-    position: sticky;
-    top: calc(var(--topbar-height) + var(--space-5));
-    max-height: calc(100svh - var(--topbar-height) - var(--space-10));
-  }
-}
-
 @media (max-width: 1180px) {
   .it-layout {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .it-list {
-    max-height: 380px;
   }
 }
 
@@ -389,10 +307,6 @@ button.it-chip:focus-visible {
 
   .it-fact--wide {
     grid-column: 1 / -1;
-  }
-
-  .it-footer__keys {
-    display: none;
   }
 
   /* Two stacked buttons would cover too much of a phone screen. */

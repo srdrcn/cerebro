@@ -21,7 +21,7 @@
             }
           </select>
         </div>
-        <a class="btn btn-ghost" routerLink="/repository" [queryParams]="repositoriesLink()">
+        <a class="btn" routerLink="/repository" [queryParams]="repositoriesLink()">
           <i class="bi bi-gear" aria-hidden="true"></i> Manage repositories
         </a>
       </div>
@@ -271,7 +271,7 @@
                               <div class="menu-separator" role="separator"></div>
                               <button type="button" class="menu-item menu-item--danger" (click)="remove(row.record)">
                                 <i class="bi bi-trash" aria-hidden="true"></i>
-                                {{ row.running ? 'Abort and delete…' : 'Delete…' }}
+                                {{ row.running ? 'Abort and delete' : 'Delete' }}
                               </button>
                             </cerebro-menu>
                           }
@@ -317,7 +317,7 @@
           }
         </div>
 
-        <aside class="card create-card" aria-labelledby="create-snapshot-title">
+        <section class="card create-card" aria-labelledby="create-snapshot-title">
           <div class="card-header">
             <div class="row min-w-0">
               <span class="card-icon" aria-hidden="true"><i class="bi bi-camera"></i></span>
@@ -470,7 +470,7 @@
               </button>
             </div>
           </form>
-        </aside>
+        </section>
       </div>
     }
   } @else if (landingFailed()) {

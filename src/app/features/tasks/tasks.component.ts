@@ -266,11 +266,7 @@ export class TasksComponent {
   }
 
   copyId(task: Task): void {
-    void this.clipboard.copy(
-      task.key,
-      () => this.alerts.info(`Task id ${task.key} copied`),
-      (error) => this.alerts.error('Could not copy the task id', error),
-    );
+    void this.clipboard.copyAndNotify(task.key, 'task id');
   }
 
   showParent(task: Task): void {

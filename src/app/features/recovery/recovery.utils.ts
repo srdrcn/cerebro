@@ -1,5 +1,6 @@
-import { elasticsearchReason } from '../../core/errors';
-import { formatBytes, formatNumber, humanize, matchesText, sentence } from '../../core/format';
+import { ClusterApiError } from '../../core/api-envelope';
+import { readableReason } from '../../core/errors';
+import { formatBytes, formatNumber, humanize, matchesText } from '../../core/format';
 import { isRecord } from '../../core/json';
 import {
   Progress,
@@ -440,22 +441,24 @@ export function estimateRemaining(remaining: number, bytesPerSecond: number | un
   return (remaining / bytesPerSecond) * 1_000;
 }
 
-/** A failed request in plain words, with Elasticsearch's own reason when it sent one. */
+/**
+ * A failed request in plain words: Elasticsearch's own reason when it sent
+ * one, a privilege hint for 401/403 without a reason, a generic sentence
+ * otherwise.
+ */
 export function describeLoadError(error: unknown): string {
-  if (!isRecord(error)) {
-    const reason = elasticsearchReason(error);
-    return reason ? sentence(reason) : 'The request failed.';
-  }
-  const status = typeof error['status'] === 'number' ? error['status'] : undefined;
-  const reason = elasticsearchReason(error['body']);
+  const reason = readableReason(error);
   if (reason) {
-    return sentence(reason);
+    return reason;
   }
+  const status =
+    error instanceof ClusterApiError
+      ? error.status
+      : isRecord(error) && typeof error['status'] === 'number'
+        ? error['status']
+        : undefined;
   if (status === 401 || status === 403) {
     return 'The connected user may not read recoveries. It needs the "monitor" cluster privilege.';
   }
-  if (status !== undefined) {
-    return `The request failed with status ${status}.`;
-  }
-  return 'The cluster did not answer. Check the connection and try again.';
+  return 'The cluster did not answer the recovery request. Check that it is reachable and try again.';
 }

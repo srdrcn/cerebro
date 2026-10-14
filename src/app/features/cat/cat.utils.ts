@@ -1,3 +1,4 @@
+import { textMatcher } from '../../core/format';
 import { HealthTone, healthTone } from '../../core/health';
 import { isRecord } from '../../core/json';
 
@@ -312,21 +313,6 @@ export function numericColumns(
     }
   }
   return numeric;
-}
-
-/** Same semantics as the other filters: a regular expression or plain text. */
-export function textMatcher(query: string): (value: string) => boolean {
-  const expression = query.trim();
-  if (!expression) {
-    return () => true;
-  }
-  try {
-    const pattern = new RegExp(expression, 'i');
-    return (value) => pattern.test(value);
-  } catch {
-    const needle = expression.toLocaleLowerCase();
-    return (value) => value.toLocaleLowerCase().includes(needle);
-  }
 }
 
 /** Keeps the rows where any column matches the query. */

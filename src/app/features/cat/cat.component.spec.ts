@@ -50,7 +50,7 @@ describe('CatComponent', () => {
     await target.load('indices');
 
     expect(target.result()).toBeNull();
-    expect(target.failure()).toEqual({ api: 'indices', reason: 'kaput' });
+    expect(target.failure()).toEqual({ api: 'indices', reason: 'Kaput' });
     expect(alerts.error).toHaveBeenCalledOnce();
   });
 
@@ -63,7 +63,7 @@ describe('CatComponent', () => {
     await target.load('nodes', true);
 
     expect(target.result()?.rows).toEqual([{ name: 'kept' }]);
-    expect(target.failure()).toEqual({ api: 'nodes', reason: 'offline' });
+    expect(target.failure()).toEqual({ api: 'nodes', reason: 'Offline' });
     expect(target.manualLoading()).toBe(false);
   });
 

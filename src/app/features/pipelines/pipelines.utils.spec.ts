@@ -63,6 +63,8 @@ describe('pipelines', () => {
     expect(filterPipelines(list, '', true)).toHaveLength(3);
     expect(filterPipelines(list, 'NORMALISES', false).map((item) => item.id)).toEqual(['app-enrich']);
     expect(filterPipelines(list, 'logs', true).map((item) => item.id)).toEqual(['logs@default-pipeline']);
+    expect(filterPipelines(list, '^app-', true).map((item) => item.id)).toEqual(['app-enrich']);
+    expect(filterPipelines(list, 'app-(', true)).toEqual([]);
     expect(filterPipelines(list, '', false, 'logs@default-pipeline').map((item) => item.id)).toEqual([
       'app-enrich',
       'logs@default-pipeline',
@@ -129,6 +131,8 @@ describe('editor', () => {
     expect(state.ok).toBe(true);
     if (state.ok) {
       expect(pipelineWarnings(state.value)).toEqual([]);
+      // The starter carries no sample text that could be saved by mistake.
+      expect(state.value.description).toBeUndefined();
     }
     expect(analyzePipelineBody('')).toEqual({ ok: false, message: 'The pipeline body is required' });
     expect(analyzePipelineBody('[1]')).toEqual({ ok: false, message: 'The pipeline must be a JSON object' });

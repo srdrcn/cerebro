@@ -122,7 +122,7 @@
         <i class="bi bi-wifi-off" aria-hidden="true"></i>
         <div class="ov-callout__body">
           <strong>Could not refresh the overview.</strong>
-          <span class="ov-callout__text">Showing data from {{ loadedAtLabel() }}; it may be out of date.</span>
+          <span class="ov-callout__text">Showing data from {{ loadedAtLabel() }}; it may be out of date.@if (loadError(); as reason) { {{ reason }}}</span>
         </div>
         <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
           <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
@@ -649,7 +649,7 @@
       <cerebro-empty
         icon="bi-exclamation-triangle"
         heading="Could not load the cluster overview"
-        text="The cluster did not answer the overview request. Check that it is reachable and try again."
+        [text]="loadError() ?? 'The cluster did not answer the overview request. Check that it is reachable and try again.'"
       >
         <button type="button" class="btn btn-sm" (click)="retry()">
           <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again

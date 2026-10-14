@@ -8,34 +8,6 @@
 
 /* ---- Template list ---- */
 
-.list-card {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.list-toolbar {
-  display: grid;
-  gap: 10px;
-  padding: 10px var(--space-4);
-  border-bottom: 1px solid var(--border);
-}
-
-.list-toolbar cerebro-search {
-  width: 100%;
-}
-
-.managed-switch {
-  color: var(--text-2);
-  font-size: var(--text-sm);
-}
-
-.template-list {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
 .template-item {
   gap: 11px;
   padding: 10px var(--space-4);
@@ -105,46 +77,10 @@
   gap: 6px;
 }
 
-.list-card__note {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  margin-top: auto;
-  padding: 10px var(--space-4);
-  border-top: 1px solid var(--border);
-  border-bottom-left-radius: var(--radius-lg);
-  border-bottom-right-radius: var(--radius-lg);
-  background: var(--surface-2);
-  color: var(--text-3);
-  font-size: var(--text-xs);
-}
-
-/* A link inside running text must not rely on colour alone. */
-.list-card__note a {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
 /* ---- Editor ---- */
-
-.editor-card {
-  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
-}
 
 .editor-card__header {
   flex-wrap: wrap;
-}
-
-/* Keeps Save reachable while scrolling long templates. */
-.editor-card > .card-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-}
-
-/* Fields focused with the keyboard stop above the sticky footer. */
-:host ::ng-deep .editor-card > .card-body :is(input, select, textarea, button) {
-  scroll-margin-bottom: calc(var(--control-height) + var(--space-10));
 }
 
 .editor-card__actions {
@@ -184,44 +120,17 @@
   overflow-wrap: anywhere;
 }
 
-.footer-keys {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--text-xs);
-}
-
-.footer-keys kbd:last-of-type {
-  margin-right: 3px;
-}
-
 .footer-buttons {
   margin-left: auto;
-}
-
-@media (min-width: 1181px) {
-  .list-card {
-    position: sticky;
-    top: calc(var(--topbar-height) + var(--space-5));
-    max-height: calc(100svh - var(--topbar-height) - var(--space-10));
-  }
 }
 
 @media (max-width: 1180px) {
   .templates-layout {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .template-list {
-    max-height: 360px;
-  }
 }
 
 @media (max-width: 760px) {
-  .footer-keys {
-    display: none;
-  }
-
   .footer-buttons {
     width: 100%;
   }

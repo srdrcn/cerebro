@@ -1,5 +1,5 @@
 import { elasticsearchReason } from '../../core/errors';
-import { formatCompact, formatNumber, plural, pluralize, sentence } from '../../core/format';
+import { formatCompact, formatNumber, plural, pluralize, sentence, textMatcher } from '../../core/format';
 import { JsonRecord, isRecord, stringList } from '../../core/json';
 import {
   ActionView,
@@ -332,16 +332,12 @@ export function filterPolicies(
   showManaged: boolean,
   keep: string | null = null,
 ): IlmPolicySummary[] {
-  const needle = query.trim().toLocaleLowerCase();
+  const matches = textMatcher(query);
   return policies.filter((policy) => {
     if (!showManaged && policy.managed && policy.name !== keep) {
       return false;
     }
-    return (
-      !needle ||
-      policy.name.toLocaleLowerCase().includes(needle) ||
-      (policy.description ?? '').toLocaleLowerCase().includes(needle)
-    );
+    return matches(policy.name) || (policy.description !== null && matches(policy.description));
   });
 }
 
@@ -520,15 +516,11 @@ export function canRetryStep(row: ExplainRow): boolean {
 }
 
 export function filterExplain(rows: readonly ExplainRow[], filter: ExplainFilter, query = ''): ExplainRow[] {
-  const needle = query.trim().toLocaleLowerCase();
+  const matches = textMatcher(query);
   return rows.filter((row) => {
     if (filter === 'managed' && !row.managed) return false;
     if (filter === 'errors' && !needsAttention(row)) return false;
-    return (
-      !needle ||
-      row.index.toLocaleLowerCase().includes(needle) ||
-      (row.policy ?? '').toLocaleLowerCase().includes(needle)
-    );
+    return matches(row.index) || (row.policy !== null && matches(row.policy));
   });
 }
 

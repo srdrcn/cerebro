@@ -8,7 +8,7 @@ import {
   model,
   signal,
 } from '@angular/core';
-import { matchesText } from '../../core/format';
+import { textMatcher } from '../../core/format';
 import { SearchInputComponent } from '../../shared/search-input.component';
 
 export interface ChecklistOption {
@@ -223,9 +223,10 @@ export class IndexChecklistComponent {
 
   readonly query = signal('');
 
-  readonly visible = computed(() =>
-    this.options().filter((option) => matchesText(option.name, this.query())),
-  );
+  readonly visible = computed(() => {
+    const matches = textMatcher(this.query());
+    return this.options().filter((option) => matches(option.name));
+  });
   readonly selectedCount = computed(
     () => this.options().filter((option) => this.selected().has(option.name)).length,
   );

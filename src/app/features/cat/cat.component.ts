@@ -14,7 +14,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClipboardService } from '../../core/clipboard.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
-import { elasticsearchReason, failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -61,7 +61,7 @@ export interface CatResult {
 
 interface CatFailure {
   readonly api: CatApi;
-  readonly reason: string | null;
+  readonly reason: string | undefined;
 }
 
 @Component({
@@ -209,7 +209,7 @@ export class CatComponent {
       if (sequence !== this.loadSequence) {
         return;
       }
-      this.failure.set({ api, reason: elasticsearchReason(error) });
+      this.failure.set({ api, reason: readableReason(error) });
       this.alerts.error(failureMessage(`Could not load _cat/${catApiValue(api)}`, error), error);
     } finally {
       if (sequence === this.loadSequence) {
@@ -268,7 +268,7 @@ export class CatComponent {
     await this.clipboard.copy(
       catRowsToTsv(result.columns, rows),
       () => this.alerts.success(`Copied ${pluralize(rows.length, 'row')} as TSV`),
-      (error: unknown) => this.alerts.error('Could not copy to the clipboard', error),
+      (error: unknown) => this.alerts.error(failureMessage('Could not copy the rows', error), error),
     );
   }
 

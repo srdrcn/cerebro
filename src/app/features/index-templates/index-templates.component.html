@@ -55,7 +55,7 @@
     [attr.aria-labelledby]="'templates-tab-' + tab()"
   >
     <!-- ---------------------------------------------------------- List -->
-    <div class="card it-list-card">
+    <div class="card list-card">
       <div class="card-header">
         <!-- The tab above names the kind; the short title leaves room for the count and the action. -->
         <h2 class="card-title spacer">
@@ -82,14 +82,14 @@
       </div>
 
       @if (loaded()) {
-        <div class="it-list-toolbar">
+        <div class="list-card__toolbar">
           <cerebro-search
             [(value)]="query"
             [small]="true"
             [placeholder]="tab() === 'index' ? 'Filter by name, pattern or component' : 'Filter by name'"
             [ariaLabel]="tab() === 'index' ? 'Filter index templates by name, index pattern or component' : 'Filter component templates by name'"
           />
-          <label class="switch it-managed-switch">
+          <label class="switch list-card__switch">
             <input
               type="checkbox"
               [ngModel]="showManaged()"
@@ -100,7 +100,7 @@
           </label>
         </div>
 
-        <ul class="list it-list" [attr.aria-label]="tab() === 'index' ? 'Index templates' : 'Component templates'" [attr.aria-busy]="loading() || saving() ? true : null">
+        <ul class="list list-card__list" [attr.aria-label]="tab() === 'index' ? 'Index templates' : 'Component templates'" [attr.aria-busy]="loading() || saving() ? true : null">
           @for (row of rows(); track row.name) {
             @let isSelected = kind() === row.kind && selected() === row.name;
             <li>
@@ -231,7 +231,7 @@
         </div>
       }
 
-      <p class="it-list-note">
+      <p class="list-card__note">
         <i class="bi bi-info-circle" aria-hidden="true"></i>
         @if (tab() === 'index') {
           <span>When several templates match a new index, only the one with the highest priority is applied.</span>
@@ -243,7 +243,7 @@
 
     <!-- -------------------------------------------------------- Editor -->
     <div class="stack it-main">
-      <div #editorCard class="card it-editor" role="region" aria-labelledby="it-editor-title">
+      <div #editorCard class="card card--sticky-footer it-editor" role="region" aria-labelledby="it-editor-title">
         <div class="card-header it-editor__header">
           <span class="card-icon" aria-hidden="true">
             <i class="bi" [class]="'bi ' + (selected() === null ? 'bi-plus-lg' : kind() === 'index' ? 'bi-layers' : 'bi-puzzle')"></i>
@@ -534,7 +534,7 @@
               <i class="bi bi-eye" aria-hidden="true"></i> Preview resolved template
             </button>
           } @else {
-            <span class="it-footer__keys text-muted"><kbd>Ctrl</kbd><kbd>Enter</kbd> to save</span>
+            <span class="footer-keys"><kbd>Ctrl</kbd><kbd>Enter</kbd> to save</span>
           }
           <div class="row it-footer__buttons">
             @if (dirty()) {

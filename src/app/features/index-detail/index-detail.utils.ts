@@ -1,4 +1,4 @@
-import { formatBytes, formatDuration, formatNumber, humanize, matchesText, pluralize } from '../../core/format';
+import { formatBytes, formatDuration, formatNumber, humanize, pluralize, textMatcher } from '../../core/format';
 import { HealthTone, healthTone } from '../../core/health';
 import { isRecord } from '../../core/json';
 import {
@@ -174,7 +174,8 @@ export function filterSettings(rows: readonly FlatSetting[], query: string): rea
   if (!query.trim()) {
     return rows;
   }
-  return rows.filter((row) => matchesText(row.key, query) || matchesText(row.value, query));
+  const matches = textMatcher(query);
+  return rows.filter((row) => matches(row.key) || matches(row.value));
 }
 
 function settingMap(settings: JsonObject): ReadonlyMap<string, string> {
@@ -413,11 +414,9 @@ export function filterMappingFields(fields: readonly MappingField[], query: stri
   if (!query.trim()) {
     return fields;
   }
+  const matches = textMatcher(query);
   return fields.filter(
-    (field) =>
-      matchesText(field.path, query) ||
-      matchesText(field.type, query) ||
-      field.details.some((detail) => matchesText(detail.value, query)),
+    (field) => matches(field.path) || matches(field.type) || field.details.some((detail) => matches(detail.value)),
   );
 }
 

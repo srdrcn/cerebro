@@ -10,14 +10,17 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router } from '@angular/router';
+import { skip } from 'rxjs';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { elasticsearchReason, failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize } from '../../core/format';
+import { revealWhenStacked } from '../../core/layout';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
@@ -121,6 +124,8 @@ export class PipelinesComponent implements PendingChangesAware {
   readonly pipelines = signal<readonly PipelineSummary[] | undefined>(undefined);
   readonly loading = signal(false);
   readonly failed = signal(false);
+  /** Readable reason of the last failed load, for the error state. */
+  readonly loadError = signal<string | undefined>(undefined);
   readonly query = signal('');
   readonly showManaged = signal(readPreference(SHOW_MANAGED_PREFERENCE) === 'true');
 
@@ -164,6 +169,10 @@ export class PipelinesComponent implements PendingChangesAware {
     const state = this.bodyState();
     return state.ok ? pipelineWarnings(state.value) : [];
   });
+  /** Announced to screen readers: changes on transitions only, not per keystroke. */
+  readonly bodyStatus = computed(() =>
+    this.bodyError() ? 'Invalid pipeline' : this.bodyWarnings().length > 0 ? 'Valid JSON, check the warnings' : 'Valid JSON',
+  );
   /** Last valid parse of the editor, so the processor list survives typos. */
   private lastValidBody = computed(() => {
     const state = this.bodyState();
@@ -250,6 +259,40 @@ export class PipelinesComponent implements PendingChangesAware {
         untracked(() => void this.load());
       }
     });
+
+    // Later links and history entries (the constructor read the first one).
+    this.route.queryParamMap.pipe(skip(1), takeUntilDestroyed()).subscribe((next) => this.applyParams(next));
+  }
+
+  /**
+   * Follows a link or history entry that names a pipeline (?pipeline=). A
+   * link without one (the sidebar, the palette) keeps the open pipeline and
+   * writes it back, so the URL always describes the page.
+   */
+  private applyParams(params: ParamMap): void {
+    if (this.destroyed) {
+      return;
+    }
+    const requested = params.get('pipeline') ?? params.get('id') ?? params.get('name');
+    if (requested !== null && requested !== this.selected()) {
+      const pipelines = this.pipelines();
+      if (!pipelines) {
+        this.pendingSelection = requested;
+        return;
+      }
+      const pipeline = pipelines.find((item) => item.id === requested);
+      if (!pipeline) {
+        this.alerts.warn(`Ingest pipeline ${requested} does not exist`);
+        this.updateUrl();
+        return;
+      }
+      // A declined discard keeps the open pipeline: put it back in the URL.
+      void this.select(pipeline).then(() => this.updateUrl());
+      return;
+    }
+    if (params.get('pipeline') !== this.selected() || params.has('id') || params.has('name')) {
+      this.updateUrl();
+    }
   }
 
   async load(): Promise<void> {
@@ -263,12 +306,14 @@ export class PipelinesComponent implements PendingChangesAware {
       const pipelines = normalizePipelines(response);
       this.pipelines.set(pipelines);
       this.failed.set(false);
+      this.loadError.set(undefined);
       this.syncEditorWithCluster(pipelines);
       this.applyPendingSelection(pipelines);
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Could not load ingest pipelines', error);
+        this.loadError.set(readableReason(error));
+        this.alerts.error(failureMessage('Could not load ingest pipelines', error), error);
       }
     } finally {
       if (sequence === this.loadSequence) {
@@ -528,10 +573,7 @@ export class PipelinesComponent implements PendingChangesAware {
   }
 
   private revealEditor(): void {
-    const card = this.editorCard()?.nativeElement;
-    if (card && globalThis.matchMedia?.('(max-width: 1180px)').matches) {
-      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    revealWhenStacked(this.editorCard()?.nativeElement);
   }
 
   /** Keeps the selected pipeline bookmarkable; never navigates once the page is gone. */
@@ -618,7 +660,7 @@ export class PipelinesComponent implements PendingChangesAware {
       queueMicrotask(() => this.resultsHeading()?.nativeElement.focus({ preventScroll: true }));
     } catch (error: unknown) {
       if (sequence === this.simulateSequence) {
-        const reason = elasticsearchReason(error) ?? 'The cluster did not answer the simulate request.';
+        const reason = readableReason(error) ?? 'The cluster did not answer the simulate request.';
         this.results.set(undefined);
         this.simError.set(reason);
         this.announcement.set(`Elasticsearch rejected the simulation: ${reason}`);

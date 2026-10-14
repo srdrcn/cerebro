@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ClusterApiError } from '../../core/api-envelope';
 import { DataStream, DataStreamStats } from './data-streams.models';
 import {
   backingIndexRows,
@@ -9,6 +10,7 @@ import {
   keepsStreamLink,
   lifecycleOf,
   linkedStreamMissing,
+  loadErrorReason,
   missingStreamMessage,
   nextBackingIndex,
   relinkExpanded,
@@ -260,5 +262,23 @@ describe('deep links', () => {
 
   it('filters a linked name to the stream itself', () => {
     expect(filterRows(rows, 'app-events-web', false).map((row) => row.name)).toEqual(['app-events-web']);
+  });
+});
+
+describe('loadErrorReason', () => {
+  it('keeps the Elasticsearch reason of an unreachable or forbidden cluster', () => {
+    expect(loadErrorReason(new ClusterApiError(500, { error: 'Connection refused: localhost/127.0.0.1:9299' }))).toBe(
+      'Connection refused: localhost/127.0.0.1:9299',
+    );
+    expect(loadErrorReason(new ClusterApiError(403, { error: { reason: 'action is unauthorized' } }))).toBe(
+      'Action is unauthorized',
+    );
+  });
+
+  it('leaves the version hint to the page for an unknown endpoint or no reason', () => {
+    expect(loadErrorReason(new ClusterApiError(404, { error: 'not found' }))).toBeUndefined();
+    expect(loadErrorReason(new ClusterApiError(400, { error: 'no handler found for uri [/_data_stream]' }))).toBeUndefined();
+    expect(loadErrorReason(new ClusterApiError(400, { error: { reason: 'Invalid index name [_data_stream], must not start with \'_\'' } }))).toBeUndefined();
+    expect(loadErrorReason(new ClusterApiError(500, {}))).toBeUndefined();
   });
 });

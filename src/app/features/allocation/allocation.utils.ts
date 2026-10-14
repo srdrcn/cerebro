@@ -911,6 +911,11 @@ export interface ExplainErrorDetails {
   readonly reason?: string;
   readonly index?: string;
   readonly shard?: string;
+  /**
+   * Cerebro answered for Elasticsearch (`{ error: "<message>" }` with a 5xx):
+   * the cluster was not reached, e.g. a refused connection or a timeout.
+   */
+  readonly unreachable?: boolean;
 }
 
 /**
@@ -934,8 +939,10 @@ export function explainErrorDetails(error: unknown): ExplainErrorDetails {
   const type = pick('type');
   const index = pick('index');
   const shard = pick('shard');
+  const unreachable = status !== undefined && status >= 500 && isRecord(body) && typeof body['error'] === 'string';
   return {
     ...(status !== undefined ? { status } : {}),
+    ...(unreachable ? { unreachable } : {}),
     ...(type ? { type } : {}),
     ...(reason ? { reason } : {}),
     ...(index ? { index } : {}),
@@ -959,16 +966,21 @@ export interface ExplainFailure {
   readonly message: string;
   /** The node named in the request does not exist: offer to explain without it. */
   readonly unknownNode?: string;
+  /** Elasticsearch was not reached, so there is no response worth showing. */
+  readonly unreachable?: boolean;
 }
 
 const UNKNOWN_NODE = /failed to resolve \[(.+?)\],? no matching nodes/i;
 
 export function describeExplainError(error: unknown, request: ExplainRequest | null): ExplainFailure {
   const details = explainErrorDetails(error);
-  if (details.status === undefined) {
+  if (details.status === undefined || details.unreachable) {
     return {
       title: 'Could not reach the cluster',
-      message: 'The request failed before Elasticsearch answered. Check the connection and try again.',
+      message: details.reason
+        ? sentence(details.reason)
+        : 'The request failed before Elasticsearch answered. Check the connection and try again.',
+      unreachable: true,
     };
   }
   if (details.status === 401 || details.status === 403) {

@@ -10,14 +10,17 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
+import { skip } from 'rxjs';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { elasticsearchReason, failureMessage } from '../../core/errors';
+import { failureMessage, readableReason } from '../../core/errors';
 import { formatDate, formatDuration, pluralize } from '../../core/format';
+import { revealWhenStacked } from '../../core/layout';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService } from '../../core/refresh.service';
@@ -104,6 +107,8 @@ export class IlmComponent implements PendingChangesAware {
   readonly policies = signal<readonly IlmPolicySummary[] | undefined>(undefined);
   readonly loading = signal(false);
   readonly failed = signal(false);
+  /** Readable reason of the last failed load, for the error state. */
+  readonly loadError = signal<string | undefined>(undefined);
   readonly query = signal('');
   readonly showManaged = signal(readPreference(SHOW_MANAGED_PREFERENCE) === 'true');
 
@@ -150,6 +155,11 @@ export class IlmComponent implements PendingChangesAware {
     const state = this.bodyState();
     return state.ok ? policyWarnings(state.value) : [];
   });
+
+  /** Announced to screen readers: changes on transitions only, not per keystroke. */
+  readonly bodyStatus = computed(() =>
+    this.bodyError() ? 'Invalid policy' : this.bodyWarnings().length > 0 ? 'Valid JSON, check the warnings' : 'Valid JSON',
+  );
 
   readonly dirty = computed(() => {
     const baseline = this.baseline();
@@ -231,6 +241,42 @@ export class IlmComponent implements PendingChangesAware {
         }
       });
     });
+
+    // Later links and history entries (the constructor read the first one).
+    this.route.queryParamMap.pipe(skip(1), takeUntilDestroyed()).subscribe((next) => this.applyParams(next));
+  }
+
+  /**
+   * Follows a link or history entry that names a policy (?policy=). A link
+   * without one (the sidebar, the palette) keeps the open policy and writes it
+   * back, so the URL always describes the page.
+   */
+  private applyParams(params: ParamMap): void {
+    if (this.destroyed) {
+      return;
+    }
+    const requested = params.get('policy') ?? params.get('name');
+    if (requested !== null && requested !== this.selected()) {
+      const policies = this.policies();
+      if (!policies) {
+        this.pendingSelection = requested;
+        return;
+      }
+      const policy = policies.find((item) => item.name === requested);
+      if (!policy) {
+        this.alerts.warn(`Lifecycle policy ${requested} does not exist`);
+        this.updateUrl();
+        return;
+      }
+      this.tab.set('policies');
+      // A declined discard keeps the open policy: put it back in the URL.
+      void this.select(policy).then(() => this.updateUrl());
+      return;
+    }
+    const expected = this.urlParams();
+    if (Object.entries(expected).some(([key, value]) => params.get(key) !== value)) {
+      this.updateUrl();
+    }
   }
 
   async load(): Promise<void> {
@@ -244,12 +290,14 @@ export class IlmComponent implements PendingChangesAware {
       const policies = normalizePolicies(response);
       this.policies.set(policies);
       this.failed.set(false);
+      this.loadError.set(undefined);
       this.syncEditorWithCluster(policies);
       this.applyPendingSelection(policies);
     } catch (error: unknown) {
       if (sequence === this.loadSequence) {
         this.failed.set(true);
-        this.alerts.error('Could not load lifecycle policies', error);
+        this.loadError.set(readableReason(error));
+        this.alerts.error(failureMessage('Could not load lifecycle policies', error), error);
       }
     } finally {
       if (sequence === this.loadSequence) {
@@ -567,10 +615,18 @@ export class IlmComponent implements PendingChangesAware {
   }
 
   private revealDetail(): void {
-    const column = this.detailColumn()?.nativeElement;
-    if (column && globalThis.matchMedia?.('(max-width: 1180px)').matches) {
-      column.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    revealWhenStacked(this.detailColumn()?.nativeElement);
+  }
+
+  /** The query parameters that describe the current tab, policy and explain target. */
+  private urlParams(): Readonly<Record<'tab' | 'policy' | 'index' | 'name', string | null>> {
+    const status = this.tab() === 'status';
+    return {
+      tab: status ? 'status' : null,
+      policy: !status ? this.selected() : null,
+      index: status ? this.explainedTarget() ?? (this.explainTarget().trim() || null) : null,
+      name: null,
+    };
   }
 
   /** Keeps the selected policy, tab and explain target bookmarkable. */
@@ -578,15 +634,9 @@ export class IlmComponent implements PendingChangesAware {
     if (this.destroyed) {
       return;
     }
-    const status = this.tab() === 'status';
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: {
-        tab: status ? 'status' : null,
-        policy: !status ? this.selected() : null,
-        index: status ? this.explainedTarget() ?? (this.explainTarget().trim() || null) : null,
-        name: null,
-      },
+      queryParams: this.urlParams(),
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
@@ -631,7 +681,7 @@ export class IlmComponent implements PendingChangesAware {
       }
     } catch (error: unknown) {
       if (sequence === this.explainSequence) {
-        this.explainError.set(elasticsearchReason(error) ?? 'The cluster did not answer the explain request.');
+        this.explainError.set(readableReason(error) ?? 'The cluster did not answer the explain request.');
         if (!silent) {
           this.explainRows.set(undefined);
           this.explainedTarget.set(null);

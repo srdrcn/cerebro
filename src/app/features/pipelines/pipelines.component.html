@@ -6,36 +6,38 @@
         Pipelines transform documents before they are indexed. Edit their processors and try them on sample documents.
       </p>
     </div>
-    <div class="page-header__actions">
-      <button type="button" class="btn btn-primary" [disabled]="saving()" (click)="newPipeline()">
-        <i class="bi bi-plus-lg" aria-hidden="true"></i> New pipeline
-      </button>
-    </div>
   </header>
 
   <div class="layout-sidebar-start pipelines-layout">
     <!-- ================= Pipeline list ================= -->
     <div class="card list-card">
       <div class="card-header">
-        <h2 class="card-title">
-          <i class="bi bi-funnel" aria-hidden="true"></i> Pipelines
-          @if (pipelines()) {
-            @if (query().trim()) {
-              <span class="badge tabular" [attr.aria-label]="visiblePipelines().length + ' of ' + listTotal() + ' pipelines match'">
-                {{ visiblePipelines().length }} of {{ listTotal() }}
-              </span>
-            } @else {
-              <span class="badge tabular">{{ listTotal() }}</span>
-            }
-          }
-        </h2>
+        <h2 class="card-title spacer"><i class="bi bi-funnel" aria-hidden="true"></i> Pipelines</h2>
         @if (loading() && pipelines()) {
           <span class="spinner" role="status" aria-label="Refreshing pipelines"></span>
         }
+        @if (pipelines()) {
+          <span class="count-label">
+            @if (query().trim() && listTotal() > 0) {
+              <strong>{{ visiblePipelines().length | num }}</strong> of {{ listTotal() | num }} {{ listTotal() | plural: 'pipeline' }}
+            } @else {
+              <strong>{{ listTotal() | num }}</strong> {{ listTotal() | plural: 'pipeline' }}
+            }
+          </span>
+        }
+        <button
+          type="button"
+          class="btn btn-sm btn-soft"
+          [disabled]="saving()"
+          [attr.title]="saving() ? 'Wait for the pipeline to be saved' : null"
+          (click)="newPipeline()"
+        >
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> New pipeline
+        </button>
       </div>
 
       @if (pipelines()) {
-        <div class="list-toolbar">
+        <div class="list-card__toolbar">
           <cerebro-search
             [(value)]="query"
             [small]="true"
@@ -43,7 +45,7 @@
             ariaLabel="Filter pipelines by id or description"
           />
           @if (managedCount() > 0) {
-            <label class="switch text-sm">
+            <label class="switch list-card__switch">
               <input
                 #managedToggle
                 type="checkbox"
@@ -57,7 +59,7 @@
           }
         </div>
 
-        <ul class="list pipeline-list" aria-label="Ingest pipelines" [attr.aria-busy]="saving() ? true : null">
+        <ul class="list list-card__list" aria-label="Ingest pipelines" [attr.aria-busy]="saving() ? true : null">
           @for (pipeline of visiblePipelines(); track pipeline.id) {
             <li>
               <button
@@ -97,8 +99,16 @@
           } @empty {
             <li>
               @if (query().trim()) {
-                <cerebro-empty icon="bi-funnel" heading="No matching pipelines" text="No pipeline id or description contains this text." [compact]="true">
+                <cerebro-empty
+                  icon="bi-funnel"
+                  heading="No matching pipelines"
+                  [text]="showManaged() || managedCount() === 0 ? 'No pipeline id or description matches this filter.' : 'No pipeline id or description matches this filter. Managed pipelines are hidden.'"
+                  [compact]="true"
+                >
                   <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+                  @if (!showManaged() && managedCount() > 0) {
+                    <button type="button" class="btn btn-sm btn-ghost" (click)="setShowManaged(true)">Show managed</button>
+                  }
                 </cerebro-empty>
               } @else {
                 <cerebro-empty
@@ -119,7 +129,11 @@
           }
         </ul>
       } @else if (failed()) {
-        <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load pipelines" text="The cluster did not answer the ingest pipelines request.">
+        <cerebro-empty
+          icon="bi-exclamation-triangle"
+          heading="Could not load pipelines"
+          [text]="loadError() ?? 'The cluster did not answer the ingest pipelines request.'"
+        >
           <button type="button" class="btn btn-sm" (click)="load()">
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
           </button>
@@ -141,7 +155,7 @@
 
     <div class="stack detail-column">
       <!-- ================= Editor ================= -->
-      <div #editorCard class="card editor-card" role="region" aria-labelledby="pipeline-editor-title">
+      <div #editorCard class="card card--sticky-footer editor-card" role="region" aria-labelledby="pipeline-editor-title">
         <div class="card-header editor-card__header">
           <div class="editor-card__heading min-w-0">
             <span class="card-icon" aria-hidden="true">
@@ -271,7 +285,7 @@
                 [value]="description()"
                 (input)="setDescription(descriptionInput.value)"
                 [disabled]="bodyError() !== null"
-                placeholder="What does this pipeline do?"
+                placeholder="Describe what this pipeline does"
                 autocomplete="off"
                 aria-describedby="pipeline-description-help"
               />
@@ -382,7 +396,9 @@
                 [describedBy]="bodyError() ? 'pipeline-body-error' : null"
                 (submit)="save()"
               />
-              <div class="editor-status" aria-live="polite">
+              <!-- Only the coarse state is live: the details change on every keystroke. -->
+              <span class="visually-hidden" role="status">{{ bodyStatus() }}</span>
+              <div class="editor-status">
                 @if (bodyError(); as error) {
                   <span class="badge badge-red"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid</span>
                   <span id="pipeline-body-error" class="editor-status__message text-danger">{{ error }}</span>
@@ -399,7 +415,7 @@
         </div>
 
         <div class="card-footer card-footer--between">
-          <span class="footer-keys text-muted"><kbd>Ctrl</kbd><kbd>Enter</kbd> to save</span>
+          <span class="footer-keys"><kbd>Ctrl</kbd><kbd>Enter</kbd> to save</span>
           <div class="row footer-buttons">
             @if (dirty()) {
               <button type="button" class="btn btn-ghost" (click)="discardChanges()" [disabled]="saving()">Discard changes</button>

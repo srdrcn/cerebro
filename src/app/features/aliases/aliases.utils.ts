@@ -1,4 +1,4 @@
-import { matchesText, plural } from '../../core/format';
+import { plural, textMatcher } from '../../core/format';
 import { isRecord } from '../../core/json';
 import { AliasChange, AliasRecord } from './aliases.models';
 
@@ -134,9 +134,9 @@ export function filterAliasRows(
   aliasQuery: string,
   indexQuery: string,
 ): AliasRow[] {
-  return rows.filter(
-    (row) => matchesText(row.record.alias, aliasQuery) && matchesText(row.record.index, indexQuery),
-  );
+  const matchesAlias = textMatcher(aliasQuery);
+  const matchesIndex = textMatcher(indexQuery);
+  return rows.filter((row) => matchesAlias(row.record.alias) && matchesIndex(row.record.index));
 }
 
 export function sortAliasRows(

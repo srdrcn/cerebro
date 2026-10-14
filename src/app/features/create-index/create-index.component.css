@@ -172,9 +172,12 @@
 
 /* ---- Action bar ---- */
 
-/* Fields focused with the keyboard stop above the sticky action bar. */
-:host ::ng-deep .create-layout :is(input, select, textarea, button) {
-  scroll-margin-bottom: calc(var(--control-height) + var(--space-10) + var(--space-4));
+/* Keyboard focus stops above the sticky action bar (rule 12): browsers only
+   honour the scroll container's scroll-padding when focus moves, so html
+   carries it while the bar is shown. Belongs with the other sticky bars in
+   components.css ("Sticky bars and keyboard focus"); kept here until it moves. */
+::ng-deep html:has(.create-actions) {
+  scroll-padding-bottom: calc(var(--control-height) + var(--space-10) + var(--space-4));
 }
 
 .create-actions {
@@ -249,8 +252,8 @@
     display: none;
   }
 
-  :host ::ng-deep .create-layout :is(input, select, textarea, button) {
-    scroll-margin-bottom: calc(2 * var(--control-height) + var(--space-10) + var(--space-4));
+  ::ng-deep html:has(.create-actions) {
+    scroll-padding-bottom: calc(2 * var(--control-height) + var(--space-10) + var(--space-4));
   }
 
   .create-actions__buttons > * {

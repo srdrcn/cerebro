@@ -22,7 +22,7 @@ import { createSort } from '../../shared/sort-state';
 import { NodeSortField, NodesFilter, NodesNode } from './nodes.models';
 import {
   attributeEntries,
-  matchesNode,
+  filterNodes,
   nodeRoles,
   prettyByteString,
   sortNodes,
@@ -90,7 +90,7 @@ export class NodesComponent {
 
   readonly visibleNodes = computed(() =>
     sortNodes(
-      (this.nodes() ?? []).filter((node) => matchesNode(node, this.filter())),
+      filterNodes(this.nodes() ?? [], this.filter()),
       this.sort.field(),
       this.sort.reverse(),
     ),

@@ -1,6 +1,6 @@
-import { matchesText } from '../../core/format';
+import { textMatcher } from '../../core/format';
 import { JsonRecord, isRecord, stringList } from '../../core/json';
-import { isManagedTemplate } from '../index-templates/index-templates.utils';
+import { isManagedTemplate } from '../../core/templates';
 
 export interface LegacyTemplate {
   name: string;
@@ -62,7 +62,7 @@ export function searchLegacyTemplates(
   query: string,
   showManaged: boolean,
 ): LegacyTemplate[] {
-  const matches = (value: string): boolean => matchesText(value, query);
+  const matches = textMatcher(query);
   return templates
     .filter((item) => showManaged || !isManagedLegacyTemplate(item))
     .filter((item) => !query.trim() || matches(item.name) || templatePatterns(item).some(matches))

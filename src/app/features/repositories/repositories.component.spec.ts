@@ -186,6 +186,72 @@ describe('RepositoriesComponent', () => {
     expect(target.name()).toBe('');
   });
 
+  it('keeps the open repository in the URL', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/?host=h');
+    const target = component();
+    await target.load();
+
+    await target.select(local);
+    await vi.waitFor(() => expect(router.url).toBe('/?host=h&repository=local'));
+
+    await target.startNew();
+    await vi.waitFor(() => expect(router.url).toBe('/?host=h'));
+  });
+
+  it('tracks unsaved edits against the opened repository', async () => {
+    const target = component();
+    await target.load();
+    expect(target.dirty()).toBe(false);
+
+    target.setType('fs');
+    expect(target.dirty()).toBe(true);
+
+    target.edit(local);
+    expect(target.dirty()).toBe(false);
+    target.setText('location', '/snap/moved');
+    expect(target.dirty()).toBe(true);
+    target.setText('location', '/snap/local');
+    expect(target.dirty()).toBe(false);
+    // An empty extra row or a cleared optional field is not a change.
+    target.addExtra();
+    target.setText('chunk_size', '');
+    expect(target.dirty()).toBe(false);
+  });
+
+  it('asks before dropping unsaved edits and keeps them when declined', async () => {
+    const target = component();
+    await target.load();
+    target.edit(local);
+    target.setText('location', '/snap/moved');
+
+    dialogs.confirm.mockResolvedValueOnce(false);
+    await target.select(cloud);
+    expect(dialogs.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Discard unsaved changes?', tone: 'danger', confirmLabel: 'Discard changes' }),
+    );
+    expect(target.editing()).toBe('local');
+    expect(target.textValue('location')).toBe('/snap/moved');
+
+    dialogs.confirm.mockResolvedValueOnce(true);
+    await target.startNew();
+    expect(target.editing()).toBeNull();
+    expect(await target.confirmDiscard()).toBe(true);
+    expect(dialogs.confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks the browser to confirm closing the tab only while edits are pending', () => {
+    const target = component();
+    const clean = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+    target.onBeforeUnload(clean);
+    expect(clean.defaultPrevented).toBe(false);
+
+    target.setName('nightly');
+    const dirty = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+    target.onBeforeUnload(dirty);
+    expect(dirty.defaultPrevented).toBe(true);
+  });
+
   it('masks secrets in the request preview', () => {
     const target = component();
     target.setName('s3');
