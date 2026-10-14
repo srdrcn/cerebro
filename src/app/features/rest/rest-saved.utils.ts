@@ -1,4 +1,4 @@
-import { formatDate, formatNumber, matchesText, pluralize } from '../../core/format';
+import { formatDate, formatNumber, pluralize, textMatcher } from '../../core/format';
 import { isRecord } from '../../core/json';
 import type { RestDraft } from './rest.models';
 import {
@@ -578,16 +578,16 @@ export function sortSavedRequests(
   );
 }
 
-function matchesSaved(request: SavedRequest, query: string): boolean {
-  return matchesText(`${request.name} ${request.method} ${request.path} ${request.body}`, query);
-}
-
 export function filterSavedRequests(
   requests: readonly SavedRequest[],
   query: string,
 ): readonly SavedRequest[] {
   const trimmed = query.trim();
-  return trimmed === '' ? requests : requests.filter((request) => matchesSaved(request, trimmed));
+  if (trimmed === '') {
+    return requests;
+  }
+  const matches = textMatcher(trimmed);
+  return requests.filter((request) => matches(`${request.name} ${request.method} ${request.path} ${request.body}`));
 }
 
 export function isSavedSort(value: unknown): value is SavedSort {

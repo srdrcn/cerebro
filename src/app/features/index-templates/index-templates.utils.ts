@@ -1,5 +1,3 @@
-import { ClusterApiError } from '../../core/api-envelope';
-import { elasticsearchReason } from '../../core/errors';
 import { pluralize, textMatcher } from '../../core/format';
 import { JsonRecord, isRecord, stringList } from '../../core/json';
 import { isManagedTemplate } from '../../core/templates';
@@ -183,17 +181,8 @@ export function filterRows(
     );
 }
 
-/**
- * Whether a failed request reached an Elasticsearch without the composable
- * template APIs (before 7.8): an unknown endpoint, not an unreachable host.
- */
-export function isUnknownEndpoint(error: unknown): boolean {
-  if (error instanceof ClusterApiError && (error.status === 404 || error.status === 405)) {
-    return true;
-  }
-  const reason = elasticsearchReason(error) ?? '';
-  return /no handler found|incorrect HTTP method|index name \[_(index|component)_template\]/i.test(reason);
-}
+/** Endpoints an Elasticsearch before 7.8 reads as invalid index names. */
+export const COMPOSABLE_TEMPLATE_ENDPOINTS = ['_index_template', '_component_template'] as const;
 
 /* ------------------------------------------------------------------ */
 /* Editor                                                              */

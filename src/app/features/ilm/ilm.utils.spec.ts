@@ -259,6 +259,7 @@ describe('editor', () => {
     if (state.ok) {
       expect(Object.keys(state.value.phases ?? {})).toEqual(['hot', 'warm', 'delete']);
       expect(policyWarnings(state.value)).toEqual([]);
+      expect(state.value._meta).toBeUndefined();
     }
   });
 

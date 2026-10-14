@@ -41,7 +41,7 @@ src/
 | `ClusterChangesService` | Announces nodes that joined or left and indices created or deleted outside the app. Index changes made through `overview/delete_indices`, `create_index/create` and `snapshots/restore` are recognised automatically (via `ClusterApiService.onSuccess`); call `expect({ created, deleted })` after other endpoints that create or delete indices so the user is not told twice. |
 | `ThemeService` | `preference()`, `resolved()`, `set()`, `cycle()`. |
 | `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `formatDate`, `formatTimestamp`, `formatRelative`, `pluralize` ("3 nodes"), `plural` (the noun alone, for labels that style the number), `sentence`, `humanize`, `severity`, `clampPercent`, `textMatcher(query)` (compiles a filter once: case-insensitive regular expression when valid, substring otherwise; use it for every list or table filter) and `matchesText(value, query)` (its one-off form), `sortByName`. Never filter with a bare `includes()`: all filters accept the same queries. |
-| `errors.ts` | `elasticsearchReason(error)` extracts the most specific readable reason from a `ClusterApiError`, an Elasticsearch error body, a string or an `Error` (HTML error pages are ignored); `readableReason(error)` returns it as a sentence for error states; `failureMessage(action, error)` builds "Could not delete index: no such index [logs]". |
+| `errors.ts` | `elasticsearchReason(error)` extracts the most specific readable reason from a `ClusterApiError`, an Elasticsearch error body, a string or an `Error` (HTML error pages are ignored); `readableReason(error)` returns it as a sentence for error states; `failureMessage(action, error)` builds "Could not delete index: no such index [logs]"; `isUnknownEndpoint(error, endpoints?)` tells an Elasticsearch that does not know an API (404/405, "no handler found", `_data_stream` read as an invalid index name) from one that is down or refusing, for "needs Elasticsearch x.y" hints. |
 | `health.ts` | `healthTone(status)` (`green` / `yellow` / `red` / `gray`, case-insensitive) and `healthLabel(status)` for Elasticsearch health colours. |
 | `json.ts` | `isRecord`, `stringList` for defensive parsing of Elasticsearch responses. |
 | `layout.ts` | `STACKED_LAYOUT_QUERY` (the 1180px breakpoint of rule 11), `isStackedLayout()`, `revealWhenStacked(element, { onlyBelowFold? })`: after a pick in a master/detail list, scrolls the editor or detail into view when the layout is stacked. Never repeat the breakpoint in TypeScript. |
@@ -82,8 +82,8 @@ src/
   `readableReason(error)` in the `catch` and cleared on success, bound as
   `<cerebro-empty … [text]="loadError() ?? 'The cluster did not answer …'">`.
   Toasts use `failureMessage(action, error)`. Hints such as "needs
-  Elasticsearch 7.8" are shown only when there is no reason or the reason
-  says the endpoint is unknown.
+  Elasticsearch 7.8" are shown only when there is no reason or
+  `isUnknownEndpoint(error)` says the endpoint is unknown.
 * No feature imports another feature: a helper two pages need moves to
   `core/` (pure logic) or `shared/` (UI).
 * Larger pages use `templateUrl` + `styleUrl`; page styles only contain
@@ -229,6 +229,8 @@ templates, lifecycle policies, pipelines, repositories) share one layout:
 * The only way to start a new item is the `btn-sm btn-soft` "New <noun>"
   button in the list card header. The page header has no primary button:
   the primary action of the page is the editor footer's Save / Create.
+  Empty list states ("No custom policies") repeat no "New …" button: the
+  editor beside them is already in New mode.
 * The list card header follows the recipe above: icon, title, right-aligned
   `.count-label`, then "New <noun>". Every list item has an icon tile.
 * The selection lives in the URL (`?name=`, `?policy=`, `?pipeline=`,

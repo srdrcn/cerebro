@@ -1,4 +1,4 @@
-import { formatBytes, formatCompact, formatNumber, matchesText, plural, pluralize } from '../../core/format';
+import { formatBytes, formatCompact, formatNumber, plural, pluralize, textMatcher } from '../../core/format';
 import { isInternalAttribute } from '../../core/node-attributes';
 import {
   IndexOperation,
@@ -38,25 +38,27 @@ export function normalizeOverview(data: RawOverviewData): OverviewData {
   };
 }
 
+/** Compiles `filter` once into a test for many indices. */
+export function overviewIndexMatcher(filter: OverviewIndexFilter): (index: OverviewIndex) => boolean {
+  const matches = textMatcher(filter.name);
+  return (index) => {
+    if ((!filter.special && index.special) || (!filter.closed && index.closed)) {
+      return false;
+    }
+    // The legacy `healthy` flag means "include healthy", rather than
+    // "match healthy". Turning it off intentionally shows affected indices only.
+    if (!filter.healthy && !index.unhealthy) {
+      return false;
+    }
+    return matches(index.name) || index.aliases.some(matches);
+  };
+}
+
 export function matchesOverviewIndex(
   index: OverviewIndex,
   filter: OverviewIndexFilter,
 ): boolean {
-  if ((!filter.special && index.special) || (!filter.closed && index.closed)) {
-    return false;
-  }
-  // The legacy `healthy` flag means "include healthy", rather than
-  // "match healthy". Turning it off intentionally shows affected indices only.
-  if (!filter.healthy && !index.unhealthy) {
-    return false;
-  }
-  if (!filter.name.trim()) {
-    return true;
-  }
-  return (
-    matchesText(index.name, filter.name) ||
-    index.aliases.some((alias) => matchesText(alias, filter.name))
-  );
+  return overviewIndexMatcher(filter)(index);
 }
 
 export function filterOverviewIndices(
@@ -65,7 +67,7 @@ export function filterOverviewIndices(
 ): OverviewIndex[] {
   const direction = filter.ascending ? 1 : -1;
   return indices
-    .filter((index) => matchesOverviewIndex(index, filter))
+    .filter(overviewIndexMatcher(filter))
     .sort((left, right) => direction * left.name.localeCompare(right.name));
 }
 
@@ -112,8 +114,9 @@ export function visibleDataNodes(
   nodes: readonly OverviewNode[],
   name: string,
 ): OverviewNode[] {
+  const matches = textMatcher(name);
   return nodes
-    .filter((node) => node.data && matchesText(node.name, name))
+    .filter((node) => node.data && matches(node.name))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 

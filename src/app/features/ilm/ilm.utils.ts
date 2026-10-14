@@ -345,6 +345,10 @@ export function filterPolicies(
 // Editor
 // ---------------------------------------------------------------------------
 
+/**
+ * Starter of the New policy editor. It carries no `_meta.description`: a
+ * placeholder sentence would be saved as the real description.
+ */
 export const NEW_POLICY_BODY = JSON.stringify(
   {
     phases: {
@@ -367,7 +371,6 @@ export const NEW_POLICY_BODY = JSON.stringify(
         actions: { delete: {} },
       },
     },
-    _meta: { description: 'Describe what this policy is for' },
   },
   null,
   2,

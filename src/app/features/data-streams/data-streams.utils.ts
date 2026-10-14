@@ -1,5 +1,4 @@
-import { ClusterApiError } from '../../core/api-envelope';
-import { elasticsearchReason, readableReason } from '../../core/errors';
+import { isUnknownEndpoint, readableReason } from '../../core/errors';
 import { textMatcher } from '../../core/format';
 import { HealthTone, healthLabel, healthTone } from '../../core/health';
 import {
@@ -270,23 +269,10 @@ export function relinkExpanded(
 }
 
 /**
- * Whether a failed request reached an Elasticsearch without the data stream
- * APIs (before 7.9): an unknown endpoint, not an unreachable host or a
- * missing privilege.
- */
-export function isUnknownEndpoint(error: unknown): boolean {
-  if (error instanceof ClusterApiError && (error.status === 404 || error.status === 405)) {
-    return true;
-  }
-  const reason = elasticsearchReason(error) ?? '';
-  return /no handler found|incorrect HTTP method|index name \[_data_stream\]/i.test(reason);
-}
-
-/**
  * The reason shown in the error state, or `undefined` when the page should
  * fall back to its own sentence with the "needs Elasticsearch 7.9" hint (no
  * reason, or an Elasticsearch that does not know the endpoint).
  */
 export function loadErrorReason(error: unknown): string | undefined {
-  return isUnknownEndpoint(error) ? undefined : readableReason(error);
+  return isUnknownEndpoint(error, ['_data_stream']) ? undefined : readableReason(error);
 }

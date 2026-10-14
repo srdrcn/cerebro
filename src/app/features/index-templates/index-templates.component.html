@@ -187,22 +187,14 @@
                   heading="No index templates yet"
                   text="Create one to give new indices or data streams predefined settings, mappings and aliases."
                   [compact]="true"
-                >
-                  <button type="button" class="btn btn-sm btn-primary" [disabled]="saving()" (click)="newTemplate()">
-                    <i class="bi bi-plus-lg" aria-hidden="true"></i> New index template
-                  </button>
-                </cerebro-empty>
+                />
               } @else {
                 <cerebro-empty
                   icon="bi-puzzle"
                   heading="No component templates yet"
                   text="Component templates are reusable blocks of settings and mappings that index templates are composed of."
                   [compact]="true"
-                >
-                  <button type="button" class="btn btn-sm btn-primary" [disabled]="saving()" (click)="newTemplate()">
-                    <i class="bi bi-plus-lg" aria-hidden="true"></i> New component template
-                  </button>
-                </cerebro-empty>
+                />
               }
             </li>
           }

@@ -117,9 +117,6 @@
                   [text]="managedCount() > 0 ? 'Only built-in pipelines exist. Create your own or show the managed ones.' : 'Create a pipeline to parse, enrich or clean documents as they are indexed.'"
                   [compact]="true"
                 >
-                  <button type="button" class="btn btn-sm btn-primary" (click)="newPipeline()">
-                    <i class="bi bi-plus-lg" aria-hidden="true"></i> New pipeline
-                  </button>
                   @if (managedCount() > 0) {
                     <button type="button" class="btn btn-sm" (click)="setShowManaged(true)">Show managed</button>
                   }

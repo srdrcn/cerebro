@@ -24,6 +24,28 @@ export function readableReason(error: unknown): string | undefined {
   return reason ? sentence(reason) : undefined;
 }
 
+/**
+ * Whether a failed request reached an Elasticsearch that does not know the
+ * endpoint (an older version): 404/405, "no handler found", "incorrect HTTP
+ * method", or a path such as `_data_stream` read as an invalid index name.
+ * An unreachable host or a missing privilege is not an unknown endpoint, so
+ * pages only add their "needs Elasticsearch x.y" hint when this is true.
+ *
+ * `endpoints` lists the path segments (`'_data_stream'`) an old cluster
+ * rejects as "Invalid index name [_data_stream]".
+ */
+export function isUnknownEndpoint(error: unknown, endpoints: readonly string[] = []): boolean {
+  if (error instanceof ClusterApiError && (error.status === 404 || error.status === 405)) {
+    return true;
+  }
+  const reason = elasticsearchReason(error) ?? '';
+  if (/no handler found|incorrect HTTP method/i.test(reason)) {
+    return true;
+  }
+  const lower = reason.toLowerCase();
+  return endpoints.some((endpoint) => lower.includes(`index name [${endpoint.toLowerCase()}]`));
+}
+
 /** "Could not delete index: no such index [logs]", or just the action. */
 export function failureMessage(action: string, error: unknown): string {
   const reason = elasticsearchReason(error);

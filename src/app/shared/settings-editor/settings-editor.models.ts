@@ -1,5 +1,5 @@
 import { elasticsearchReason } from '../../core/errors';
-import { humanize, matchesText } from '../../core/format';
+import { humanize, textMatcher } from '../../core/format';
 
 /**
  * Pure logic behind <cerebro-settings-editor>, shared by the cluster settings
@@ -308,10 +308,22 @@ export function settingNameError(name: string): string | undefined {
   return undefined;
 }
 
-/** Every whitespace separated term must match the setting name. */
+/**
+ * Compiles the filter once: every whitespace separated term must match the
+ * setting name.
+ */
+export function settingQueryMatcher(query: string): (name: string) => boolean {
+  const terms = query
+    .trim()
+    .split(/\s+/)
+    .filter((term) => term.length > 0)
+    .map(textMatcher);
+  return (name) => terms.every((matches) => matches(name));
+}
+
+/** One-off form of `settingQueryMatcher`. */
 export function matchesSettingQuery(name: string, query: string): boolean {
-  const terms = query.trim().split(/\s+/).filter((term) => term.length > 0);
-  return terms.every((term) => matchesText(name, term));
+  return settingQueryMatcher(query)(name);
 }
 
 /**
@@ -324,11 +336,12 @@ export function filterSettingRows(
   filter: SettingsFilter,
   pending: ReadonlySet<string> = new Set(),
 ): SettingRow[] {
+  const matches = settingQueryMatcher(filter.query);
   return rows.filter((row) => {
     if (row.custom) {
       return true;
     }
-    if (!matchesSettingQuery(row.name, filter.query)) {
+    if (!matches(row.name)) {
       return false;
     }
     if (pending.has(row.name)) {

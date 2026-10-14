@@ -17,7 +17,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
-import { failureMessage, readableReason } from '../../core/errors';
+import { failureMessage, isUnknownEndpoint, readableReason } from '../../core/errors';
 import { pluralize, sentence } from '../../core/format';
 import { JsonRecord, isRecord } from '../../core/json';
 import { revealWhenStacked } from '../../core/layout';
@@ -46,6 +46,7 @@ import {
   TemplateRow,
 } from './index-templates.models';
 import {
+  COMPOSABLE_TEMPLATE_ENDPOINTS,
   analyzeBody,
   buildResolvedView,
   componentTemplateRow,
@@ -57,7 +58,6 @@ import {
   indexPatterns,
   indexTemplateRow,
   isDataStreamTemplate,
-  isUnknownEndpoint,
   kindParam,
   metaDescription,
   metaTags,
@@ -411,7 +411,7 @@ export class IndexTemplatesComponent implements PendingChangesAware {
   private describeLoadFailure(error: unknown): string {
     const reason = readableReason(error);
     const versionHint = 'Composable templates need Elasticsearch 7.8 or later.';
-    if (isUnknownEndpoint(error)) {
+    if (isUnknownEndpoint(error, COMPOSABLE_TEMPLATE_ENDPOINTS)) {
       return reason ? `${reason} ${versionHint}` : versionHint;
     }
     return reason ?? 'The cluster did not answer the template requests.';

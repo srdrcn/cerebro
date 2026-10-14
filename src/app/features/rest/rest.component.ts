@@ -81,7 +81,7 @@ import {
   isRestMethod,
   isStringBodyPath,
   isTextCatPath,
-  matchesHistoryEntry,
+  historyMatcher,
   networkErrorText,
   parseStoredDraft,
   prependHistoryEntry,
@@ -274,7 +274,7 @@ export class RestComponent {
   readonly visibleHistory = computed(() => {
     const query = this.historyQuery().trim();
     const history = this.history() ?? [];
-    return query ? history.filter((entry) => matchesHistoryEntry(entry, query)) : history;
+    return query ? history.filter(historyMatcher(query)) : history;
   });
 
   // ---- Saved requests ----

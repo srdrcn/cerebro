@@ -1946,8 +1946,16 @@ kbd,
    html widens it while a page shows extra sticky bars. base.css covers the
    top bar. Add a rule here for every new sticky bar. */
 html:has(.card--sticky-footer),
-html:has(.settings-actionbar) {
+html:has(.settings-actionbar),
+html:has(.create-actions) {
   scroll-padding-bottom: calc(var(--control-height) + var(--space-10) + var(--space-4));
+}
+
+@media (max-width: 760px) {
+  /* Create index's action bar stacks its summary above the buttons. */
+  html:has(.create-actions) {
+    scroll-padding-bottom: calc(2 * var(--control-height) + var(--space-10) + var(--space-4));
+  }
 }
 
 @media (min-width: 761px) {

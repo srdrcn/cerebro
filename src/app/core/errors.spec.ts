@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ClusterApiError } from './api-envelope';
-import { elasticsearchReason, failureMessage, readableReason } from './errors';
+import { elasticsearchReason, failureMessage, isUnknownEndpoint, readableReason } from './errors';
 
 describe('elasticsearchReason', () => {
   it('prefers the root cause over the generic top level reason', () => {
@@ -57,5 +57,29 @@ describe('readableReason', () => {
   it('capitalizes the reason or returns undefined', () => {
     expect(readableReason({ error: { reason: 'no such index [logs]' } })).toBe('No such index [logs]');
     expect(readableReason(null)).toBeUndefined();
+  });
+});
+
+describe('isUnknownEndpoint', () => {
+  it('recognises an Elasticsearch that does not know the endpoint', () => {
+    expect(isUnknownEndpoint(new ClusterApiError(404, {}))).toBe(true);
+    expect(isUnknownEndpoint(new ClusterApiError(405, 'Method Not Allowed'))).toBe(true);
+    expect(isUnknownEndpoint(new ClusterApiError(400, { error: 'no handler found for uri [/_component_template]' }))).toBe(true);
+    expect(isUnknownEndpoint(new ClusterApiError(400, { error: 'Incorrect HTTP method for uri [/_data_stream]' }))).toBe(true);
+  });
+
+  it('matches the invalid index name answer only for the listed endpoints', () => {
+    const oldCluster = new ClusterApiError(400, {
+      error: { root_cause: [{ reason: "Invalid index name [_index_template], must not start with '_'." }] },
+    });
+    expect(isUnknownEndpoint(oldCluster, ['_index_template', '_component_template'])).toBe(true);
+    expect(isUnknownEndpoint(oldCluster, ['_data_stream'])).toBe(false);
+    expect(isUnknownEndpoint(oldCluster)).toBe(false);
+  });
+
+  it('does not blame the version for an unreachable or refusing cluster', () => {
+    expect(isUnknownEndpoint(new ClusterApiError(500, { error: 'Connection refused: localhost/127.0.0.1:9299' }))).toBe(false);
+    expect(isUnknownEndpoint(new ClusterApiError(403, { error: { reason: 'action is unauthorized' } }))).toBe(false);
+    expect(isUnknownEndpoint(new Error('network'))).toBe(false);
   });
 });

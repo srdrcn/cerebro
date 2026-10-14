@@ -1,6 +1,6 @@
 import { ClusterApiError } from '../../core/api-envelope';
 import { readableReason } from '../../core/errors';
-import { formatBytes, formatNumber, humanize, matchesText } from '../../core/format';
+import { formatBytes, formatNumber, humanize, textMatcher } from '../../core/format';
 import { isRecord } from '../../core/json';
 import {
   Progress,
@@ -256,9 +256,8 @@ export interface RecoveryFilter {
 }
 
 export function filterRecoveries(recoveries: readonly Recovery[], filter: RecoveryFilter): Recovery[] {
-  return recoveries.filter(
-    (recovery) => !filter.hiddenTypes.has(recovery.type) && matchesText(recovery.index, filter.text),
-  );
+  const matches = textMatcher(filter.text);
+  return recoveries.filter((recovery) => !filter.hiddenTypes.has(recovery.type) && matches(recovery.index));
 }
 
 function compareRecoveries(left: Recovery, right: Recovery): number {

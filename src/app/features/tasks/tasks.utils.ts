@@ -1,5 +1,5 @@
 import { elasticsearchReason } from '../../core/errors';
-import { humanize, matchesText, sentence } from '../../core/format';
+import { humanize, sentence, textMatcher } from '../../core/format';
 import { isRecord } from '../../core/json';
 import {
   RawTask,
@@ -213,11 +213,17 @@ export function buildTaskTree(tasks: readonly Task[]): TaskTreeNode[] {
   return roots.map(build);
 }
 
-export function matchesTaskQuery(task: Task, query: string): boolean {
+/** Compiles the search query once into a test for many tasks. */
+export function taskQueryMatcher(query: string): (task: Task) => boolean {
   if (!query.trim()) {
-    return true;
+    return () => true;
   }
-  return [task.action, task.label, task.description, task.key, task.nodeName].some((value) => matchesText(value, query));
+  const matches = textMatcher(query);
+  return (task) => [task.action, task.label, task.description, task.key, task.nodeName].some(matches);
+}
+
+export function matchesTaskQuery(task: Task, query: string): boolean {
+  return taskQueryMatcher(query)(task);
 }
 
 function passesToggles(task: Task, filter: TaskFilter): boolean {
@@ -229,11 +235,20 @@ function passesToggles(task: Task, filter: TaskFilter): boolean {
  * A search match on a task keeps its sub-tasks (subject to the toggles), so
  * searching "reindex" still shows the reindex's bulk and search children.
  */
-export function filterTaskTree(nodes: readonly TaskTreeNode[], filter: TaskFilter, ancestorMatched = false): TaskTreeNode[] {
+export function filterTaskTree(nodes: readonly TaskTreeNode[], filter: TaskFilter): TaskTreeNode[] {
+  return filterTaskNodes(nodes, filter, taskQueryMatcher(filter.query), false);
+}
+
+function filterTaskNodes(
+  nodes: readonly TaskTreeNode[],
+  filter: TaskFilter,
+  matches: (task: Task) => boolean,
+  ancestorMatched: boolean,
+): TaskTreeNode[] {
   const result: TaskTreeNode[] = [];
   for (const node of nodes) {
-    const searchMatch = ancestorMatched || matchesTaskQuery(node.task, filter.query);
-    const children = filterTaskTree(node.children, filter, searchMatch);
+    const searchMatch = ancestorMatched || matches(node.task);
+    const children = filterTaskNodes(node.children, filter, matches, searchMatch);
     if ((searchMatch && passesToggles(node.task, filter)) || children.length > 0) {
       result.push({ task: node.task, children });
     }

@@ -114,11 +114,7 @@
             icon="bi-file-earmark-code"
             heading="No legacy templates"
             text="Create one to give new indices predefined settings, mappings and aliases."
-          >
-            <button type="button" class="btn btn-sm btn-primary" [disabled]="saving()" (click)="newTemplate()">
-              <i class="bi bi-plus-lg" aria-hidden="true"></i> New template
-            </button>
-          </cerebro-empty>
+          />
         }
       } @else if (failed()) {
         <cerebro-empty

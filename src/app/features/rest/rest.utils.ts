@@ -1,5 +1,5 @@
 import { elasticsearchReason } from '../../core/errors';
-import { matchesText } from '../../core/format';
+import { textMatcher } from '../../core/format';
 import { isRecord } from '../../core/json';
 import type {
   BodyState,
@@ -511,8 +511,14 @@ export function bodyPreview(body: string, max = 90): string {
   return compact.length > max ? `${compact.slice(0, max - 1)}…` : compact;
 }
 
+/** Compiles the history filter once into a test for many entries. */
+export function historyMatcher(query: string): (entry: RestHistoryEntry) => boolean {
+  const matches = textMatcher(query);
+  return (entry) => matches(`${entry.method} ${entry.path} ${entry.body}`);
+}
+
 export function matchesHistoryEntry(entry: RestHistoryEntry, query: string): boolean {
-  return matchesText(`${entry.method} ${entry.path} ${entry.body}`, query);
+  return historyMatcher(query)(entry);
 }
 
 function sameRequest(left: RestHistoryEntry, right: RestHistoryEntry): boolean {

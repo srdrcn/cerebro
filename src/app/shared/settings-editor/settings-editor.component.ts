@@ -38,6 +38,7 @@ import {
   isNoopDraft,
   isOverridden,
   matchesSettingQuery,
+  settingQueryMatcher,
   movesToPersistent,
   normalizeSettingName,
   pendingChanges,
@@ -213,11 +214,10 @@ export class SettingsEditorComponent {
     if (this.showStatic()) {
       return 0;
     }
-    const query = this.query();
+    const matches = settingQueryMatcher(this.query());
     const onlyOverridden = this.onlyOverridden();
     return this.rows().filter(
-      (row) =>
-        !row.editable && matchesSettingQuery(row.name, query) && (!onlyOverridden || isOverridden(row)),
+      (row) => !row.editable && matches(row.name) && (!onlyOverridden || isOverridden(row)),
     ).length;
   });
 
