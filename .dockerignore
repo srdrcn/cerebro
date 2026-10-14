@@ -1,7 +1,6 @@
 .git
 .gitignore
 .github
-.travis.yml
 .DS_Store
 .idea
 .vscode

@@ -341,6 +341,17 @@ First cerebro release.
 - JSON is edited and displayed with a themed, searchable code editor with folding.
 - Drop Bootstrap CSS; feature pages are lazy loaded to keep the initial bundle small.
 
+#### Bug fixes
+
+- Snapshot creation now honours "ignore unavailable indices" and "include global state" (the options were sent with the wrong field names and ignored by Elasticsearch).
+- Aliases report their write index and hidden flags.
+- The overview computes disk usage from the space available to Elasticsearch, matching the nodes view and the disk allocation thresholds.
+- Repeated identical errors (for example while the cluster is unreachable) no longer flood the screen.
+
+#### Maintenance
+
+- Remove the unused `zone.js` dependency, the legacy logo image and the obsolete Travis CI configuration (CI runs on GitHub Actions).
+
 #### Security updates
 
 - Migrate the backend to Play 3.0.11, Pekko, Scala 2.13.18 and a Java 17 baseline.

@@ -5,6 +5,15 @@ Cerebro
 
 cerebro is an open source (MIT License) Elasticsearch administration tool built with Scala, Play Framework and Angular.
 
+### Features
+
+- Cluster overview with the shard allocation map: open, close, refresh, flush, force merge and delete indices, relocate shards and toggle shard allocation.
+- Nodes view with roles, versions and heap, disk, CPU and load usage.
+- REST console with JSON editor, request history and "copy as cURL".
+- Aliases, index templates, index creation, cluster and index settings editors.
+- Snapshot and repository management, text analysis and CAT API browser.
+- Light and dark themes (following the operating system by default), a command palette (`Ctrl`/`⌘` + `K`) and layouts that work down to phone width.
+
 ### Requirements
 
 cerebro needs Java 17 or newer to run. Building the web application from source also requires a Node.js version supported by Angular 22 (`^22.22.3`, `^24.15.0`, or `>=26`).
@@ -20,7 +29,7 @@ sbt test
 sbt stage
 ```
 
-The Angular build writes the browser bundle to `public/js`; Play packages that output with the backend distribution.
+The Angular build writes the browser bundle to `public/js`; Play packages that output with the backend distribution. The frontend architecture and design system are described in [docs/FRONTEND.md](docs/FRONTEND.md).
 
 ### Installation
 - Download from [https://github.com/lmenezes/cerebro/releases](https://github.com/lmenezes/cerebro/releases)
