@@ -6,7 +6,7 @@ version := "0.10.0"
 
 scalaVersion := "2.13.18"
 
-val playVersion = "3.0.11"
+val playVersion = "3.0.12"
 val playSlickVersion = "6.2.0"
 val jacksonVersion = "2.18.11"
 val logbackVersion = "1.5.38"
