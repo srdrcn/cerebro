@@ -2,7 +2,7 @@ name := "cerebro"
 
 maintainer := "cerebro maintainers <https://github.com/srdrcn/cerebro>"
 
-version := "0.9.4"
+version := "0.10.0"
 
 scalaVersion := "2.13.18"
 
