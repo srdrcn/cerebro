@@ -252,17 +252,4 @@ describe('DoctorComponent', () => {
 
     expect(dialogs.showJson).toHaveBeenCalledWith('Cluster doctor report', raw, expect.stringMatching(/^cerebro-demo · \d{4}-/));
   });
-
-  it('runs again for another cluster and drops the old report', async () => {
-    post.mockResolvedValue(liveReport());
-    const target = component();
-    await vi.waitFor(() => expect(target.report()).toBeDefined());
-    post.mockImplementation(() => new Promise(() => undefined));
-
-    host.set('http://other:9200');
-    TestBed.tick();
-
-    expect(target.report()).toBeUndefined();
-    expect(post).toHaveBeenCalledTimes(2);
-  });
 });

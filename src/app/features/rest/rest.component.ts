@@ -305,27 +305,15 @@ export class RestComponent {
   private sendSequence = 0;
   private sendPending = false;
   private persistTimer: ReturnType<typeof setTimeout> | undefined;
-  private loadedHost: string | null | undefined;
 
   constructor() {
     effect(() => {
-      const host = this.connection.host();
-      const connected = this.connection.connected();
-      untracked(() => {
-        if (this.loadedHost !== undefined && host !== this.loadedHost) {
-          // A response (or a reply still in flight) belongs to the previous cluster.
-          this.sendSequence++;
-          this.sending.set(false);
-          this.response.set(null);
-          this.endpoint.set('');
-          this.indices.set([]);
-        }
-        this.loadedHost = host;
-        if (connected) {
+      if (this.connection.connected()) {
+        untracked(() => {
           void this.loadIndex();
           void this.loadHistory();
-        }
-      });
+        });
+      }
     });
 
     // Persist the draft (debounced) so it survives reloads. Never credentials.
@@ -425,7 +413,7 @@ export class RestComponent {
       if (sequence === this.indexSequence) {
         this.indices.set([]);
         this.endpoint.set('');
-        this.alerts.error(failureMessage('Could not load indices for autocompletion', error), error);
+        this.alerts.error(failureMessage('Could not load the index list', error), error);
       }
     }
   }

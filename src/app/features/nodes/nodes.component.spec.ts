@@ -131,13 +131,27 @@ describe('NodesComponent', () => {
 
     expect(post).toHaveBeenCalledWith('nodes');
     expect(post).toHaveBeenCalledWith('metrics/nodes');
-    expect(TestBed.inject(MetricsService).active()).toBe(true);
     // CPU, heap and the two activity rates.
     expect(element.querySelectorAll('tbody tr.node-row')[0]?.querySelectorAll('cerebro-sparkline')).toHaveLength(4);
     expect(element.querySelector('th.activity-col')?.textContent?.trim()).toBe('Activity');
 
+    // While the page is shown, a refresh tick takes a sample (positive control).
+    const metrics = TestBed.inject(MetricsService);
+    const attached = metricsCalls;
+    now += 15_000;
+    tick.update((value) => value + 1);
+    TestBed.tick();
+    await vi.waitFor(() => expect(metricsCalls).toBe(attached + 1));
+    await vi.waitFor(() => expect(metrics.sampling()).toBe(false));
+
+    // Leaving the page stops the sampling: the same steps take no sample.
     fixture.destroy();
-    expect(TestBed.inject(MetricsService).active()).toBe(false);
+    const calls = metricsCalls;
+    now += 15_000;
+    tick.update((value) => value + 1);
+    TestBed.tick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(metricsCalls).toBe(calls);
   });
 
   it('expands a node from ?node=, highlights it and scrolls to it', async () => {
@@ -179,27 +193,6 @@ describe('NodesComponent', () => {
       [],
       expect.objectContaining({ queryParams: { node: null }, queryParamsHandling: 'merge', replaceUrl: true }),
     );
-  });
-
-  it('resolves ?node= against the new cluster after Back to another host', async () => {
-    // Shown for a cluster without es-node-2 first.
-    let clusterNodes = NODES.filter((node) => node.name !== 'es-node-2');
-    post.mockImplementation((path: string) =>
-      path === 'nodes' ? Promise.resolve(clusterNodes) : Promise.resolve(metricsBody(1_000, now)),
-    );
-    const { fixture, component } = await render();
-    expect(component.nodes()?.map((node) => node.name)).not.toContain('es-node-2');
-
-    // Back: the route is reused, only the host and ?node= change.
-    clusterNodes = NODES;
-    host.set('http://localhost:9201');
-    params.next(convertToParamMap({ node: 'es-node-2' }));
-    expect(component.nodes()).toBeUndefined();
-    await vi.waitFor(() => expect(component.nodes()?.map((node) => node.name)).toContain('es-node-2'));
-    await fixture.whenStable();
-
-    expect(alerts.warn).not.toHaveBeenCalled();
-    expect(component.expanded()).toBe('es-node-2');
   });
 
   it('mirrors the expanded node in the URL without reacting to its own echo', async () => {

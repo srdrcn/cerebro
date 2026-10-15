@@ -153,7 +153,7 @@
               <p class="field-hint copy-status"><span class="spinner" aria-hidden="true"></span> Loading {{ sourceIndex() }}…</p>
             } @else if (indicesFailed() && indices() === undefined) {
               <p class="field-error">
-                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> Could not load the indices
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> Could not load the index list
                 <button type="button" class="link-button" (click)="loadIndices()">Try again</button>
               </p>
             } @else if (copyInfo(); as info) {

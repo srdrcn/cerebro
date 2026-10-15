@@ -68,7 +68,7 @@
         @if (picker.failed()) {
           <cerebro-empty
             icon="bi-exclamation-triangle"
-            heading="Could not load indices"
+            heading="Could not load the index list"
             [text]="picker.loadError() ?? 'The cluster did not answer the request for its index list.'"
           >
             <button type="button" class="btn btn-sm" (click)="picker.retry()">

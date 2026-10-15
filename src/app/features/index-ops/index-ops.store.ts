@@ -9,6 +9,7 @@ import { failureMessage, readableReason } from '../../core/errors';
 import { formatBytes, pluralize } from '../../core/format';
 import { isRecord } from '../../core/json';
 import { RefreshService } from '../../core/refresh.service';
+import { cancelFailure } from '../../core/tasks';
 import {
   Check,
   DataStreamsResponse,
@@ -508,7 +509,6 @@ export class IndexOpsStore {
   private dryRunSequence = 0;
   private sourcesSequence = 0;
   private destSequence = 0;
-  private host: string | undefined;
   /** Source whose defaults (target name, shards, replicas) were filled in. */
   private defaultsFor = '';
 
@@ -520,31 +520,18 @@ export class IndexOpsStore {
       this.taskPoller.stop();
     });
 
-    // Catalog: on load and when the cluster changes (not on every refresh:
-    // listing indices makes every node compute index statistics). The
-    // wizard reloads it after its own changes; Try again after a failure.
-    effect(() => {
-      const host = this.connection.host();
-      untracked(() => {
-        if (host !== this.host) {
-          this.host = host;
-          this.nodesSequence++;
-          this.indices.set(undefined);
-          this.watermarks.set(null);
-          this.catalogLoaded.set(false);
-        }
-        if (host) {
-          void this.loadCatalog();
-        }
-      });
-    });
+    // Catalog: when the page opens (another cluster creates it again), not
+    // on every refresh: listing indices makes every node compute index
+    // statistics. The wizard reloads it after its own changes; Try again
+    // after a failure.
+    void this.loadCatalog();
 
     // The nodes' disk usage and shard counts are live: refreshed on every tick.
     effect(() => {
       this.refreshService.tick();
       untracked(() => {
         this.now.set(Date.now());
-        if (this.host && this.catalogLoaded()) {
+        if (this.catalogLoaded()) {
           void this.loadNodes();
         }
       });
@@ -555,9 +542,8 @@ export class IndexOpsStore {
       this.refreshService.tick();
       const operation = this.operation();
       const source = this.source();
-      const host = this.connection.host();
       untracked(() => {
-        if (!host || !isResizeKind(operation) || !source || this.run().kind !== 'idle') {
+        if (!isResizeKind(operation) || !source || this.run().kind !== 'idle') {
           return;
         }
         if (!this.sourcePoller.active) {
@@ -1639,10 +1625,9 @@ export class IndexOpsStore {
     this.updateRun('reindex', { cancelling: true });
     try {
       const response = await this.api.post<unknown>('tasks/cancel', { task_id: run.taskId });
-      // `_cancel` answers 200 even when nothing was cancelled: the reason then sits in a failure list.
-      const failures = isRecord(response) ? [response['task_failures'], response['node_failures']].find((list) => Array.isArray(list) && list.length > 0) : undefined;
-      if (Array.isArray(failures)) {
-        const reason = readableReason(failures[0]) ?? 'Elasticsearch reported a failure while cancelling the task.';
+      // `_cancel` answers 200 even when nothing was cancelled.
+      const reason = cancelFailure(response);
+      if (reason) {
         this.alerts.error(`Could not cancel the reindex: ${reason}`);
         this.updateRun('reindex', { cancelling: false });
         return;

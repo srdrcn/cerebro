@@ -19,7 +19,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { elasticsearchReason, failureMessage, readableReason } from '../../core/errors';
-import { formatNumber, pluralize, textMatcher } from '../../core/format';
+import { formatNumber, listSample, pluralize, textMatcher } from '../../core/format';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
@@ -154,36 +154,22 @@ export class SlowLogsComponent {
   private readonly pickerSearch = viewChild<SearchInputComponent>('pickerSearch');
   private sequence = 0;
   private indicesSequence = 0;
-  private host: string | undefined;
   private wasActive = false;
 
   constructor() {
     effect(() => {
       const active = this.active();
-      const host = this.connection.host();
+      const connected = this.connection.connected();
       untracked(() => {
-        const hostChanged = host !== this.host;
-        if (hostChanged) {
-          this.host = host;
-          this.sequence++;
-          this.indicesSequence++;
-          this.rows.set(undefined);
-          this.loadError.set(undefined);
-          this.staleReason.set(undefined);
-          this.indexNames.set(undefined);
-          this.indicesError.set(undefined);
-          this.selected.set(new Set());
-          this.form.set(EMPTY_FORM);
-          this.baseline.set(EMPTY_FORM);
-          this.submitted.set(false);
-          this.configured.emit(0);
-        }
-        const opened = active && (!this.wasActive || hostChanged);
-        this.wasActive = active;
-        if (!opened || !host) {
+        if (!connected) {
           return;
         }
-        // Settings once per host (then after changes and on Reload); index names on every visit.
+        const opened = active && !this.wasActive;
+        this.wasActive = active;
+        if (!opened) {
+          return;
+        }
+        // Settings once (then after changes and on Reload); index names on every visit.
         if (this.rows() === undefined && !this.loading()) {
           void this.load();
         }
@@ -253,7 +239,7 @@ export class SlowLogsComponent {
       }
     } catch (error: unknown) {
       if (sequence === this.indicesSequence && this.indexNames() === undefined) {
-        this.indicesError.set(readableReason(error) ?? 'The cluster did not return its indices.');
+        this.indicesError.set(failureMessage('Could not load the index list', error));
       }
     }
   }
@@ -413,7 +399,7 @@ export class SlowLogsComponent {
     const selectedRows = (this.rows() ?? []).filter((row) => indices.includes(row.index));
     const overwrites = describeOverwrites(form, selectedRows).map((line) => `Overwrites ${line}`);
     const notes = [
-      `${namedIndices(indices)}.`,
+      `${listSample(indices, NAMED_INDICES)}.`,
       hasEmptyFields(form) ? 'Empty fields reset the setting to its default.' : '',
       this.selectedBacking() > 0
         ? 'Backing indices of data streams keep this only until the next rollover: change the index template of the data stream for new backing indices.'
@@ -476,7 +462,7 @@ export class SlowLogsComponent {
     }
     if (reloaded && applied.length > 0) {
       const reason = (failed ? elasticsearchReason(error) : null) ?? 'the settings read back differ';
-      const message = `${messages.partial} to ${applied.length} of ${pluralize(indices.length, 'index', 'indices')}; not applied to ${namedIndices(missing)}: ${reason}`;
+      const message = `${messages.partial} to ${formatNumber(applied.length)} of ${pluralize(indices.length, 'index', 'indices')}; not applied to ${listSample(missing, NAMED_INDICES)}: ${reason}`;
       this.announcement.set(message);
       this.alerts.warn(message);
       return 'partial';
@@ -507,7 +493,7 @@ export class SlowLogsComponent {
     const rows = (this.rows() ?? []).filter((row) => indices.includes(row.index));
     const confirmed = await this.dialogs.confirm({
       title: `Reset the slow logs of ${pluralize(indices.length, 'index', 'indices')} to the defaults?`,
-      message: `${namedIndices(indices)}. Every slow log threshold and option is removed from these indices, so they log nothing until thresholds are set again.`,
+      message: `${listSample(indices, NAMED_INDICES)}. Every slow log threshold and option is removed from these indices, so they log nothing until thresholds are set again.`,
       confirmLabel: 'Reset to defaults',
       tone: 'danger',
     });
@@ -572,10 +558,4 @@ export class SlowLogsComponent {
     card.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
     this.editorTitle()?.nativeElement.focus({ preventScroll: true });
   }
-}
-
-function namedIndices(indices: readonly string[]): string {
-  const shown = indices.slice(0, NAMED_INDICES).join(', ');
-  const rest = indices.length - NAMED_INDICES;
-  return rest > 0 ? `${shown} and ${formatNumber(rest)} more` : shown;
 }

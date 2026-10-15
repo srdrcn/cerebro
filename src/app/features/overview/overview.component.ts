@@ -215,8 +215,6 @@ export class OverviewComponent {
   /** Name passed with `?filter=` whose closed/special chips still need revealing. */
   private pendingReveal: string | undefined;
   private loadSequence = 0;
-  /** Cluster the map was loaded from; the route is reused when only `?host=` changes. */
-  private loadedHost: string | undefined;
   /** Pending debounced write of the index filter to the `?filter=` query param. */
   private urlTimer: ReturnType<typeof setTimeout> | undefined;
   /** Navigations started by this component to sync the URL; their emissions are echoes. */
@@ -359,10 +357,8 @@ export class OverviewComponent {
   constructor() {
     effect(() => {
       this.refreshService.tick();
-      const host = this.connection.host();
-      if (host !== undefined) {
-        untracked(() => this.forgetOtherCluster(host));
-        void this.load();
+      if (this.connection.connected()) {
+        void untracked(() => this.load());
       }
     });
 
@@ -441,22 +437,6 @@ export class OverviewComponent {
       if (sequence === this.loadSequence) {
         this.loading.set(false);
       }
-    }
-  }
-
-  /** Never shows the map of the previous cluster as stale data of a new one. */
-  private forgetOtherCluster(host: string): void {
-    const switched = this.loadedHost !== undefined && this.loadedHost !== host;
-    this.loadedHost = host;
-    if (switched) {
-      this.loadSequence++;
-      this.data.set(undefined);
-      this.selected.set(undefined);
-      this.loadedAt.set(undefined);
-      this.loading.set(false);
-      this.failed.set(false);
-      this.loadError.set(undefined);
-      this.offset.set(0);
     }
   }
 

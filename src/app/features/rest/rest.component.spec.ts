@@ -224,31 +224,6 @@ describe('RestComponent', () => {
     expect(target.path()).toBe(option);
   });
 
-  it('forgets the previous cluster when the host changes', async () => {
-    const target = component();
-    TestBed.tick();
-    await target.loadIndex();
-    expect(target.endpoint()).toBe('http://localhost:9200');
-    rawPost.mockResolvedValue({ status: 200, body: {} });
-    target.path.set('_cluster/health');
-    await target.send();
-    expect(target.response()).not.toBeNull();
-
-    post.mockImplementation(async (path: string) => {
-      if (path === 'rest') {
-        throw new Error('forbidden');
-      }
-      return [];
-    });
-    host.set('http://other:9200');
-    TestBed.tick();
-    await Promise.resolve();
-
-    expect(target.response()).toBeNull();
-    expect(target.endpoint()).toBe('');
-    expect(target.prefix()).toBe('other:9200/');
-  });
-
   describe('saved requests', () => {
     function file(name: string, text: string): HTMLInputElement {
       const input = document.createElement('input');

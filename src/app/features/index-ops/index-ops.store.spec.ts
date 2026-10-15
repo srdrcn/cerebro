@@ -458,6 +458,30 @@ describe('IndexOpsStore', () => {
     expect(calls('tasks/get')).toHaveLength(polls);
   });
 
+  it('keeps following the reindex when Elasticsearch answers the cancel with node failures', async () => {
+    routes.set('index_ops/reindex', () => REINDEX_STARTED);
+    routes.set('tasks/get', () => TASK_RUNNING);
+    // Live shape of `_tasks/<id>/_cancel` (200) when the task's node cannot be reached.
+    routes.set('tasks/cancel', () => ({
+      node_failures: [{ type: 'failed_node_exception', reason: 'Failed node [x]', caused_by: { type: 'no_such_node_exception', reason: 'No such node [x]' } }],
+    }));
+    const target = await store();
+    target.applyParams('reindex', 'tmp-index-ops-src');
+    target.reindex.update((options) => ({ ...options, dest: 'tmp-index-ops-dst' }));
+    TestBed.tick();
+    await target.execute();
+    await vi.advanceTimersByTimeAsync(0);
+
+    dialogs.confirm.mockResolvedValue(true);
+    await target.cancelTask();
+
+    expect(calls('tasks/cancel')).toHaveLength(1);
+    expect(alerts.error).toHaveBeenCalledTimes(1);
+    expect(alerts.error.mock.calls[0]?.[0]).toMatch(/^Could not cancel the reindex: /);
+    expect(target.run()).toMatchObject({ kind: 'reindex', phase: 'running', cancelling: false });
+    expect(target.announcement()).not.toBe('Cancelling the reindex');
+  });
+
   it('reports a refused request and lets the user go back to the review', async () => {
     routes.set('index_ops/resize', () => Promise.reject(new Error('resource_already_exists_exception')));
     const target = await store();

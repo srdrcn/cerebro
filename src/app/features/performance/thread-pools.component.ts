@@ -90,31 +90,14 @@ export class ThreadPoolsComponent {
   readonly announcement = signal('');
 
   private sequence = 0;
-  private host: string | undefined;
   private previous: ReadonlyMap<string, number> | null = null;
 
   constructor() {
     effect(() => {
       this.refreshService.tick();
-      const active = this.active();
-      const host = this.connection.host();
-      untracked(() => {
-        if (host !== this.host) {
-          this.host = host;
-          this.sequence++;
-          this.previous = null;
-          this.baselineAt.set(0);
-          this.rows.set(undefined);
-          this.loadError.set(undefined);
-          this.staleReason.set(undefined);
-          this.increases.set(new Map());
-          this.sinceBaseline.set(0);
-          this.newRejections.emit(0);
-        }
-        if (active && host) {
-          void this.load();
-        }
-      });
+      if (this.active() && this.connection.connected()) {
+        void untracked(() => this.load());
+      }
     });
   }
 

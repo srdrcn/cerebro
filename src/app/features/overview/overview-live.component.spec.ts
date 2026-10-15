@@ -125,11 +125,10 @@ describe('OverviewLiveComponent', () => {
   it('collapses, stops sampling and remembers it', async () => {
     post.mockResolvedValue(body(1_000, 100, 500_000));
     const { fixture, element } = await render();
-    const metrics = TestBed.inject(MetricsService);
     const toggle = element.querySelector('.ov-live__toggle') as HTMLButtonElement;
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(toggle.getAttribute('aria-controls')).toBe('ov-live-body');
-    expect(metrics.active()).toBe(true);
+    expect(post).toHaveBeenCalledWith('metrics/nodes');
 
     toggle.click();
     await fixture.whenStable();
@@ -138,7 +137,6 @@ describe('OverviewLiveComponent', () => {
     expect(toggle.hasAttribute('aria-controls')).toBe(false);
     expect(element.querySelector('#ov-live-body')).toBeNull();
     expect(text(element.querySelector('.ov-live__status'))).toBe('Hidden, not sampling');
-    expect(metrics.active()).toBe(false);
     expect(localStorage.getItem(LIVE_COLLAPSED_PREFERENCE)).toBe('true');
 
     const calls = post.mock.calls.length;

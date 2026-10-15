@@ -278,24 +278,17 @@ export class AliasesComponent implements PendingChangesAware {
   readonly pluralize = pluralize;
 
   private loadSequence = 0;
-  private loadedHost: string | undefined;
+  /** The first load lists the indices; later refresh ticks only once the list is stale. */
+  private loaded = false;
   private indicesLoadedAt = 0;
 
   constructor() {
     effect(() => {
       this.refreshService.tick();
-      const host = this.connection.host();
-      if (!host) {
-        return;
-      }
       untracked(() => {
-        const sameHost = this.loadedHost === host;
-        if (this.loadedHost !== undefined && !sameHost) {
-          this.resetForHost();
-        }
-        this.loadedHost = host;
         // Aliases follow the cluster (rollovers move them); the index list only once it is a minute old.
-        void this.load(sameHost ? 'if-stale' : 'reload');
+        void this.load(this.loaded ? 'if-stale' : 'reload');
+        this.loaded = true;
       });
     });
 
@@ -371,18 +364,6 @@ export class AliasesComponent implements PendingChangesAware {
         this.loading.set(false);
       }
     }
-  }
-
-  private resetForHost(): void {
-    this.loadSequence++;
-    this.aliases.set(undefined);
-    this.indices.set(undefined);
-    this.failed.set(false);
-    this.loadError.set(undefined);
-    this.changes.set([]);
-    this.expanded.set(new Set());
-    this.page.set(1);
-    this.resetDraft();
   }
 
   // ---- Table --------------------------------------------------------------
@@ -606,25 +587,20 @@ export class AliasesComponent implements PendingChangesAware {
     if (submitted.length === 0 || this.saving()) {
       return;
     }
-    const host = this.connection.host();
     this.saving.set(true);
     try {
       const response = await this.api.post<unknown>('aliases/update_aliases', {
         changes: buildAliasActions(submitted),
       });
-      if (this.connection.host() === host) {
-        this.aliases.update((aliases) => applyChangesLocally(aliases ?? [], submitted));
-        this.changes.update((changes) => changes.filter((change) => !submitted.includes(change)));
-        void this.load();
-      }
+      this.aliases.update((aliases) => applyChangesLocally(aliases ?? [], submitted));
+      this.changes.update((changes) => changes.filter((change) => !submitted.includes(change)));
+      void this.load();
       this.alerts.success(`Applied ${pluralize(submitted.length, 'alias change')}`, response);
     } catch (error: unknown) {
       this.alerts.error(failureMessage('Could not apply the alias changes', error), error);
       // The cluster probably changed underneath: reloading flags the staged
       // changes that can no longer apply.
-      if (this.connection.host() === host) {
-        void this.load();
-      }
+      void this.load();
     } finally {
       this.saving.set(false);
     }

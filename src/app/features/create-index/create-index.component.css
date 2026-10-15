@@ -120,7 +120,6 @@
 
 .editor-wrap {
   position: relative;
-  isolation: isolate;
 }
 
 .editor-wrap.is-busy cerebro-code-editor {

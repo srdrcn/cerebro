@@ -128,7 +128,7 @@
     @case ('idle') {
       <div class="card">
         @if (picker.failed()) {
-          <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load indices" [text]="picker.loadError() ?? 'The cluster did not answer the request for its index list.'">
+          <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load the index list" [text]="picker.loadError() ?? 'The cluster did not answer the request for its index list.'">
             <button type="button" class="btn btn-sm" (click)="picker.retry()">
               <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
             </button>

@@ -549,12 +549,6 @@
   box-shadow: inset 3px 0 0 var(--yellow);
 }
 
-@media (max-width: 1180px) {
-  .ilm-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 760px) {
   .detail-header__actions {
     width: 100%;

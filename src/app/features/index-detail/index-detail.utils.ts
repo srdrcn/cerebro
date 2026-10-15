@@ -1,5 +1,5 @@
 import { formatBytes, formatDuration, formatNumber, humanize, pluralize, textMatcher } from '../../core/format';
-import { HealthTone, healthTone } from '../../core/health';
+import { HealthTone, healthFromShardCopies, healthTone } from '../../core/health';
 import { isRecord } from '../../core/json';
 import { unassignedReason } from '../../core/shards';
 import {
@@ -258,25 +258,10 @@ export function isClosed(detail: IndexDetail): boolean {
 
 /* ---- Health and summary --------------------------------------------------- */
 
-/**
- * The reported health, or one derived from the shard copies ("gray" when
- * unknown) with Elasticsearch's rules: an inactive (unassigned or
- * initializing) primary is red, an inactive replica yellow, and a relocating
- * copy is still active.
- */
+/** The reported health, or one derived from the shard copies ("gray" when unknown). */
 export function indexHealth(detail: IndexDetail, shards: readonly ShardRow[]): HealthTone {
   const reported = healthTone(detail.stats?.health);
-  if (reported !== 'gray') {
-    return reported;
-  }
-  if (shards.length === 0) {
-    return 'gray';
-  }
-  const inactive = (row: ShardRow) => row.state === 'unassigned' || row.state === 'initializing';
-  if (shards.some((row) => row.primary && inactive(row))) {
-    return 'red';
-  }
-  return shards.some(inactive) ? 'yellow' : 'green';
+  return reported !== 'gray' ? reported : healthFromShardCopies(shards);
 }
 
 export function indexSummary(detail: IndexDetail, shards: readonly ShardRow[]): IndexSummary {

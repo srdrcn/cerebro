@@ -387,13 +387,6 @@
   background: color-mix(in srgb, var(--surface-2) 60%, var(--surface));
 }
 
-/* ---- All good ---------------------------------------------------------- */
-
-.doctor-all-good:not(.is-partial) ::ng-deep .empty__icon {
-  background: var(--green-soft);
-  color: var(--green-text);
-}
-
 /* ---- Checks that could not run ----------------------------------------- */
 
 .doctor-gaps__reasons {

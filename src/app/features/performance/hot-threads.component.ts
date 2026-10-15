@@ -179,19 +179,14 @@ export class HotThreadsComponent {
   private readonly threadsInput = viewChild<ElementRef<HTMLInputElement>>('threadsInput');
   private sequence = 0;
   private nodesSequence = 0;
-  private host: string | undefined;
   private autoCaptured = false;
 
   constructor() {
     effect(() => {
       const active = this.active();
-      const host = this.connection.host();
+      const connected = this.connection.connected();
       untracked(() => {
-        if (host !== this.host) {
-          this.host = host;
-          this.reset();
-        }
-        if (!active || !host) {
+        if (!active || !connected) {
           return;
         }
         if (!this.autoCaptured) {
@@ -221,20 +216,6 @@ export class HotThreadsComponent {
     } else {
       this.waitingForCapture.set(true);
     }
-  }
-
-  private reset(): void {
-    this.sequence++;
-    this.nodesSequence++;
-    this.autoCaptured = false;
-    this.waitingForCapture.set(false);
-    this.capturing.set(false);
-    this.capture.set(undefined);
-    this.captureError.set(undefined);
-    this.nodes.set([]);
-    this.nodesFailed.set(false);
-    this.node.set('');
-    this.expanded.set(new Set());
   }
 
   private async loadNodes(): Promise<void> {

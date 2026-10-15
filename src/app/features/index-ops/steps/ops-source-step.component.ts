@@ -1,13 +1,16 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ConnectionService } from '../../../core/connection.service';
-import { formatNumber } from '../../../core/format';
+import { listSample } from '../../../core/format';
 import { healthLabel, healthTone } from '../../../core/health';
 import { groupIndexOptions } from '../../../shared/index-picker.component';
 import { BytesPipe, NumberPipe, PluralPipe } from '../../../shared/format.pipes';
 import { isResizeKind } from '../index-ops.models';
 import { IndexOpsStore } from '../index-ops.store';
 import { sourceExpressions, totalDocs } from '../index-ops.utils';
+
+/** Closed indices named before "and N more". */
+const SKIPPED_PREVIEW = 10;
 
 /** Step 2: the index, the alias or data stream, or the source indices. */
 @Component({
@@ -42,8 +45,10 @@ export class OpsSourceStepComponent {
     return lookup.state === 'ready' ? (lookup.skipped ?? []) : [];
   });
   readonly skippedNames = computed(() => {
-    const names = this.skippedIndices().map((index) => index.name);
-    return names.length > 10 ? `${names.slice(0, 10).join(', ')} and ${formatNumber(names.length - 10)} more` : names.join(', ');
+    return listSample(
+      this.skippedIndices().map((index) => index.name),
+      SKIPPED_PREVIEW,
+    );
   });
   readonly sourceDocs = computed(() => totalDocs(this.sourceIndices()));
   readonly sourceSize = computed(() => this.sourceIndices().reduce((sum, index) => sum + (index.primarySize ?? 0), 0));

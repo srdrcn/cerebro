@@ -24,7 +24,6 @@ import {
   SlowlogLevel,
   SlowlogPreset,
   SlowlogPresetKey,
-  SlowlogResponse,
   SlowlogThresholds,
   PoolLoad,
   StackFrame,

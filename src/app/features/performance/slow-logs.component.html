@@ -244,9 +244,9 @@
           }
           <div class="slowlog-picker__list" role="group" aria-label="Indices to configure" [class.is-invalid]="submitted() && !!selectionError()">
             @if (indexNames() === undefined) {
-              @if (indicesError(); as reason) {
+              @if (indicesError(); as message) {
                 <p class="field-error slowlog-picker__note">
-                  <i class="bi bi-exclamation-circle" aria-hidden="true"></i> Could not list the indices: {{ reason }}
+                  <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ message }}
                   <button type="button" class="link-button" (click)="loadIndices()">Try again</button>
                 </p>
               } @else {

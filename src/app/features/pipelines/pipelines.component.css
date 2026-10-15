@@ -573,12 +573,6 @@
   text-decoration: line-through;
 }
 
-@media (max-width: 1180px) {
-  .pipelines-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 760px) {
   .footer-buttons {
     width: 100%;

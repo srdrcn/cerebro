@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { formatDuration } from '../../core/format';
-import { MetricKey, formatMetric } from '../../core/metrics';
+import { answeredLabel, metricFormatter } from '../../core/metrics';
 import { MetricsService } from '../../core/metrics.service';
 import { readPreference, writePreference } from '../../core/preferences';
 import { RefreshService, refreshIntervalLabel } from '../../core/refresh.service';
@@ -37,12 +37,7 @@ export class OverviewLiveComponent {
   readonly late = this.metrics.late;
   readonly hasSamples = computed(() => this.history().times.length > 0);
   /** "2 of 3 nodes answered" while some nodes fail their statistics. */
-  readonly partialLabel = computed(() => {
-    const answered = this.history().answered;
-    return answered && answered.answered < answered.total
-      ? `${answered.answered} of ${answered.total} nodes answered`
-      : undefined;
-  });
+  readonly partialLabel = computed(() => answeredLabel(this.history()));
   readonly sampledAt = this.metrics.sampledAt;
   /** Why rates are not shown yet. */
   readonly pending = computed(() =>
@@ -55,8 +50,8 @@ export class OverviewLiveComponent {
   readonly tiles = computed(() => liveActivityTiles(this.history(), this.pending()));
   readonly intervalLabel = computed(() => refreshIntervalLabel(this.metrics.interval()));
   readonly windowLabel = computed(() => formatDuration(this.history().span));
-  /** Formatters per metric, created once so the sparklines keep their inputs. */
-  readonly formatters = new Map<MetricKey, (value: number) => string>();
+  /** One stable formatter per metric, so the sparklines keep their inputs. */
+  readonly format = metricFormatter;
 
   constructor() {
     effect((onCleanup) => {
@@ -64,15 +59,6 @@ export class OverviewLiveComponent {
         onCleanup(this.metrics.attach());
       }
     });
-  }
-
-  format(key: MetricKey): (value: number) => string {
-    let formatter = this.formatters.get(key);
-    if (!formatter) {
-      formatter = (value: number) => formatMetric(key, value);
-      this.formatters.set(key, formatter);
-    }
-    return formatter;
   }
 
   toggle(): void {

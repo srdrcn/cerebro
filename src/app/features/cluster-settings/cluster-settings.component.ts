@@ -2,14 +2,11 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  effect,
   inject,
   signal,
-  untracked,
 } from '@angular/core';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
-import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize } from '../../core/format';
@@ -81,7 +78,6 @@ export class ClusterSettingsComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
-  private readonly connection = inject(ConnectionService);
 
   readonly grouping = GROUPING;
   readonly pluralize = pluralize;
@@ -108,23 +104,12 @@ export class ClusterSettingsComponent implements PendingChangesAware {
 
   private loadSequence = 0;
   private lastResponse = '';
-  /** Cluster the rows and drafts belong to. */
-  private loadedHost: string | undefined;
 
   constructor() {
-    // Settings only change when someone edits them: they load on open, on a
-    // cluster switch, after a save and on Reload, not on refresh ticks.
-    effect(() => {
-      const host = this.connection.host();
-      untracked(() => {
-        if (host !== this.loadedHost) {
-          this.switchCluster(this.loadedHost, host);
-        }
-        if (host) {
-          void this.load();
-        }
-      });
-    });
+    // Settings only change when someone edits them: they load when the page
+    // opens (another cluster creates it again), after a save and on Reload,
+    // not on refresh ticks.
+    void this.load();
   }
 
   async load(): Promise<void> {
@@ -227,27 +212,6 @@ export class ClusterSettingsComponent implements PendingChangesAware {
       this.alerts.error(failureMessage('Could not save cluster settings', error), error);
     } finally {
       this.saving.set(false);
-    }
-  }
-
-  /**
-   * Edits never follow the user to another cluster: switching host drops the
-   * rows and drafts of the previous one before loading the new one.
-   */
-  private switchCluster(previous: string | undefined, next: string | undefined): void {
-    this.loadedHost = next;
-    if (previous === undefined) {
-      return;
-    }
-    const discarded = this.pending().length;
-    this.loadSequence++;
-    this.lastResponse = '';
-    this.rows.set(undefined);
-    this.drafts.set({});
-    this.errors.set({});
-    this.failed.set(false);
-    if (discarded > 0 && next !== undefined) {
-      this.alerts.warn(`Discarded ${pluralize(discarded, 'pending change')} made on ${previous}`);
     }
   }
 }

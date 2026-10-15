@@ -69,8 +69,6 @@ export class MetricsService {
   /** The configured sampling interval: the auto refresh interval (0 while paused). */
   readonly interval = computed(() => this.refresh.interval());
   readonly paused = computed(() => this.refresh.paused());
-  /** Whether a page is showing metrics (and polling runs). */
-  readonly active = computed(() => this.consumers() > 0);
   /** A sample request is running. */
   readonly sampling = signal(false);
   /** The latest sample failed; earlier samples are kept. */

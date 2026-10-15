@@ -34,7 +34,7 @@ import { asNames } from './analysis.utils';
         <div class="card">
           <cerebro-empty
             icon="bi-exclamation-triangle"
-            heading="Could not load indices"
+            heading="Could not load the open indices"
             [text]="loadError() ?? 'Analysis runs against an index, but the cluster did not return its list of open indices.'"
           >
             <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">

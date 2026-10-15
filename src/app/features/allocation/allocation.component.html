@@ -452,7 +452,7 @@
         @case ('all-assigned') {
           <div class="card">
             <cerebro-empty
-              class="alloc-all-good"
+              tone="success"
               icon="bi-check2-circle"
               heading="All shards are assigned"
               text="Every shard copy in the cluster has a node, so there is nothing to diagnose. Pick a shard above to see why it sits where it does."
@@ -540,7 +540,7 @@
             </div>
           }
           @if (unassigned().length === 0) {
-            <cerebro-empty [compact]="true" class="alloc-all-good" icon="bi-check2-all" heading="Nothing unassigned" text="Every shard copy is allocated to a node." />
+            <cerebro-empty [compact]="true" tone="success" icon="bi-check2-all" heading="Nothing unassigned" text="Every shard copy is allocated to a node." />
           } @else {
             <p class="alloc-aside__hint">Choose a shard to see why Elasticsearch cannot place it.</p>
             <ul class="list">

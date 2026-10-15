@@ -5,10 +5,8 @@ import {
   Injector,
   afterNextRender,
   computed,
-  effect,
   inject,
   signal,
-  untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
@@ -18,7 +16,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
-import { formatNumber, formatRelative, formatTimestamp, pluralize } from '../../core/format';
+import { formatNumber, formatRelative, formatTimestamp, listSample, pluralize } from '../../core/format';
 import { healthLabel } from '../../core/health';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
@@ -87,6 +85,8 @@ export class DoctorComponent {
   readonly severities = SEVERITIES;
   readonly categories = CATEGORIES;
   readonly resourcePreview = RESOURCE_PREVIEW;
+  /** "a, b, c and 17 more". */
+  readonly listSample = listSample;
 
   readonly report = signal<DoctorReport | undefined>(undefined);
   readonly raw = signal<unknown>(undefined);
@@ -178,8 +178,6 @@ export class DoctorComponent {
   private readonly injector = inject(Injector);
   private runSequence = 0;
   private destroyed = false;
-  /** Cluster the report on screen belongs to. */
-  private reportHost: string | null = null;
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -190,21 +188,9 @@ export class DoctorComponent {
       this.categoryFilter.set(parseCategoryParam(params.get('category')));
     });
 
-    // Point-in-time report: run once per cluster, not on refresh ticks.
-    effect(() => {
-      const host = this.connection.host();
-      if (host === undefined) {
-        return;
-      }
-      untracked(() => {
-        if (this.reportHost !== null && this.reportHost !== host) {
-          this.report.set(undefined);
-          this.raw.set(undefined);
-          this.checkedAt.set(null);
-        }
-        void this.run();
-      });
-    });
+    // Point-in-time report: run when the page opens, not on refresh ticks
+    // (another cluster creates the page again).
+    void this.run();
 
     const clock = setInterval(() => this.now.set(Date.now()), CLOCK_INTERVAL_MS);
     destroyRef.onDestroy(() => clearInterval(clock));
@@ -213,7 +199,6 @@ export class DoctorComponent {
   async run(): Promise<void> {
     const sequence = ++this.runSequence;
     this.running.set(true);
-    const host = this.connection.host() ?? null;
     try {
       const raw = await this.api.post<unknown>('doctor');
       if (sequence !== this.runSequence) {
@@ -222,7 +207,6 @@ export class DoctorComponent {
       const report = runChecks(raw);
       this.raw.set(raw);
       this.report.set(report);
-      this.reportHost = host;
       if (report.findings.length === 0 || report.gaps > 0) {
         // Nothing to fix (what was verified is the interesting part), or
         // checks are missing (what was not verified matters).
@@ -388,12 +372,6 @@ export class DoctorComponent {
 
   canExpand(indicator: HealthIndicatorView): boolean {
     return indicator.impacts.length > 0 || indicator.diagnoses.length > 0;
-  }
-
-  /** "a, b, c and 17 more". */
-  resourceSample(names: readonly string[]): string {
-    const shown = names.slice(0, RESOURCE_PREVIEW).join(', ');
-    return names.length > RESOURCE_PREVIEW ? `${shown} and ${formatNumber(names.length - RESOURCE_PREVIEW)} more` : shown;
   }
 
   timestamp(milliseconds: number | null): string {

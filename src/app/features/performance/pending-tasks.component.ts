@@ -72,26 +72,13 @@ export class PendingTasksComponent {
   readonly announcement = signal('');
 
   private sequence = 0;
-  private host: string | undefined;
 
   constructor() {
     effect(() => {
       this.refreshService.tick();
-      const active = this.active();
-      const host = this.connection.host();
-      untracked(() => {
-        if (host !== this.host) {
-          this.host = host;
-          this.sequence++;
-          this.tasks.set(undefined);
-          this.loadError.set(undefined);
-          this.staleReason.set(undefined);
-          this.count.emit(0);
-        }
-        if (active && host) {
-          void this.load();
-        }
-      });
+      if (this.active() && this.connection.connected()) {
+        void untracked(() => this.load());
+      }
     });
   }
 

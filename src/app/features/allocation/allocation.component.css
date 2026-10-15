@@ -562,12 +562,6 @@ td.alloc-nodes__weight {
   margin-top: 6px;
 }
 
-:host ::ng-deep .alloc-all-good .empty__icon {
-  border-color: color-mix(in srgb, var(--green) 35%, transparent);
-  background: var(--green-soft);
-  color: var(--green-text);
-}
-
 /* ---- Responsive --------------------------------------------------------- */
 
 @media (max-width: 760px) {

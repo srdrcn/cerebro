@@ -153,8 +153,6 @@ export class RecoveryComponent {
   );
 
   private loadSequence = 0;
-  /** Cluster the recoveries were loaded from; the route is reused when only `?host=` changes. */
-  private loadedHost: string | undefined;
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
   private previousSample: { readonly mode: Mode; readonly sample: RecoverySample } | null = null;
   private destroyed = false;
@@ -164,12 +162,8 @@ export class RecoveryComponent {
   constructor() {
     effect(() => {
       this.refreshService.tick();
-      const host = this.connection.host();
-      if (host !== undefined) {
-        untracked(() => {
-          this.forgetOtherCluster(host);
-          void this.load();
-        });
+      if (this.connection.connected()) {
+        void untracked(() => this.load());
       }
     });
     // Resuming auto refresh restarts the fast polling when recoveries are running.
@@ -234,25 +228,6 @@ export class RecoveryComponent {
           this.schedulePoll();
         }
       }
-    }
-  }
-
-  /** Never shows the recoveries of the previous cluster as stale data of a new one. */
-  private forgetOtherCluster(host: string): void {
-    const switched = this.loadedHost !== undefined && this.loadedHost !== host;
-    this.loadedHost = host;
-    if (switched) {
-      this.loadSequence++;
-      this.cancelPoll();
-      this.previousSample = null;
-      this.recoveries.set(undefined);
-      this.raw.set(undefined);
-      this.rates.set(new Map());
-      this.updatedAt.set(null);
-      this.loading.set(false);
-      this.failed.set(false);
-      this.failure.set('');
-      this.page.set(1);
     }
   }
 

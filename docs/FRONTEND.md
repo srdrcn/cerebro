@@ -48,7 +48,7 @@ src/
 | `names.ts` | `validateResourceName(name, noun)` (template, snapshot and repository names) and the invalid character lists for resource and index names. ILM policy and pipeline ids follow their own rules in their features. |
 | `shards.ts` | `unassignedReason(reason)`: label and explanation of an `unassigned.reason`. |
 | `tasks.ts` | `cancelFailure(response)`: why `_tasks/<id>/_cancel` cancelled nothing (Elasticsearch answers 200 with `node_failures` / `task_failures`), `null` when it did. |
-| `MetricsService` | Live node activity. `attach(destroyRef?)` returns a release function; it samples `metrics/nodes` on refresh ticks only while something is attached, keeps the history across pages and resets it on host change. Signals `history`, `cluster`, `nodes`, `latest`, `ready`, `sampling`, `failed`, `lastError`, `late`, `interval`, `paused`, `active`; `sampleNow()`. |
+| `MetricsService` | Live node activity. `attach(destroyRef?)` returns a release function; it samples `metrics/nodes` on refresh ticks only while something is attached, keeps the history across pages and resets it on host change. Signals `history`, `cluster`, `nodes`, `latest`, `ready`, `sampling`, `failed`, `lastError`, `late`, `interval`, `paused`; `sampleNow()`. |
 | `metrics.ts` | Pure sampling logic: `parseNodeMetrics`, `buildHistory` (rates from each node's own timestamps, latencies Δtime/Δcount, cluster sums rates and averages gauges, counter resets and gaps give `null`), `METRICS` definitions (their labels are the names every page uses), `formatRate`, `formatLatency`, `metricParts`, `seriesTone`, `metricFormatter(key)` (one stable formatter per metric for chart `[format]` inputs), `answeredLabel(history)` ("2 of 3 nodes answered"). |
 | `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
 | `pending-changes.guard.ts` | `PendingChangesAware` (`confirmDiscard()`) and the `confirmDiscardPendingChanges` route guard. |
@@ -96,6 +96,13 @@ src/
   Data that only changes when someone edits it (settings, slow log
   thresholds, the index list) loads when the page or tab opens, after a
   change and on an explicit Reload, not on every tick.
+* Page load effects read `connection.connected()` (plus ticks or tab
+  activity), never `connection.host()`: `ClusterRouteReuseStrategy` creates
+  the page again for another cluster.
+* Index lists: `commons/indices` (names) for pickers; `commons/indices/lookup`
+  with an expression (`'*,.*'` for open, closed and hidden indices) when the
+  status or size in bytes is needed. Failures read "Could not load the index
+  list", in toasts and error states alike.
 * Status text that grows on every tick ("last 3m 5s") stays outside
   `role="status"`, so screen readers are not interrupted.
 * After a confirmed change that removes or disables its own button, move

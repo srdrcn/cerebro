@@ -125,8 +125,6 @@ export class IndexSettingsComponent implements PendingChangesAware {
 
   private readonly picker = viewChild(IndexPickerComponent);
   private loadSequence = 0;
-  /** Cluster the rows and drafts belong to. */
-  private loadedHost: string | undefined;
   private lastResponse = '';
   /** A Back/Forward switch to another index waits for the discard dialog. */
   private confirmingSwitch = false;
@@ -135,15 +133,12 @@ export class IndexSettingsComponent implements PendingChangesAware {
 
   constructor() {
     // Settings only change when someone edits them: they load on open, on an
-    // index or cluster switch, after a save and on Reload, not on refresh ticks.
+    // index switch, after a save and on Reload, not on refresh ticks (another
+    // cluster creates the page again).
     effect(() => {
       const index = this.index();
-      const host = this.connection.host();
       untracked(() => {
-        if (host !== this.loadedHost) {
-          this.switchCluster(this.loadedHost, host);
-          this.reset(index);
-        } else if (index !== this.loadedIndex()) {
+        if (index !== this.loadedIndex()) {
           if (this.pending().length > 0) {
             // Picker switches discard first, so this is browser history navigation.
             void this.confirmHistorySwitch();
@@ -153,7 +148,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
         } else {
           this.loadedPosition = this.historyPosition();
         }
-        if (host && index) {
+        if (index) {
           void this.load(index);
         }
       });
@@ -304,15 +299,6 @@ export class IndexSettingsComponent implements PendingChangesAware {
     }
   }
 
-  /** Edits never follow the user to another cluster, even to an index of the same name. */
-  private switchCluster(previous: string | undefined, next: string | undefined): void {
-    this.loadedHost = next;
-    const discarded = this.pending().length;
-    if (previous !== undefined && next !== undefined && discarded > 0) {
-      this.alerts.warn(`Discarded ${pluralize(discarded, 'pending change')} made on ${previous}`);
-    }
-  }
-
   private confirmDiscardDrafts(consequence: string, confirmLabel: string): Promise<boolean> {
     const changes = this.pending();
     return this.dialogs.confirm({
@@ -340,7 +326,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
       if (await this.confirmDiscardDrafts('will be lost.', 'Discard and switch')) {
         const index = this.index();
         this.reset(index);
-        if (this.connection.host() && index) {
+        if (index) {
           void this.load(index);
         }
       } else {

@@ -229,8 +229,6 @@ export class AllocationComponent {
   private firstTick = true;
   /** When the index list was last loaded. */
   private indicesAt = 0;
-  /** Cluster the page shows; the route is reused when only `?host=` changes. */
-  private loadedHost: string | undefined;
 
   constructor() {
     // Deep links (?index=&shard=&primary=&node=) and back/forward navigation.
@@ -262,15 +260,13 @@ export class AllocationComponent {
 
     effect(() => {
       this.refreshService.tick();
-      const host = this.connection.host();
-      if (host === undefined) {
+      if (!this.connection.connected()) {
         return;
       }
       untracked(() => {
-        const switched = this.forgetOtherCluster(host);
         this.now.set(Date.now());
         void this.loadClusterData(false);
-        if (this.firstTick || switched) {
+        if (this.firstTick) {
           this.firstTick = false;
           void this.explain(this.request());
         } else {
@@ -556,38 +552,6 @@ export class AllocationComponent {
     return nodes.length <= EXPAND_ALL_UP_TO
       ? new Set(nodes.filter((node) => node.blockers.length > 0).map((node) => node.id))
       : new Set();
-  }
-
-  /**
-   * Drops everything loaded from the previous cluster after a host change, so
-   * its explanation is never shown as stale data of the new one. Returns
-   * whether the host changed.
-   */
-  private forgetOtherCluster(host: string): boolean {
-    const switched = this.loadedHost !== undefined && this.loadedHost !== host;
-    this.loadedHost = host;
-    if (switched) {
-      this.liveSequence++;
-      this.explainSequence++;
-      this.indices.set(undefined);
-      this.indicesAt = 0;
-      this.copies.set(undefined);
-      this.copiesAt.set(null);
-      this.copiesFailed.set(false);
-      this.copiesError.set(undefined);
-      this.copiesStale.set(undefined);
-      this.loadingCopies.set(false);
-      this.explaining.set(false);
-      this.explainStale.set(undefined);
-      this.state.set({ kind: 'idle' });
-      this.expanded.set(new Set());
-      this.nodeNames.set(new Map());
-      this.nodeNamesLoaded = false;
-      if (this.request()?.node) {
-        void this.loadNodeNames();
-      }
-    }
-    return switched;
   }
 
   /** Node names for the node chip; cosmetic, so a failure keeps the value of the link. */

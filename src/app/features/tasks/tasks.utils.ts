@@ -1,6 +1,4 @@
-import { elasticsearchReason } from '../../core/errors';
-import { humanize, sentence, textMatcher } from '../../core/format';
-import { isRecord } from '../../core/json';
+import { humanize, textMatcher } from '../../core/format';
 import {
   RawTask,
   Task,
@@ -341,24 +339,6 @@ export function summarizeTasks(tasks: readonly Task[], hideInternal: boolean, el
     longest,
     total: tasks.length,
   };
-}
-
-/**
- * `_cancel` answers 200 even when nothing was cancelled; the reason then sits
- * in `node_failures` / `task_failures`.
- */
-export function cancelFailure(response: unknown): string | null {
-  if (!isRecord(response)) {
-    return null;
-  }
-  for (const key of ['task_failures', 'node_failures']) {
-    const failures = response[key];
-    if (Array.isArray(failures) && failures.length > 0) {
-      const reason = elasticsearchReason(failures[0]);
-      return reason ? sentence(reason) : 'Elasticsearch reported a failure while cancelling the task.';
-    }
-  }
-  return null;
 }
 
 /** Built-in tasks Elasticsearch runs (and usually restarts) on its own. */

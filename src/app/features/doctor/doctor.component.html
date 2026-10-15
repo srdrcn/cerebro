@@ -140,8 +140,9 @@
           }
 
           @if (report.findings.length === 0) {
-            <div class="card doctor-all-good" [class.is-partial]="report.gaps > 0">
+            <div class="card">
               <cerebro-empty
+                [tone]="report.gaps > 0 ? 'default' : 'success'"
                 [icon]="report.gaps > 0 ? 'bi-clipboard-check' : 'bi-check2-circle'"
                 [heading]="report.gaps > 0 ? 'Nothing to fix in what was checked' : 'Nothing to fix'"
                 [text]="allPassedText()"
@@ -381,7 +382,7 @@
                               @for (group of diagnosis.resources; track group.label) {
                                 <p class="diagnosis__resources">
                                   <span class="diagnosis__resources-label">{{ group.label }} ({{ group.names.length | num }}):</span>
-                                  {{ resourceSample(group.names) }}
+                                  {{ listSample(group.names, resourcePreview) }}
                                 </p>
                               }
                               @if (diagnosis.helpUrl) {

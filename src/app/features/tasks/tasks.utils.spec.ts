@@ -4,7 +4,6 @@ import {
   LONG_RUNNING_MILLIS,
   actionLabel,
   buildTaskTree,
-  cancelFailure,
   cancelMessage,
   countDescendants,
   isSystemTask,
@@ -287,17 +286,6 @@ describe('node name lookups', () => {
 });
 
 describe('errors and cancellation', () => {
-  it('detects failures reported inside a 200 cancel response', () => {
-    expect(cancelFailure({ nodes: {} })).toBeNull();
-    expect(cancelFailure({ node_failures: [], task_failures: [] })).toBeNull();
-    expect(
-      cancelFailure({ task_failures: [{ task_id: 9, reason: { type: 'illegal_argument_exception', reason: 'task is not cancellable' } }] }),
-    ).toBe('Task is not cancellable');
-    expect(cancelFailure({ node_failures: [{ type: 'failed_node_exception', caused_by: { reason: 'node left' } }] })).toBe('Node left');
-    expect(cancelFailure({ node_failures: [{}] })).toBe('Elasticsearch reported a failure while cancelling the task.');
-    expect(cancelFailure('nope')).toBeNull();
-  });
-
   it('explains what cancelling keeps', () => {
     const [reindex, merge] = tasks({ status: { total: 10 } }, { action: 'indices:admin/forcemerge', description: '' });
     expect(reindex && cancelMessage(reindex)).toBe(

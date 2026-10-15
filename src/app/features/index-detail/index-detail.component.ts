@@ -207,7 +207,6 @@ export class IndexDetailComponent {
   readonly tabsOverflow = signal<{ readonly start: boolean; readonly end: boolean }>({ start: false, end: false });
   private loadSequence = 0;
   private loadedIndex = '';
-  private loadedHost: string | undefined;
   private lastResponse = '';
   private lastLifecycle = '';
   private ilmRaw: unknown = undefined;
@@ -243,16 +242,15 @@ export class IndexDetailComponent {
       onCleanup(() => observer.disconnect());
     });
 
+    // Another cluster creates the page again; another index resets it.
     effect(() => {
       this.refreshService.tick();
       const index = this.index();
-      const host = this.connection.host();
       untracked(() => {
-        if (host !== this.loadedHost || index !== this.loadedIndex) {
-          this.loadedHost = host;
+        if (index !== this.loadedIndex) {
           this.reset(index);
         }
-        if (host && index) {
+        if (index) {
           void this.load(index);
         }
       });

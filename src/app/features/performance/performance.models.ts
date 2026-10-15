@@ -241,8 +241,6 @@ export interface PendingSummary {
 
 // ---- Slow logs ----------------------------------------------------------------
 
-/** `performance/slowlog`: `{ index: { settings: { flat key: value } } }`. */
-export type SlowlogResponse = Readonly<Record<string, { readonly settings?: Readonly<Record<string, unknown>> }>>;
 
 export type SlowlogGroup = 'query' | 'fetch' | 'index';
 export type SlowlogLevel = 'warn' | 'info' | 'debug' | 'trace';

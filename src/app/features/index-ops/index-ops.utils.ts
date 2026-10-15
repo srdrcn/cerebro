@@ -1,6 +1,6 @@
 import { elasticsearchReason } from '../../core/errors';
 import { formatBytes, formatNumber, humanize, pluralize, sentence } from '../../core/format';
-import { HealthTone, healthTone } from '../../core/health';
+import { healthFromShardCopies, healthTone } from '../../core/health';
 import { isRecord } from '../../core/json';
 import { INVALID_INDEX_NAME_CHARACTERS, invalidCharacters } from '../../core/names';
 import {
@@ -235,16 +235,6 @@ export function shardCopies(rows: readonly CatShardRow[] | null | undefined): Sh
   });
 }
 
-function healthFromCopies(copies: readonly ShardCopy[]): HealthTone {
-  if (copies.length === 0) {
-    return 'gray';
-  }
-  if (copies.some((copy) => copy.primary && (copy.state === 'unassigned' || copy.state === 'initializing'))) {
-    return 'red';
-  }
-  return copies.some((copy) => copy.state === 'unassigned' || copy.state === 'initializing') ? 'yellow' : 'green';
-}
-
 /* ---- Routing shards ------------------------------------------------------------------ */
 
 /** `index.version.created` of 7.0.0. */
@@ -417,7 +407,7 @@ function parseIndex(
     primarySize: pathNumber(stats?.primaries, 'store.size_in_bytes') ?? sum(primaryCopies.map((copy) => copy.size)),
     totalSize: pathNumber(stats?.total, 'store.size_in_bytes') ?? sum(copies.filter((copy) => copy.size !== null).map((copy) => copy.size)),
     // Closed indices have no statistics; their copies (replicated since 7.2) still tell the health.
-    health: reported !== 'gray' ? reported : healthFromCopies(copies),
+    health: reported !== 'gray' ? reported : healthFromShardCopies(copies),
     open,
     writeBlock: settingTrue(settings, 'index.blocks.write'),
     writeBlocked: blockSettings.length > 0,
@@ -1794,7 +1784,7 @@ export function targetRecovery(copies: readonly ShardCopy[]): TargetRecovery {
     primariesStarted,
     unassignedPrimaries,
     percent: total > 0 ? (started / total) * 100 : 0,
-    health: healthFromCopies(copies),
+    health: healthFromShardCopies(copies),
     done: total > 0 && started + count('relocating') === total,
   };
 }

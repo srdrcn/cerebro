@@ -18,6 +18,7 @@ import { ClusterApiError } from '../../core/api-envelope';
 import { failureMessage, readableReason } from '../../core/errors';
 import { formatDuration, pluralize } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
+import { cancelFailure } from '../../core/tasks';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
@@ -28,7 +29,6 @@ import { Task, TaskFilter, TaskNode, TaskRow, TaskSortField, TasksResponse } fro
 import {
   LONG_RUNNING_MILLIS,
   buildTaskTree,
-  cancelFailure,
   cancelMessage,
   filterTaskTree,
   isSystemTask,
@@ -115,7 +115,6 @@ export class TasksComponent {
 
   private loadSequence = 0;
   private nodesSequence = 0;
-  private nodesHost: string | undefined;
   private nodesLoading = false;
   /** Node ids already looked up, so unknown ids do not trigger a nodes call on every tick. */
   private nodesRequested = new Set<string>();
@@ -124,24 +123,9 @@ export class TasksComponent {
   constructor() {
     effect(() => {
       this.refreshService.tick();
-      const host = this.connection.host();
-      untracked(() => {
-        if (host !== this.nodesHost) {
-          this.nodesHost = host;
-          this.nodesSequence++;
-          this.nodesLoading = false;
-          this.nodesRequested = new Set();
-          this.nodesFailedAt = null;
-          this.nodeNames.set(new Map());
-          this.tasks.set(undefined);
-          this.failed.set(false);
-          this.staleReason.set(undefined);
-          this.collapsed.set(new Set());
-        }
-        if (host) {
-          void this.load();
-        }
-      });
+      if (this.connection.connected()) {
+        void untracked(() => this.load());
+      }
     });
 
     const timer = setInterval(() => this.now.set(Date.now()), 1_000);

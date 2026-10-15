@@ -19,7 +19,7 @@ import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
 import { formatDuration } from '../../core/format';
-import { MetricKey, NodeSeries, formatMetric, metricParts, seriesTone } from '../../core/metrics';
+import { MetricKey, NodeSeries, answeredLabel, metricFormatter, metricParts, seriesTone } from '../../core/metrics';
 import { MetricsService } from '../../core/metrics.service';
 import { RefreshService, refreshIntervalLabel } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
@@ -170,22 +170,15 @@ export class NodesComponent {
     return span > 0 ? `last ${formatDuration(span)}` : '';
   });
   /** "2 of 3 nodes answered" while some nodes fail their statistics. */
-  readonly partialLabel = computed(() => {
-    const answered = this.metrics.history().answered;
-    return answered && answered.answered < answered.total
-      ? `${answered.answered} of ${answered.total} nodes answered`
-      : undefined;
-  });
+  readonly partialLabel = computed(() => answeredLabel(this.metrics.history()));
+  /** One stable formatter per metric, so the sparklines keep their inputs. */
+  readonly format = metricFormatter;
   /** Live series by node id. */
   private readonly series = computed(
     () => new Map(this.metrics.nodes().map((node) => [node.id, node] as const)),
   );
-  /** Formatters per metric, created once so the sparklines keep their inputs. */
-  private readonly formatters = new Map<MetricKey, (value: number) => string>();
 
   private loadSequence = 0;
-  /** Cluster the nodes were loaded from; the route is reused when only `?host=` changes. */
-  private loadedHost: string | undefined;
   /** `?node=` still to reveal once the nodes are loaded. */
   private pendingReveal: string | undefined;
   /** Navigations started here to sync the URL; their emissions are echoes. */
@@ -196,17 +189,13 @@ export class NodesComponent {
 
     effect(() => {
       this.refreshService.tick();
-      this.connection.host();
       if (this.connection.connected()) {
-        untracked(() => this.forgetOtherCluster());
-        void this.load();
+        void untracked(() => this.load());
       }
     });
 
     // `?node=` deep links (cluster doctor, bookmarks): expand that node.
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      // Back to another cluster: never resolve the node against the old list.
-      this.forgetOtherCluster();
       const name = params.get('node');
       if (this.urlWrites > 0 || name === untracked(this.expanded)) {
         return;
@@ -295,39 +284,12 @@ export class NodesComponent {
     return threadPoolRows(this.live(node), this.metrics.latest().get(node.id));
   }
 
-  format(key: MetricKey): (value: number) => string {
-    let formatter = this.formatters.get(key);
-    if (!formatter) {
-      formatter = (value: number) => formatMetric(key, value);
-      this.formatters.set(key, formatter);
-    }
-    return formatter;
-  }
-
   resumeRefresh(): void {
     this.refreshService.resume();
   }
 
   retryMetrics(): void {
     void this.metrics.sampleNow();
-  }
-
-  /** Drops the nodes of the previous cluster after a host change. */
-  private forgetOtherCluster(): void {
-    const host = untracked(this.connection.host);
-    if (host === this.loadedHost) {
-      return;
-    }
-    const switched = this.loadedHost !== undefined;
-    this.loadedHost = host;
-    if (switched) {
-      this.loadSequence++;
-      this.nodes.set(undefined);
-      this.loadedAt.set(null);
-      this.loading.set(false);
-      this.failed.set(false);
-      this.loadError.set(undefined);
-    }
   }
 
   /** Expands the `?node=` node once known: clears filters that hide it and scrolls to it. */

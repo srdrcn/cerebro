@@ -188,23 +188,6 @@ describe('AllocationComponent', () => {
     vi.restoreAllMocks();
   });
 
-  it('drops the previous cluster when only the host changes', async () => {
-    respond(async () => UNASSIGNED);
-    const target = component();
-    await vi.waitFor(() => expect(target.state().kind).toBe('done'));
-    await vi.waitFor(() => expect(target.copies()).toBeDefined());
-    const explains = () => post.mock.calls.filter(([path]) => path === 'allocation/explain').length;
-
-    host.set('http://localhost:9201');
-    TestBed.tick();
-
-    expect(target.copies()).toBeUndefined();
-    expect(target.indices()).toBeUndefined();
-    expect(target.state().kind).toBe('loading');
-    await vi.waitFor(() => expect(target.state().kind).toBe('done'));
-    expect(explains()).toBe(2);
-  });
-
   it('waits for the first refresh tick before explaining', () => {
     respond(async () => UNASSIGNED);
     // The shell may create the page and drop it again before it ever renders.
