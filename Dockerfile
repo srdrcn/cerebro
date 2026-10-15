@@ -29,11 +29,12 @@ RUN --mount=type=cache,target=/root/.cache/coursier \
 FROM ${RUNTIME_IMAGE} AS runtime
 
 ARG APP_VERSION=0.9.4-secure
-# The pinned base image fixes the starting point. Its packages come from
-# Chainguard's repository; Wolfi's own repository carries the OS security
-# fixes the image scan checks against (glibc, zlib, ...), so it is added and
-# the base packages are upgraded from both.
-RUN echo "https://packages.wolfi.dev/os" >> /etc/apk/repositories \
+# The pinned base image fixes the starting point, and its /etc/apk/world
+# pins every package to the version it shipped with. Drop those pins and
+# upgrade from Chainguard's repository and Wolfi's own, so the image gets
+# the OS security fixes released since (glibc, zlib, ...).
+RUN sed -i 's/[<>=~].*//' /etc/apk/world \
+    && echo "https://packages.wolfi.dev/os" >> /etc/apk/repositories \
     && if [ ! -f /etc/apk/keys/wolfi-signing.rsa.pub ]; then \
          wget -q -O /etc/apk/keys/wolfi-signing.rsa.pub https://packages.wolfi.dev/os/wolfi-signing.rsa.pub; \
        fi \
