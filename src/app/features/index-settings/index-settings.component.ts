@@ -21,7 +21,6 @@ import { failureMessage, readableReason } from '../../core/errors';
 import { formatRelative, pluralize } from '../../core/format';
 import { isRecord } from '../../core/json';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
-import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { IndexPickerComponent } from '../../shared/index-picker.component';
 import { SettingsEditorComponent } from '../../shared/settings-editor/settings-editor.component';
@@ -91,7 +90,6 @@ export class IndexSettingsComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
-  private readonly refreshService = inject(RefreshService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly location = inject(Location);
@@ -115,6 +113,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
   readonly drafts = signal<SettingDrafts>({});
   readonly errors = signal<SettingErrors>({});
   readonly saving = signal(false);
+  readonly reloading = signal(false);
   /** Why the settings could not be loaded, as Elasticsearch put it. */
   readonly loadError = signal<string | undefined>(undefined);
   /** Reference time of relative dates, moved on every load. */
@@ -135,8 +134,9 @@ export class IndexSettingsComponent implements PendingChangesAware {
   private loadedPosition: number | undefined;
 
   constructor() {
+    // Settings only change when someone edits them: they load on open, on an
+    // index or cluster switch, after a save and on Reload, not on refresh ticks.
     effect(() => {
-      this.refreshService.tick();
       const index = this.index();
       const host = this.connection.host();
       untracked(() => {
@@ -161,9 +161,9 @@ export class IndexSettingsComponent implements PendingChangesAware {
   }
 
   /**
-   * Background refreshes leave the current state (ready, missing, multiple or
-   * error) on screen until the answer arrives; only switching index or an
-   * explicit retry shows the skeleton.
+   * Reloads (after a save or on Reload) leave the current state (ready,
+   * missing, multiple or error) on screen until the answer arrives; only
+   * switching index or an explicit retry shows the skeleton.
    */
   async load(index: string): Promise<void> {
     const sequence = ++this.loadSequence;
@@ -203,7 +203,7 @@ export class IndexSettingsComponent implements PendingChangesAware {
         this.resolvedIndex.set('');
         this.state.set('missing');
       } else {
-        // Keep showing the last good values when a background refresh fails.
+        // Keep showing the last good values when a reload fails.
         if (this.state() !== 'ready') {
           this.loadError.set(readableReason(error));
           this.state.set('error');
@@ -215,6 +215,20 @@ export class IndexSettingsComponent implements PendingChangesAware {
 
   age(date: Date): string {
     return formatRelative(date.getTime(), this.now());
+  }
+
+  /** Reads the settings again, keeping the table and the staged changes on screen. */
+  async reload(): Promise<void> {
+    const index = this.index();
+    if (!index || this.reloading()) {
+      return;
+    }
+    this.reloading.set(true);
+    try {
+      await this.load(index);
+    } finally {
+      this.reloading.set(false);
+    }
   }
 
   retry(): void {

@@ -142,12 +142,7 @@ export class DataStreamsComponent {
         return;
       }
       if (name === null) {
-        if (previous !== null && keepsStreamLink(untracked(this.query), previous)) {
-          this.query.set('');
-        }
-        this.linkedName.set(null);
-        this.pendingReveal = null;
-        this.relink(null);
+        this.clearLink();
         return;
       }
       this.query.set(name);
@@ -300,6 +295,11 @@ export class DataStreamsComponent {
     try {
       const response = await this.api.post<unknown>('data_streams/delete', { name: row.name });
       this.alerts.success(`Data stream ${row.name} deleted`, response);
+      if (row.name === this.linkedName()) {
+        // The link pointed at the stream that is gone: back to the full list.
+        this.clearLink();
+        this.dropNameParam();
+      }
       this.streams.update((list) => list?.filter((stream) => stream.name !== row.name));
       this.expanded.update((current) => {
         const next = new Set(current);
@@ -324,6 +324,17 @@ export class DataStreamsComponent {
     if (revealsInternal(this.allRows(), name)) {
       this.showInternal.set(true);
     }
+  }
+
+  /** Forgets the `?name=` link, and its filter while the filter is still the linked name. */
+  private clearLink(): void {
+    const linked = this.linkedName();
+    if (linked !== null && keepsStreamLink(this.query(), linked)) {
+      this.query.set('');
+    }
+    this.linkedName.set(null);
+    this.pendingReveal = null;
+    this.relink(null);
   }
 
   /** Collapse the row the previous link opened (unless the user re-toggled it) and open the new one. */

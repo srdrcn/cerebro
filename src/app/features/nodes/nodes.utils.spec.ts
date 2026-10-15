@@ -127,7 +127,6 @@ describe('node presentation helpers', () => {
       master: 'a',
       versions: ['8.0.0', '8.1.0'],
       averageHeap: 30,
-      averageCpu: 10,
       diskUsed: 50,
       diskTotal: 100,
     });

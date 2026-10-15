@@ -14,7 +14,6 @@ import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
 import { pluralize } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
-import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import {
@@ -82,7 +81,6 @@ export class ClusterSettingsComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
   private readonly dialogs = inject(DialogService);
-  private readonly refreshService = inject(RefreshService);
   private readonly connection = inject(ConnectionService);
 
   readonly grouping = GROUPING;
@@ -95,6 +93,7 @@ export class ClusterSettingsComponent implements PendingChangesAware {
   /** Why the settings could not be loaded, as Elasticsearch put it. */
   readonly loadError = signal<string | undefined>(undefined);
   readonly saving = signal(false);
+  readonly reloading = signal(false);
 
   readonly overrides = computed(() => summarizeOverrides(this.rows() ?? []));
   readonly transientSettings = computed(() =>
@@ -113,8 +112,9 @@ export class ClusterSettingsComponent implements PendingChangesAware {
   private loadedHost: string | undefined;
 
   constructor() {
+    // Settings only change when someone edits them: they load on open, on a
+    // cluster switch, after a save and on Reload, not on refresh ticks.
     effect(() => {
-      this.refreshService.tick();
       const host = this.connection.host();
       untracked(() => {
         if (host !== this.loadedHost) {
@@ -149,6 +149,19 @@ export class ClusterSettingsComponent implements PendingChangesAware {
         this.failed.set(true);
         this.alerts.error(failureMessage('Could not load cluster settings', error), error);
       }
+    }
+  }
+
+  /** Reads the settings again, keeping the table and the staged changes on screen. */
+  async reload(): Promise<void> {
+    if (this.reloading()) {
+      return;
+    }
+    this.reloading.set(true);
+    try {
+      await this.load();
+    } finally {
+      this.reloading.set(false);
     }
   }
 

@@ -99,7 +99,7 @@
             <div class="callout callout-warning cat-callout" role="status">
               <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
               <div class="min-w-0">
-                <p><strong>The last refresh failed.</strong> Showing data from {{ data.loadedAt.toLocaleTimeString() }}.</p>
+                <p><strong>The last refresh failed.</strong> Showing data from {{ data.loadedAt | date: 'HH:mm:ss' }}.</p>
                 @if (failure.reason) {
                   <p class="cat-callout__reason text-secondary break-all">Reason: {{ failure.reason }}</p>
                 }

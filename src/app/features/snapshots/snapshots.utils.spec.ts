@@ -9,11 +9,12 @@ import {
   indexStatuses,
   isRenaming,
   isRestorable,
-  matchesSnapshot,
   renameIndex,
   restoreTargetState,
   snapshotDuration,
+  snapshotMatcher,
   snapshotStart,
+  snapshotSystemIndices,
   sortSnapshots,
   stateMeta,
   suggestSnapshotName,
@@ -97,11 +98,27 @@ describe('snapshot timing', () => {
 
 describe('snapshot filtering and sorting', () => {
   it('matches snapshot names and contained indices', () => {
-    expect(matchesSnapshot(nightly13, '')).toBe(true);
-    expect(matchesSnapshot(nightly13, '10.13')).toBe(true);
-    expect(matchesSnapshot(nightly13, 'customers')).toBe(true);
-    expect(matchesSnapshot(nightly13, '^logs')).toBe(false);
-    expect(matchesSnapshot(nightly14, '^logs')).toBe(true);
+    expect(snapshotMatcher('')(nightly13)).toBe(true);
+    expect(snapshotMatcher('10.13')(nightly13)).toBe(true);
+    expect(snapshotMatcher('customers')(nightly13)).toBe(true);
+    expect(snapshotMatcher('^logs')(nightly13)).toBe(false);
+    expect(snapshotMatcher('^logs')(nightly14)).toBe(true);
+  });
+
+  it('lists the system indices of the feature states', () => {
+    expect(snapshotSystemIndices(nightly13)).toEqual([]);
+    expect(
+      snapshotSystemIndices(
+        snapshot('full', {
+          indices: ['.tasks', 'orders', '.security-7'],
+          feature_states: [
+            { feature_name: 'tasks', indices: ['.tasks'] },
+            { feature_name: 'security', indices: ['.security-7', '.tasks'] },
+            { feature_name: 'empty' },
+          ],
+        }),
+      ),
+    ).toEqual(['.security-7', '.tasks']);
   });
 
   it('hides filtered states', () => {

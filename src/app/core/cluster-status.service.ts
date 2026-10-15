@@ -31,6 +31,8 @@ export class ClusterStatusService {
   private readonly refresh = inject(RefreshService);
   private readonly document = inject(DOCUMENT);
   private sequence = 0;
+  /** The host the status, name and user belong to. */
+  private statusHost: string | undefined;
 
   readonly status = signal<ClusterHealth | undefined>(undefined);
   readonly clusterName = signal<string | undefined>(undefined);
@@ -53,10 +55,14 @@ export class ClusterStatusService {
     effect(() => {
       const host = this.connection.host();
       this.refresh.tick();
+      // Another cluster: never show the previous one's name or health while
+      // the new one has not answered (or does not answer at all).
+      if (host !== this.statusHost) {
+        this.reset();
+        this.statusHost = host;
+      }
       if (host) {
         void this.load(host);
-      } else {
-        this.reset();
       }
     });
 

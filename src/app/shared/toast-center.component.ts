@@ -4,8 +4,10 @@ import {
   ElementRef,
   Injector,
   afterNextRender,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { AlertService, CerebroAlert } from '../core/alert.service';
 
@@ -19,14 +21,13 @@ const ICONS: Readonly<Record<CerebroAlert['level'], string>> = {
 @Component({
   selector: 'cerebro-toast-center',
   template: `
-    <!-- Each toast is its own live region (role alert / status); hovering or
-         focusing the stack pauses the auto-dismiss countdowns. -->
+    <!-- Each toast is its own live region (role alert / status); hovering a
+         toast or focusing the stack pauses the auto-dismiss countdowns. Only
+         the toasts take pointer events, so hover is tracked per toast. -->
     <section
       class="toasts"
       aria-label="Notifications"
       [class.is-paused]="alerts.paused()"
-      (mouseenter)="setHovered(true)"
-      (mouseleave)="setHovered(false)"
       (focusin)="setFocused(true)"
       (focusout)="onFocusOut($event)"
     >
@@ -35,6 +36,8 @@ const ICONS: Readonly<Record<CerebroAlert['level'], string>> = {
           class="toast"
           [class]="'toast toast--' + alert.level"
           [attr.role]="alert.level === 'error' ? 'alert' : 'status'"
+          (pointerenter)="setHovered(alert.id)"
+          (pointerleave)="clearHovered(alert.id)"
         >
           <span class="toast__icon" aria-hidden="true">
             <i class="bi" [class]="'bi ' + icon(alert)"></i>
@@ -93,12 +96,43 @@ export class ToastCenterComponent {
   private readonly injector = inject(Injector);
   readonly expanded = signal<string | undefined>(undefined);
   readonly pinned = signal<string | undefined>(undefined);
-  private hovered = false;
+  /** The toast under the pointer. */
+  private hovered: string | undefined;
   private focused = false;
 
-  setHovered(hovered: boolean): void {
-    this.hovered = hovered;
+  constructor() {
+    // A toast removed under the pointer (its close button, folding) never
+    // fires pointerleave, and an emptied stack fires no focusout: let the
+    // countdowns continue instead of staying paused for the session.
+    effect(() => {
+      const ids = new Set(this.alerts.alerts().map((alert) => alert.id));
+      untracked(() => {
+        let changed = false;
+        if (this.hovered !== undefined && !ids.has(this.hovered)) {
+          this.hovered = undefined;
+          changed = true;
+        }
+        if (this.focused && ids.size === 0) {
+          this.focused = false;
+          changed = true;
+        }
+        if (changed) {
+          this.syncPause();
+        }
+      });
+    });
+  }
+
+  setHovered(id: string): void {
+    this.hovered = id;
     this.syncPause();
+  }
+
+  clearHovered(id: string): void {
+    if (this.hovered === id) {
+      this.hovered = undefined;
+      this.syncPause();
+    }
   }
 
   setFocused(focused: boolean): void {
@@ -138,7 +172,7 @@ export class ToastCenterComponent {
   }
 
   private syncPause(): void {
-    if (this.hovered || this.focused) {
+    if (this.hovered !== undefined || this.focused) {
       this.alerts.pauseAll();
     } else {
       this.alerts.resumeAll();

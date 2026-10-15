@@ -41,8 +41,6 @@ trait ElasticClient {
 
   def getIndexMapping(index: String, target: ElasticServer): Future[ElasticResponse]
 
-  def putClusterSettings(settings: String, target: ElasticServer): Future[ElasticResponse]
-
   def enableShardAllocation(target: ElasticServer): Future[ElasticResponse]
 
   def disableShardAllocation(target: ElasticServer, kind: String): Future[ElasticResponse]
@@ -61,7 +59,11 @@ trait ElasticClient {
 
   def createIndex(index: String, metadata: JsValue, target: ElasticServer): Future[ElasticResponse]
 
+  // Index names only (`_cat/indices` rows with the index column)
   def getIndices(target: ElasticServer): Future[ElasticResponse]
+
+  // Index names and their status (`_cat/indices` rows with the index and status columns)
+  def getIndexStatuses(target: ElasticServer): Future[ElasticResponse]
 
   def getTemplates(target: ElasticServer): Future[ElasticResponse]
 

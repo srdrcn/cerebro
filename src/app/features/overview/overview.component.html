@@ -122,7 +122,7 @@
         <i class="bi bi-wifi-off" aria-hidden="true"></i>
         <div class="ov-callout__body">
           <strong>Could not refresh the overview.</strong>
-          <span class="ov-callout__text">Showing data from {{ loadedAtLabel() }}; it may be out of date.@if (loadError(); as reason) { {{ reason }}}</span>
+          <span class="ov-callout__text">Showing data from {{ loadedAt() | date: 'HH:mm:ss' }}; it may be out of date.@if (loadError(); as reason) { {{ reason }}}</span>
         </div>
         <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
           <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
@@ -517,10 +517,10 @@
                           <span class="node-metric__value">{{ row.node.disk.used_percent }}%</span>
                           <cerebro-meter [value]="row.node.disk.used_percent" [warn]="85" [danger]="90" [small]="true" label="Disk usage" />
                         </div>
-                        <div class="node-metric" [title]="'Process CPU: ' + row.node.cpu_percent + '%'">
-                          <span class="node-metric__label">CPU</span>
+                        <div class="node-metric" [title]="'OS CPU (whole machine): ' + row.node.cpu_percent + '%'">
+                          <span class="node-metric__label">OS CPU</span>
                           <span class="node-metric__value">{{ row.node.cpu_percent }}%</span>
-                          <cerebro-meter [value]="row.node.cpu_percent" [small]="true" label="CPU usage" />
+                          <cerebro-meter [value]="row.node.cpu_percent" [small]="true" label="OS CPU usage" />
                         </div>
                         <div
                           class="node-metric"

@@ -5,7 +5,7 @@ import javax.inject.Inject
 import controllers.auth.AuthenticationModule
 import elastic.{ElasticClient, ElasticResponse, Error, Success}
 import models.{CerebroResponse, Hosts}
-import play.api.libs.json.{JsNull, JsValue, Json}
+import play.api.libs.json.{JsNull, JsObject, JsValue, Json}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -45,9 +45,16 @@ class IndexDetailController @Inject()(val authentication: AuthenticationModule,
     }
   }
 
-  // GET _cluster/state/metadata/<index> → metadata.indices.<index>.routing_num_shards
+  // GET _cluster/state/metadata/<index> → metadata.indices.<concrete index>.routing_num_shards.
+  // The metadata is keyed by the concrete index, also when the page was opened
+  // through an alias, so a single index is used whatever its key.
   private def routingShards(index: String, response: ElasticResponse): JsValue = response match {
-    case Success(_, body) => (body \ "metadata" \ "indices" \ index \ "routing_num_shards").asOpt[JsValue].getOrElse(JsNull)
+    case Success(_, body) =>
+      val indices = (body \ "metadata" \ "indices").asOpt[JsObject].getOrElse(Json.obj())
+      val entry = (indices \ index).asOpt[JsObject].orElse(
+        if (indices.keys.size == 1) indices.values.headOption.flatMap(_.asOpt[JsObject]) else None
+      )
+      entry.flatMap(value => (value \ "routing_num_shards").asOpt[JsValue]).getOrElse(JsNull)
     case Error(_, _) => JsNull
   }
 

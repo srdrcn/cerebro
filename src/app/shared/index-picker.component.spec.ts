@@ -100,7 +100,7 @@ describe('IndexPickerComponent', () => {
 
     expect(picker.failed()).toBe(true);
     expect(picker.loadError()).toBe('Cluster is blocked');
-    expect(alerts.error).toHaveBeenCalledWith('Could not load indices: cluster is blocked', expect.any(ClusterApiError));
+    expect(alerts.error).toHaveBeenCalledWith('Could not load the index list: cluster is blocked', expect.any(ClusterApiError));
     expect(select.options[0]?.textContent?.trim()).toBe('Indices unavailable');
 
     post.mockResolvedValue(['orders']);

@@ -1,6 +1,6 @@
 package controllers
 
-import elastic.{ElasticResponse, Error, Success}
+import elastic.{ElasticResponse, Error, HTTPElasticClient, Success}
 import org.specs2.Specification
 import play.api.libs.json.Json
 
@@ -16,6 +16,7 @@ object IndexBatchesSpec extends Specification {
     IndexBatches should
       keep short lists in one batch                      $short
       split long lists below the length limit            $long
+      measure batches as they are encoded in the URL     $encodedLength
       stop at the first failing batch                    $stopOnError
       """
 
@@ -25,7 +26,16 @@ object IndexBatchesSpec extends Specification {
     val indices = (1 to 300).map(n => f"logs-2026.10.$n%03d-000001")
     val batches = IndexBatches.batches(indices)
     (batches.size must beGreaterThan(1)) and
-      (batches.forall(_.length <= IndexBatches.MaxBatchLength) must beTrue) and
+      (batches.forall(batch => HTTPElasticClient.encoded(batch).length <= IndexBatches.MaxBatchLength) must beTrue) and
+      (batches.flatMap(_.split(",")) must equalTo(indices))
+  }
+
+  // Commas become %2C and each non-ASCII character up to nine characters.
+  def encodedLength = {
+    val indices = (1 to 200).map(n => s"journal-économie-$n")
+    val batches = IndexBatches.batches(indices)
+    (batches.size must beGreaterThan(2)) and
+      (batches.forall(batch => HTTPElasticClient.encoded(batch).length <= IndexBatches.MaxBatchLength) must beTrue) and
       (batches.flatMap(_.split(",")) must equalTo(indices))
   }
 

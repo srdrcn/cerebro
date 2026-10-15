@@ -1,4 +1,6 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationStart, Router } from '@angular/router';
 
 export type DialogTone = 'default' | 'warning' | 'danger';
 
@@ -35,13 +37,31 @@ export function stringifyForDisplay(value: unknown): string {
   }
 }
 
-/** Drives the single <cerebro-dialog-host> mounted by the app root. */
+/**
+ * Drives the single <cerebro-dialog-host> mounted by the app root.
+ *
+ * A dialog belongs to the page that opened it: when a navigation starts
+ * (Back/Forward, a link, the command palette) it is closed, and a pending
+ * confirmation resolves `false`, so nothing runs on behalf of a page that is
+ * no longer shown. Dialogs opened by `confirmDiscardPendingChanges` open
+ * after that point and stay until the user answers.
+ */
 @Injectable({ providedIn: 'root' })
 export class DialogService {
   private readonly stateValue = signal<DialogState | undefined>(undefined);
   private confirmationResolver: ((confirmed: boolean) => void) | undefined;
 
   readonly state = this.stateValue.asReadonly();
+
+  constructor() {
+    inject(Router)
+      .events.pipe(takeUntilDestroyed())
+      .subscribe((event) => {
+        if (event instanceof NavigationStart && this.stateValue()) {
+          this.close();
+        }
+      });
+  }
 
   confirm(options: ConfirmOptions | string): Promise<boolean> {
     const config: ConfirmOptions =

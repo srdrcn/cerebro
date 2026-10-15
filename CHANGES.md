@@ -338,7 +338,7 @@ First cerebro release.
 - Index operations wizard: shrink, split, clone, roll over and reindex with live preflight checks (write block, shard placement, disk, document limits, exact split counts), a review of the exact requests, and progress tracking with cancel and finishing actions; reachable from the Actions menu of index details.
 - Cluster doctor: a one click health check of the whole cluster. It finds unassigned shards, replicas that can never be allocated, indices without replicas, nodes above the disk watermarks (with headroom), read-only blocks, oversized and over-sharded indices, the shard limit, ILM errors, heap and old-generation memory pressure, garbage collection, tripped circuit breakers, disabled allocation, transient settings and upgrade deprecations, shows Elasticsearch's health report on 8.7+, explains each problem and offers a confirmed one-click fix or a link to the page that handles it.
 - Shard allocation explain: why a shard is unassigned or stays on its node, with every node's deciders, reachable from the overview's shard menus and the unassigned-shards warning.
-- Index details page with overview, settings, mappings, statistics, aliases and shards tabs.
+- Index details page with overview, settings, mappings, statistics, aliases, shards and lifecycle tabs.
 - Composable index templates and component templates: list, edit, delete and preview the settings, mappings and aliases a template resolves to.
 - Data streams (backing indices, generation, lifecycle, rollover, delete) and index lifecycle (ILM) policies with a phase timeline, a JSON editor and per-index lifecycle status (current phase, step and errors).
 - Ingest pipelines: list, edit, delete and simulate against sample documents, with per-processor results.
@@ -370,15 +370,22 @@ First cerebro release.
 - Pipelines, ILM policies, templates and other resources whose name contains a space can be updated and deleted (the space was sent as "+").
 - Text responses (for example `GET _cat/health` in the REST console) no longer fail with a JSON parse error.
 - "Copy settings and mappings from" on create index copies the chosen index; for a data stream backing index it could pick a sibling backing index on 8.x.
-- Index lists ask Elasticsearch for names only and the index picker no longer reloads them on every refresh.
-- The `?host=` of the URL now always decides which cluster is shown (Back/Forward, bookmarks, pasted links).
+- Index lists ask Elasticsearch only for the columns they use (the analysis page also asks for the status, to offer open indices) and the index picker no longer reloads them on every refresh.
+- Bulk actions on the overview (close, open, refresh, flush, force merge, clear cache, delete) send long index lists in batches instead of failing with "An HTTP line is larger than 4096 bytes"; batches are measured as they are encoded in the URL.
+- The snapshot page and the REST history report the reason Elasticsearch or the history store gave (for example a 401 or 403) instead of an internal parsing error.
+- Index details opened through an alias read the routing shard count of the index behind it, so the index operations wizard checks split targets exactly.
+- The `?host=` of the URL now always decides which cluster is shown (Back/Forward, bookmarks, pasted links); a page opened for another cluster starts afresh instead of keeping the previous cluster's lists and editors, and the sidebar, breadcrumb and tab title drop the previous cluster's name until the new one answers.
+- Confirmation dialogs close when the page changes (Back/Forward included), so confirming can no longer act on a page that was left.
+- Notifications no longer stay paused after the hovered one is dismissed, and they rise above sticky Save / Apply bars instead of covering them.
+- Long error reasons and index names wrap instead of widening the page on phones.
 - Cancelling "Switch cluster" because of unsaved edits keeps the page connected.
 - Requests without a target host are answered with 400 "Missing required parameter host" instead of a 500.
 
 #### Maintenance
 
 - Remove the unused `zone.js` dependency, the legacy logo image and the obsolete Travis CI configuration (CI runs on GitHub Actions).
-- Remove the unused `/commons/nodes` endpoint and unused Elasticsearch client methods.
+- Remove the unused `/commons/nodes` endpoint, unused Elasticsearch client methods and the unused cluster health model.
+- CI runs on pushes and pull requests to `main`.
 - `public/js` is build output and no longer tracked in git; run `npm run build` before `sbt run` / `sbt stage`.
 - Docker examples and documentation use the in-repository image (`chosenwar/cerebro`).
 
@@ -395,5 +402,5 @@ First cerebro release.
 
 #### Compatibility
 
-- Preserve the existing cluster endpoints, response envelopes, SQLite REST history and all 13 UI workflows.
+- Preserve the existing cluster endpoints (except the unused `/commons/nodes`), response envelopes, SQLite REST history and all 13 UI workflows.
 - Preserve legacy `#!/...` bookmarks by rewriting them to Angular hash routes before startup.

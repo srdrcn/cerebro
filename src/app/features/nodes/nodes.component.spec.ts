@@ -68,6 +68,7 @@ describe('NodesComponent', () => {
 
   beforeEach(() => {
     now = 1_000_000;
+    host.set('http://localhost:9200');
     interval.set(15_000);
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     post.mockReset();
@@ -178,6 +179,27 @@ describe('NodesComponent', () => {
       [],
       expect.objectContaining({ queryParams: { node: null }, queryParamsHandling: 'merge', replaceUrl: true }),
     );
+  });
+
+  it('resolves ?node= against the new cluster after Back to another host', async () => {
+    // Shown for a cluster without es-node-2 first.
+    let clusterNodes = NODES.filter((node) => node.name !== 'es-node-2');
+    post.mockImplementation((path: string) =>
+      path === 'nodes' ? Promise.resolve(clusterNodes) : Promise.resolve(metricsBody(1_000, now)),
+    );
+    const { fixture, component } = await render();
+    expect(component.nodes()?.map((node) => node.name)).not.toContain('es-node-2');
+
+    // Back: the route is reused, only the host and ?node= change.
+    clusterNodes = NODES;
+    host.set('http://localhost:9201');
+    params.next(convertToParamMap({ node: 'es-node-2' }));
+    expect(component.nodes()).toBeUndefined();
+    await vi.waitFor(() => expect(component.nodes()?.map((node) => node.name)).toContain('es-node-2'));
+    await fixture.whenStable();
+
+    expect(alerts.warn).not.toHaveBeenCalled();
+    expect(component.expanded()).toBe('es-node-2');
   });
 
   it('mirrors the expanded node in the URL without reacting to its own echo', async () => {

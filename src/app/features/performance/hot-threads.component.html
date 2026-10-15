@@ -185,7 +185,13 @@
           @if (quietState(); as quiet) {
             <cerebro-empty [icon]="quiet.icon" [heading]="quiet.heading" [text]="quiet.text" [compact]="true">
               @if (quietCount() > 0) {
-                <button type="button" class="btn btn-sm" [attr.aria-pressed]="showQuiet()" (click)="showQuiet.set(!showQuiet())">
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  aria-controls="hot-thread-nodes"
+                  [attr.aria-expanded]="showQuiet()"
+                  (click)="showQuiet.set(!showQuiet())"
+                >
                   {{ showQuiet() ? 'Hide' : 'Show' }} {{ pluralize(quietCount(), 'quiet thread') }}
                 </button>
               }
@@ -199,6 +205,7 @@
               <span><span class="hot-legend__swatch frame--jdk"></span> JDK and libraries</span>
             </div>
 
+            <div class="stack" id="hot-thread-nodes">
             @for (entry of shownNodes(); track entry.node.id || entry.node.name) {
               <section class="hot-node" [attr.aria-labelledby]="'hot-node-' + $index">
                 <header class="hot-node__header">
@@ -354,7 +361,7 @@
                             >
                               <i class="bi" [class]="allStacks().has(thread.key) ? 'bi bi-dash-square' : 'bi bi-plus-square'" aria-hidden="true"></i>
                               @if (allStacks().has(thread.key)) {
-                                Hide the other {{ otherStacks(thread).length === 1 ? 'stack' : 'stacks' }}
+                                Hide the other {{ otherStacks(thread).length | plural: 'stack' }}
                               } @else {
                                 Show {{ pluralize(otherStacks(thread).length, 'other stack') }}
                                 <span class="text-muted">({{ otherSnapshots(thread) }} of {{ thread.groups[0]?.total }} snapshots)</span>
@@ -368,9 +375,16 @@
                 }
               </section>
             }
+            </div>
 
             @if (summary().busy > 0 && quietCount() > 0) {
-              <button type="button" class="btn btn-sm hot-quiet-toggle" [attr.aria-pressed]="showQuiet()" (click)="showQuiet.set(!showQuiet())">
+              <button
+                type="button"
+                class="btn btn-sm hot-quiet-toggle"
+                aria-controls="hot-thread-nodes"
+                [attr.aria-expanded]="showQuiet()"
+                (click)="showQuiet.set(!showQuiet())"
+              >
                 <i class="bi" [class]="showQuiet() ? 'bi bi-eye-slash' : 'bi bi-eye'" aria-hidden="true"></i>
                 {{ showQuiet() ? 'Hide' : 'Show' }} {{ pluralize(quietCount(), 'quiet thread') }} (under {{ busyPercent }}%)
               </button>
@@ -410,11 +424,7 @@
             ? 'This cluster has ' + pluralize(nodes().length, 'node') + '. A capture samples every thread of each node 10 times, so it only runs when you ask: pick a node to keep it light, then choose Capture.'
             : 'A capture samples every thread of each node 10 times, so it only runs when you ask. Choose Capture to start.'
         "
-      >
-        <button type="button" class="btn btn-sm btn-primary" (click)="submit()">
-          <i class="bi bi-record-circle" aria-hidden="true"></i> Capture
-        </button>
-      </cerebro-empty>
+      ></cerebro-empty>
     </div>
   }
 </div>

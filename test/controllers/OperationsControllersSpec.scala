@@ -30,6 +30,7 @@ object OperationsControllersSpec extends MockedServices {
       delete an ILM policy                               $deleteIlmPolicy
       explain the lifecycle of an index                  $explainIlm
       retry the failed lifecycle step of indices         $retryIlm
+      require indices to retry                           $retryIlmEmpty
       list ingest pipelines                              $listPipelines
       save an ingest pipeline                            $savePipeline
       delete an ingest pipeline                          $deletePipeline
@@ -139,6 +140,9 @@ object OperationsControllersSpec extends MockedServices {
     client.retryIlm("logs,metrics", server) returns Future.successful(Success(200, ack))
     ensure(post("/ilm/retry", Json.obj("indices" -> Json.arr("logs", "metrics"))), 200, ack)
   }
+
+  def retryIlmEmpty =
+    ensure(post("/ilm/retry", Json.obj("indices" -> Json.arr())), 400, Json.obj("error" -> "No indices given"))
 
   def listPipelines = {
     val pipelines = Json.obj("enrich" -> Json.obj("processors" -> Json.arr()))

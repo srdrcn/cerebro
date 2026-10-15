@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { NavigationEnd, NavigationStart, Router, type Event } from '@angular/router';
+import { Subject } from 'rxjs';
 import { DialogService } from './dialog.service';
 
 describe('DialogService', () => {
@@ -60,6 +62,38 @@ describe('DialogService', () => {
       title: 'Response',
       subtitle: 'subtitle',
       text: '{\n  "html": "<img src=x onerror=alert(1)>"\n}',
+    });
+  });
+
+  describe('on navigation', () => {
+    const events = new Subject<Event>();
+
+    beforeEach(() => {
+      TestBed.configureTestingModule({ providers: [{ provide: Router, useValue: { events } }] });
+    });
+
+    it('closes the dialog of the page being left and declines its confirmation', async () => {
+      const service = TestBed.inject(DialogService);
+      const result = service.confirm({ title: 'Close index products?', confirmLabel: 'Close index' });
+
+      events.next(new NavigationStart(2, '/overview', 'popstate'));
+
+      await expect(result).resolves.toBe(false);
+      expect(service.state()).toBeUndefined();
+    });
+
+    it('closes a JSON viewer and leaves dialogs opened later alone', async () => {
+      const service = TestBed.inject(DialogService);
+      service.showJson('Response', { ok: true });
+      events.next(new NavigationStart(2, '/tasks'));
+      expect(service.state()).toBeUndefined();
+
+      // A discard-changes guard asks after the navigation started.
+      const guard = service.confirm('Discard changes?');
+      events.next(new NavigationEnd(2, '/tasks', '/tasks'));
+      expect(service.state()).toMatchObject({ kind: 'confirm', title: 'Discard changes?' });
+      service.accept();
+      await expect(guard).resolves.toBe(true);
     });
   });
 });

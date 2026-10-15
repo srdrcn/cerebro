@@ -9,7 +9,7 @@ import {
   formatRelative,
   formatTimestamp,
   humanize,
-  matchesText,
+  listSample,
   plural,
   pluralize,
   sentence,
@@ -52,14 +52,23 @@ describe('format helpers', () => {
   });
 
   it('matches text as a case-insensitive regex with a substring fallback', () => {
-    expect(matchesText('logs-2026.10.14', '^logs-.*14$')).toBe(true);
-    expect(matchesText('Products', 'prod')).toBe(true);
-    expect(matchesText('a[b', '[b')).toBe(true);
-    expect(matchesText('anything', '  ')).toBe(true);
-    expect(matchesText('orders', 'logs')).toBe(false);
+    expect(textMatcher('^logs-.*14$')('logs-2026.10.14')).toBe(true);
+    expect(textMatcher('prod')('Products')).toBe(true);
+    expect(textMatcher('[b')('a[b')).toBe(true);
+    expect(textMatcher('  ')('anything')).toBe(true);
+    expect(textMatcher('logs')('orders')).toBe(false);
   });
 
-  it('compiles a reusable matcher with the same semantics as matchesText', () => {
+  it('names a sample of a long list', () => {
+    expect(listSample(['logs', 'metrics'], 3)).toBe('logs, metrics');
+    expect(listSample(['a', 'b', 'c'], 3)).toBe('a, b, c');
+    expect(listSample(['a', 'b', 'c', 'd', 'e'], 3)).toBe('a, b, c and 2 more');
+    const many = Array.from({ length: 1_210 }, (_, index) => `index-${index}`);
+    expect(listSample(many, 10)).toMatch(/^index-0, index-1, .*, index-9 and 1,200 more$/);
+    expect(listSample([], 3)).toBe('');
+  });
+
+  it('compiles a reusable matcher for many values', () => {
     const regex = textMatcher(' ^app-');
     expect(['app-logs', 'my-app-logs', 'APP-metrics'].filter(regex)).toEqual(['app-logs', 'APP-metrics']);
     const invalid = textMatcher('a[b');

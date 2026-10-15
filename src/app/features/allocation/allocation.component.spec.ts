@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, ParamMap, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
@@ -7,6 +8,7 @@ import { ClusterApiError } from '../../core/api-envelope';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { RefreshService } from '../../core/refresh.service';
 import { AllocationComponent } from './allocation.component';
 import { RawAllocationExplain } from './allocation.models';
 
@@ -29,8 +31,10 @@ describe('AllocationComponent', () => {
   const post = vi.fn();
   const alerts = { error: vi.fn(), success: vi.fn(), info: vi.fn(), warn: vi.fn() };
   const dialogs = { confirm: vi.fn(), showJson: vi.fn() };
+  const host = signal<string | undefined>('http://localhost:9200');
 
   beforeEach(() => {
+    host.set('http://localhost:9200');
     post.mockReset();
     alerts.error.mockReset();
     dialogs.showJson.mockReset();
@@ -40,7 +44,7 @@ describe('AllocationComponent', () => {
         { provide: ClusterApiService, useValue: { post } },
         { provide: AlertService, useValue: alerts },
         { provide: DialogService, useValue: dialogs },
-        { provide: ConnectionService, useValue: { connected: () => true, hostQuery: () => ({}) } },
+        { provide: ConnectionService, useValue: { host, connected: () => host() !== undefined, hostQuery: () => ({}) } },
       ],
     });
   });
@@ -154,6 +158,51 @@ describe('AllocationComponent', () => {
 
     params.next(convertToParamMap({ index: 'overflow-test', shard: '0', primary: 'true' }));
     await vi.waitFor(() => expect(explains()).toBe(2));
+  });
+
+  it('reloads the shard copies on every tick but the index list at most once a minute', async () => {
+    respond(async () => UNASSIGNED);
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const target = component();
+    await vi.waitFor(() => expect(target.state().kind).toBe('done'));
+    const calls = (path: string) => post.mock.calls.filter(([called]) => called === path).length;
+    await vi.waitFor(() => expect(calls('cat')).toBe(1));
+    expect(calls('commons/indices')).toBe(1);
+
+    now += 15_000;
+    TestBed.inject(RefreshService).refresh();
+    TestBed.tick();
+    await vi.waitFor(() => expect(calls('cat')).toBe(2));
+    expect(calls('commons/indices')).toBe(1);
+
+    now += 60_000;
+    TestBed.inject(RefreshService).refresh();
+    TestBed.tick();
+    await vi.waitFor(() => expect(calls('cat')).toBe(3));
+    expect(calls('commons/indices')).toBe(2);
+
+    // An explicit reload always lists the indices again.
+    await target.loadClusterData();
+    expect(calls('commons/indices')).toBe(3);
+    vi.restoreAllMocks();
+  });
+
+  it('drops the previous cluster when only the host changes', async () => {
+    respond(async () => UNASSIGNED);
+    const target = component();
+    await vi.waitFor(() => expect(target.state().kind).toBe('done'));
+    await vi.waitFor(() => expect(target.copies()).toBeDefined());
+    const explains = () => post.mock.calls.filter(([path]) => path === 'allocation/explain').length;
+
+    host.set('http://localhost:9201');
+    TestBed.tick();
+
+    expect(target.copies()).toBeUndefined();
+    expect(target.indices()).toBeUndefined();
+    expect(target.state().kind).toBe('loading');
+    await vi.waitFor(() => expect(target.state().kind).toBe('done'));
+    expect(explains()).toBe(2);
   });
 
   it('waits for the first refresh tick before explaining', () => {

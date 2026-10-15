@@ -491,11 +491,11 @@ describe('liveActivityTiles', () => {
       buildHistory([{ time: 1_000, nodes: [counters('a', 1_000, { heapPercent: 30 }), counters('b', 1_000, { heapPercent: 50 })] }]),
     );
     expect(tiles.map((tile) => [tile.label, tile.value, tile.unit, tile.meta])).toEqual([
-      ['Indexing', '–', '', 'Collecting samples…'],
-      ['Search', '–', '', 'Collecting samples…'],
+      ['Indexing rate', '–', '', 'Collecting samples…'],
+      ['Search rate', '–', '', 'Collecting samples…'],
       ['Search latency', '–', '', 'Collecting samples…'],
       ['Avg. heap', '40', '%', 'max 50% on b'],
-      ['Avg. CPU', '20', '%', 'max 20% on a'],
+      ['Avg. OS CPU', '20', '%', 'max 20% on a'],
     ]);
     expect(tiles[3]?.domainMax).toBe(100);
     const paused = liveActivityTiles(buildHistory([{ time: 1_000, nodes: [counters('a', 1_000)] }]), 'Refresh to measure rates');
@@ -544,7 +544,7 @@ describe('liveActivityTiles', () => {
     // 1,000ms over 100 queries, not the average of 1ms and 91ms.
     expect(latency).toMatchObject({ value: '10', unit: 'ms', meta: 'Query phase, per shard' });
     // Heap colour follows the window's low (40%), the meta the busiest node's range.
-    expect(heap).toMatchObject({ value: '68', unit: '%', meta: 'max 95%, low 40% · a', tone: 'accent' });
+    expect(heap).toMatchObject({ value: '68', unit: '%', meta: 'max 95% on a (low 40%)', tone: 'accent' });
     expect(indexing?.points.map((point) => point.value)).toEqual([null, 150]);
   });
 

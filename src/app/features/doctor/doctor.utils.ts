@@ -741,10 +741,6 @@ const CATEGORY_ORDER: Readonly<Record<DoctorCategory, number>> = Object.fromEntr
   CATEGORIES.map((category, index) => [category.key, index]),
 ) as Record<DoctorCategory, number>;
 
-export function severityRank(severity: DoctorSeverity): number {
-  return SEVERITY_ORDER[severity];
-}
-
 /** Severity first, then category, then title. */
 export function sortFindings(findings: readonly DoctorFinding[]): DoctorFinding[] {
   return [...findings].sort(

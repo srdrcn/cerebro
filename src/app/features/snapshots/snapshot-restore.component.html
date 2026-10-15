@@ -56,6 +56,15 @@
             <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
           </p>
         }
+        @if (systemIndices().length > 0) {
+          <p class="field-hint">
+            <i class="bi bi-info-circle" aria-hidden="true"></i>
+            System {{ systemIndices().length | plural: 'index' : 'indices' }}
+            (<span class="mono">{{ systemIndices().join(', ') }}</span>)
+            {{ systemIndices().length | plural: 'is' : 'are' }} restored only with
+            {{ systemIndices().length | plural: 'its' : 'their' }} feature state, as part of the global state.
+          </p>
+        }
         @if (conflicts().length > 0) {
           <div class="callout callout-warning restore-callout" role="status">
             <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>

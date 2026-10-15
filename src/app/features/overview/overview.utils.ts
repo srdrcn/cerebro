@@ -614,17 +614,23 @@ export interface LiveTile {
 
 interface LiveTileDefinition {
   readonly key: MetricKey;
-  readonly label: string;
+  /** Overrides `METRICS[key].label`; the gauges show the cluster average. */
+  readonly label?: string;
   readonly icon: string;
   readonly unit?: string;
 }
 
+/**
+ * Rates and latency keep the names of `METRICS`, which the node charts use
+ * too. The CPU is the machine's (os.cpu.percent), named "OS CPU" as on the
+ * nodes page, where "Process CPU" is the Elasticsearch process.
+ */
 const LIVE_TILES: readonly LiveTileDefinition[] = [
-  { key: 'indexingRate', label: 'Indexing', icon: 'bi-box-arrow-in-down', unit: 'docs/s' },
-  { key: 'searchRate', label: 'Search', icon: 'bi-search', unit: 'shard queries/s' },
-  { key: 'searchLatency', label: 'Search latency', icon: 'bi-stopwatch' },
+  { key: 'indexingRate', icon: 'bi-box-arrow-in-down', unit: 'docs/s' },
+  { key: 'searchRate', icon: 'bi-search', unit: 'shard queries/s' },
+  { key: 'searchLatency', icon: 'bi-stopwatch' },
   { key: 'heap', label: 'Avg. heap', icon: 'bi-memory' },
-  { key: 'cpu', label: 'Avg. CPU', icon: 'bi-cpu' },
+  { key: 'cpu', label: 'Avg. OS CPU', icon: 'bi-cpu' },
 ];
 
 /**
@@ -668,11 +674,10 @@ function liveMeta(key: MetricKey, history: MetricsHistory, pending: string): str
       if (!busiest || nodeCount < 2) {
         return nodeCount === 1 ? '1 node' : '–';
       }
-      // Heap: the low of that node tells garbage (it falls back after a
-      // collection) from retained heap; the node name comes last as it may be cut.
-      return key === 'heap' && busiest.low < busiest.value
-        ? `max ${formatMetric(key, busiest.value)}, low ${formatMetric(key, busiest.low)} · ${busiest.name}`
-        : `max ${formatMetric(key, busiest.value)} on ${busiest.name}`;
+      // Heap: the low of that node in the window tells garbage (it falls back
+      // after a collection) from retained heap.
+      const max = `max ${formatMetric(key, busiest.value)} on ${busiest.name}`;
+      return key === 'heap' && busiest.low < busiest.value ? `${max} (low ${formatMetric(key, busiest.low)})` : max;
     }
   }
 }
@@ -689,7 +694,7 @@ export function liveActivityTiles(history: MetricsHistory, pending = 'Collecting
     const definition = METRICS[tile.key];
     return {
       key: tile.key,
-      label: tile.label,
+      label: tile.label ?? definition.label,
       icon: tile.icon,
       value: parts.value,
       unit: parts.value === '–' ? '' : (tile.unit ?? parts.unit),

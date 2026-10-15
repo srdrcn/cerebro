@@ -47,7 +47,7 @@ describe('SnapshotRestoreComponent', () => {
     });
   });
 
-  /** Routes `cat` (index statuses, aliases) and `snapshots/restore` calls. */
+  /** Routes index statuses, `cat` aliases and `snapshots/restore` calls. */
   function api(
     options: {
       cat?: unknown;
@@ -58,11 +58,14 @@ describe('SnapshotRestoreComponent', () => {
     } = {},
   ): void {
     post.mockImplementation(async (path: string, body?: { api?: string }) => {
-      if (path === 'cat') {
+      if (path === 'commons/indices/lookup') {
         if (options.catError) {
           throw options.catError;
         }
-        return (body?.api === 'aliases' ? options.aliases : options.cat) ?? [];
+        return options.cat ?? [];
+      }
+      if (path === 'cat' && body?.api === 'aliases') {
+        return options.aliases ?? [];
       }
       if (options.restoreError) {
         throw options.restoreError;
@@ -77,10 +80,13 @@ describe('SnapshotRestoreComponent', () => {
     return event;
   }
 
-  async function render(clusterIndices: string[] = []): Promise<ComponentFixture<SnapshotRestoreComponent>> {
+  async function render(
+    clusterIndices: string[] = [],
+    record: SnapshotRecord = snapshot,
+  ): Promise<ComponentFixture<SnapshotRestoreComponent>> {
     const fixture = TestBed.createComponent(SnapshotRestoreComponent);
     fixture.componentRef.setInput('repository', 'backups');
-    fixture.componentRef.setInput('snapshot', snapshot);
+    fixture.componentRef.setInput('snapshot', record);
     fixture.componentRef.setInput('clusterIndices', clusterIndices);
     await fixture.whenStable();
     // Let the index status request settle.
@@ -112,12 +118,38 @@ describe('SnapshotRestoreComponent', () => {
     expect(alerts.success).toHaveBeenCalledOnce();
   });
 
+  it('leaves system indices out: they come back only with their feature state', async () => {
+    api({ cat: [{ index: '.tasks', status: 'open' }, { index: '.ds-events-000001', status: 'open' }] });
+    const withSystem: SnapshotRecord = {
+      ...snapshot,
+      indices: ['.tasks', 'orders', 'logs-a', '.ds-events-000001'],
+      feature_states: [{ feature_name: 'tasks', indices: ['.tasks'] }],
+    };
+    const fixture = await render([], withSystem);
+    const component = fixture.componentInstance;
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(component.indexNames()).toEqual(['.ds-events-000001', 'logs-a', 'orders']);
+    expect(component.selectedNames()).not.toContain('.tasks');
+    // A hidden index that exists is flagged from the statuses.
+    expect(component.conflicts().map((target) => target.name)).toEqual(['.ds-events-000001']);
+    expect(element.querySelector('.restore-section')?.textContent).toContain('3 indices in this snapshot');
+    expect(element.textContent).toContain('System index (.tasks) is restored only with its feature state');
+
+    component.selected.set(new Set(['logs-a', 'orders']));
+    expect(component.submitLabel()).toBe('Restore 2 indices');
+    await component.restore();
+
+    expect(post).toHaveBeenCalledWith('snapshots/restore', expect.objectContaining({ indices: ['logs-a', 'orders'] }));
+    expect(alerts.success).toHaveBeenCalledWith('Restore of 2 indices from nightly started', expect.anything());
+  });
+
   it('restores a renamed subset and flags conflicts with existing indices', async () => {
     api({ cat: [{ index: 'logs-a', status: 'open' }, { index: 'restored-orders', status: 'open' }] });
     const fixture = await render(['logs-a', 'restored-orders']);
     const component = fixture.componentInstance;
 
-    expect(post).toHaveBeenCalledWith('cat', { api: 'indices' });
+    expect(post).toHaveBeenCalledWith('commons/indices/lookup', { expression: '*,.*' });
     expect(component.conflicts().map((option) => option.name)).toEqual(['logs-a']);
 
     component.usePrefix();

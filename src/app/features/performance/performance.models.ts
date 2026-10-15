@@ -214,8 +214,6 @@ export interface PendingTasksResponse {
   readonly tasks?: readonly RawPendingTask[];
 }
 
-export type PendingPriority = 'IMMEDIATE' | 'URGENT' | 'HIGH' | 'NORMAL' | 'LOW' | 'LANGUID';
-
 export interface PendingTask {
   /** Position in Elasticsearch's answer: the order the master runs the queue in (8.x). */
   readonly position: number;

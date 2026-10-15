@@ -12,12 +12,12 @@ import {
   flattenTaskTree,
   isInternalAction,
   liveRunningMillis,
-  matchesTaskQuery,
   normalizeTasks,
   shouldLookUpNodes,
   sortTaskTree,
   summarizeTasks,
   taskProgress,
+  taskQueryMatcher,
 } from './tasks.utils';
 
 function raw(overrides: Partial<RawTask> = {}): RawTask {
@@ -199,12 +199,14 @@ describe('task tree', () => {
 
   it('matches action, label, description, id and node name', () => {
     const [task] = list;
-    expect(task && matchesTaskQuery(task, 'Reindex')).toBe(true);
-    expect(task && matchesTaskQuery(task, 'write/reindex')).toBe(true);
-    expect(task && matchesTaskQuery(task, '[a]')).toBe(true);
-    expect(task && matchesTaskQuery(task, 'n1:1')).toBe(true);
-    expect(task && matchesTaskQuery(task, 'es-node-1')).toBe(true);
-    expect(task && matchesTaskQuery(task, 'snapshot')).toBe(false);
+    const matches = (query: string) => task !== undefined && taskQueryMatcher(query)(task);
+    expect(matches('Reindex')).toBe(true);
+    expect(matches('write/reindex')).toBe(true);
+    expect(matches('[a]')).toBe(true);
+    expect(matches('n1:1')).toBe(true);
+    expect(matches('es-node-1')).toBe(true);
+    expect(matches('snapshot')).toBe(false);
+    expect(matches('  ')).toBe(true);
   });
 
   it('sorts roots by the chosen column and children by start time', () => {

@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, UrlTree, convertToParamMap } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,13 +14,14 @@ describe('ConnectComponent', () => {
   const connect = vi.fn();
   const navigate = vi.fn(async (..._args: unknown[]) => true);
   const navigateByUrl = vi.fn(async (..._args: unknown[]) => true);
+  const alertError = vi.fn();
 
   function component(params: Record<string, string>): ConnectComponent {
     TestBed.configureTestingModule({
       providers: [
         { provide: ConnectApiService, useValue: { testConnection, getHosts: async () => [] } },
         { provide: ConnectionService, useValue: { connect, host: () => undefined } },
-        { provide: AlertService, useValue: { error: vi.fn() } },
+        { provide: AlertService, useValue: { error: alertError } },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(params) } } },
       ],
     });
@@ -45,6 +47,7 @@ describe('ConnectComponent', () => {
     connect.mockReset();
     navigate.mockClear();
     navigateByUrl.mockClear();
+    alertError.mockClear();
   });
 
   it('goes back to the page that asked for credentials, with the connected host', async () => {
@@ -72,5 +75,20 @@ describe('ConnectComponent', () => {
 
     expect(navigateByUrl).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenLastCalledWith(['/overview'], { queryParams: { host: 'http://localhost:9200' } });
+  });
+
+  it('reports an unreachable cluster once, in the callout beside the form', async () => {
+    testConnection.mockRejectedValue(
+      new HttpErrorResponse({ status: 500, error: { error: 'Connection refused: localhost/127.0.0.1:9299' } }),
+    );
+    const target = component({});
+    await target.connectTo('http://localhost:9299');
+
+    expect(target.feedback()).toBe('Could not reach http://localhost:9299. Connection refused: localhost/127.0.0.1:9299');
+    expect(alertError).not.toHaveBeenCalled();
+
+    testConnection.mockRejectedValue(new HttpErrorResponse({ status: 500, error: '<html>Execution exception</html>' }));
+    await target.connectTo('http://localhost:9299');
+    expect(target.feedback()).toBe('Could not reach http://localhost:9299.');
   });
 });

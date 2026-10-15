@@ -85,6 +85,18 @@ export function snapshotIndices(snapshot: SnapshotRecord): readonly string[] {
   return Array.isArray(snapshot.indices) ? snapshot.indices : [];
 }
 
+/**
+ * System indices of the snapshot (`feature_states[*].indices`). Elasticsearch
+ * restores them only as part of their feature state, never by name.
+ */
+export function snapshotSystemIndices(snapshot: SnapshotRecord): readonly string[] {
+  const states = Array.isArray(snapshot.feature_states) ? snapshot.feature_states : [];
+  const names = states.flatMap((state) => (Array.isArray(state?.indices) ? state.indices : []));
+  return [...new Set(names.filter((name): name is string => typeof name === 'string'))].sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
+
 /** Failed shard count, falling back to the failure list. */
 export function failedShards(snapshot: SnapshotRecord): number {
   return finite(snapshot.shards?.failed) ?? (Array.isArray(snapshot.failures) ? snapshot.failures.length : 0);
@@ -101,11 +113,6 @@ export function snapshotMatcher(query: string): (snapshot: SnapshotRecord) => bo
   }
   const matches = textMatcher(query);
   return (snapshot) => matches(snapshot.snapshot) || snapshotIndices(snapshot).some(matches);
-}
-
-/** Matches the snapshot name or any index it contains. */
-export function matchesSnapshot(snapshot: SnapshotRecord, query: string): boolean {
-  return snapshotMatcher(query)(snapshot);
 }
 
 export function filterSnapshots(

@@ -517,10 +517,6 @@ export function historyMatcher(query: string): (entry: RestHistoryEntry) => bool
   return (entry) => matches(`${entry.method} ${entry.path} ${entry.body}`);
 }
 
-export function matchesHistoryEntry(entry: RestHistoryEntry, query: string): boolean {
-  return historyMatcher(query)(entry);
-}
-
 function sameRequest(left: RestHistoryEntry, right: RestHistoryEntry): boolean {
   return left.method === right.method && left.path === right.path && left.body === right.body;
 }

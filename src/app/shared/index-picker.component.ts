@@ -158,7 +158,7 @@ export class IndexPickerComponent {
       if (sequence === this.sequence && this.indices() === undefined) {
         this.loadError.set(readableReason(error));
         this.failed.set(true);
-        this.alerts.error(failureMessage('Could not load indices', error), error);
+        this.alerts.error(failureMessage('Could not load the index list', error), error);
       }
     }
   }

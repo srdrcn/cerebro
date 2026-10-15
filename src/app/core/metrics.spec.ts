@@ -6,6 +6,7 @@ import {
   MetricsSample,
   NodeCounters,
   STALE_HISTORY_MS,
+  answeredLabel,
   appendSample,
   buildHistory,
   busiestNode,
@@ -13,9 +14,8 @@ import {
   formatLatency,
   formatMetric,
   formatRate,
-  formatSpacing,
-  isIntervalMetric,
   latestValue,
+  metricFormatter,
   metricParts,
   metricTone,
   nodeInterval,
@@ -264,17 +264,17 @@ describe('nodeInterval', () => {
 describe('sampleGaps', () => {
   it('breaks the line when samples are much further apart than usual', () => {
     const times = [0, 15_000, 30_000, 45_000, 200_000, 215_000];
-    expect(sampleGaps(times)).toEqual({ gaps: [false, false, false, false, true, false], spacing: 15_000 });
+    expect(sampleGaps(times)).toEqual([false, false, false, false, true, false]);
   });
 
   it('never calls a short pause a gap', () => {
-    expect(sampleGaps([0, 5_000, 10_000, 35_000]).gaps).toEqual([false, false, false, false]);
-    expect(sampleGaps([0, 5_000, 10_000, 41_000]).gaps).toEqual([false, false, false, true]);
+    expect(sampleGaps([0, 5_000, 10_000, 35_000])).toEqual([false, false, false, false]);
+    expect(sampleGaps([0, 5_000, 10_000, 41_000])).toEqual([false, false, false, true]);
   });
 
-  it('has no spacing before two samples', () => {
-    expect(sampleGaps([])).toEqual({ gaps: [], spacing: null });
-    expect(sampleGaps([5])).toEqual({ gaps: [false], spacing: null });
+  it('has no gap before two samples', () => {
+    expect(sampleGaps([])).toEqual([]);
+    expect(sampleGaps([5])).toEqual([false]);
   });
 
   /** Times and intervals of `count` samples at `every` ms after `from`. */
@@ -292,14 +292,13 @@ describe('sampleGaps', () => {
   ])('keeps joining samples after auto refresh switches from %ims to %ims', (before, after) => {
     const first = run(0, before, 60);
     const second = run(first.times.at(-1)!, after, 20);
-    const { gaps, spacing } = sampleGaps([...first.times, ...second.times], [...first.expected, ...second.expected]);
+    const gaps = sampleGaps([...first.times, ...second.times], [...first.expected, ...second.expected]);
     expect(gaps.filter(Boolean)).toEqual([]);
-    expect(spacing).toBe(after);
   });
 
   it('marks a hidden tab or a sleeping laptop as a gap at the interval the samples were taken at', () => {
     // Every 5s, then the catch-up tick of a tab hidden for 40s.
-    expect(sampleGaps([0, 5_000, 10_000, 50_000, 55_000], [5_000, 5_000, 5_000, 5_000, 5_000]).gaps).toEqual([
+    expect(sampleGaps([0, 5_000, 10_000, 50_000, 55_000], [5_000, 5_000, 5_000, 5_000, 5_000])).toEqual([
       false,
       false,
       false,
@@ -307,7 +306,7 @@ describe('sampleGaps', () => {
       false,
     ]);
     // Every 1m: 2.5 minutes is not a gap, 4 minutes is.
-    expect(sampleGaps([0, 60_000, 210_000, 450_000], [60_000, 60_000, 60_000, 60_000]).gaps).toEqual([
+    expect(sampleGaps([0, 60_000, 210_000, 450_000], [60_000, 60_000, 60_000, 60_000])).toEqual([
       false,
       false,
       false,
@@ -316,16 +315,16 @@ describe('sampleGaps', () => {
   });
 
   it('applies the 30s rule to samples taken while paused', () => {
-    expect(sampleGaps([0, 20_000, 60_000], [0, 0, 0]).gaps).toEqual([false, false, true]);
+    expect(sampleGaps([0, 20_000, 60_000], [0, 0, 0])).toEqual([false, false, true]);
     // Paused after sampling every minute: the sample before the pause still counts.
-    expect(sampleGaps([0, 60_000, 150_000], [60_000, 60_000, 0]).gaps).toEqual([false, false, false]);
+    expect(sampleGaps([0, 60_000, 150_000], [60_000, 60_000, 0])).toEqual([false, false, false]);
   });
 
   it('falls back to the recent spacing when the samples do not say their interval', () => {
     // Without `expected`, a switch to 1m costs a few intervals, not half the buffer.
     const first = run(0, 5_000, 60).times;
     const second = run(first.at(-1)!, 60_000, 6).times;
-    const { gaps } = sampleGaps([...first, ...second]);
+    const gaps = sampleGaps([...first, ...second]);
     expect(gaps.slice(60)).toEqual([true, true, true, false, false, false]);
   });
 });
@@ -506,24 +505,16 @@ describe('buildHistory', () => {
     // The write pool rejected nothing (2 → 2), indexing pressure 40.
     expect(values(history.cluster.writeRejected)).toEqual([null, 0]);
     expect(values(history.cluster.pressureRejected)).toEqual([null, 40]);
-    expect(isIntervalMetric('pressureRejected')).toBe(true);
     // Not reported (before 7.9, or not requested): no value at all.
     expect(values(buildHistory([sample(1, [counters({ timestamp: 1 })]), sample(2, [counters({ timestamp: 2 })])]).cluster.pressureRejected)).toEqual([null, null]);
   });
 
   it('is empty and not ready before two samples', () => {
-    expect(buildHistory([])).toMatchObject({ times: [], ready: false, spacing: null, span: 0, nodes: [], answered: null });
+    expect(buildHistory([])).toMatchObject({ times: [], ready: false, span: 0, nodes: [], answered: null });
     const one = buildHistory([parseNodeMetrics(SAMPLE_1, T1)]);
     expect(one.ready).toBe(false);
     expect(values(one.cluster.heap)).toEqual([40]);
     expect(values(one.cluster.indexingRate)).toEqual([null]);
-  });
-
-  it('marks the interval metrics', () => {
-    expect(isIntervalMetric('indexingRate')).toBe(true);
-    expect(isIntervalMetric('writeRejected')).toBe(true);
-    expect(isIntervalMetric('heap')).toBe(false);
-    expect(isIntervalMetric('searchQueue')).toBe(false);
   });
 });
 
@@ -635,14 +626,6 @@ describe('formatting', () => {
     expect(formatMetric('heap', null)).toBe('–');
   });
 
-  it('formats the sampling interval', () => {
-    expect(formatSpacing(15_020)).toBe('15s');
-    expect(formatSpacing(60_000)).toBe('1m');
-    expect(formatSpacing(90_000)).toBe('1.5m');
-    expect(formatSpacing(null)).toBe('–');
-    expect(formatSpacing(0)).toBe('–');
-  });
-
   it('describes every metric', () => {
     for (const definition of Object.values(METRICS)) {
       expect(definition.label).toMatch(/^[A-Z]/);
@@ -652,5 +635,21 @@ describe('formatting', () => {
     }
     expect(METRICS.getRate.minDomain).toBe(1);
     expect(METRICS.searchRate.unit).toBe('shard queries/s');
+  });
+});
+
+describe('shared presentation helpers', () => {
+  it('says how many nodes answered only when some did not', () => {
+    expect(answeredLabel({ answered: { answered: 2, total: 3 } })).toBe('2 of 3 nodes answered');
+    expect(answeredLabel({ answered: { answered: 0, total: 1 } })).toBe('0 of 1 node answered');
+    expect(answeredLabel({ answered: { answered: 3, total: 3 } })).toBeUndefined();
+    expect(answeredLabel({ answered: null })).toBeUndefined();
+  });
+
+  it('keeps one formatter per metric', () => {
+    const heap = metricFormatter('heap');
+    expect(metricFormatter('heap')).toBe(heap);
+    expect(heap(59.4)).toBe('59%');
+    expect(metricFormatter('indexingLatency')(3.1)).toBe(formatMetric('indexingLatency', 3.1));
   });
 });

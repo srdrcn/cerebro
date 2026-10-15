@@ -47,8 +47,11 @@ export type CodeEditorMode = 'json' | 'text';
   },
   template: `<div #host class="code-editor__surface"></div>`,
   styles: `
+    /* Ace layers its gutter and scrollbars with z-indexes: keep them inside
+       the editor so sticky bars and dialogs stay on top. */
     :host {
       display: block;
+      isolation: isolate;
     }
 
     :host(.is-fill) {

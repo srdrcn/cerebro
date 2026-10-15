@@ -180,8 +180,4 @@ export class ThreadPoolsComponent {
     const level = queueLevel(row);
     return level === 'danger' ? 'text-danger' : level === 'warn' ? 'text-warning' : '';
   }
-
-  rowLabel(row: ThreadPoolRow): string {
-    return `${row.pool} on ${row.node}`;
-  }
 }

@@ -83,11 +83,6 @@
   flex-wrap: wrap;
 }
 
-/* Ace layers its gutter and scrollbars with z-indexes; keep them local. */
-.editor-card cerebro-code-editor {
-  isolation: isolate;
-}
-
 .name-field {
   max-width: 520px;
 }

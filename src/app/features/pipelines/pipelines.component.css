@@ -2,11 +2,6 @@
   display: block;
 }
 
-.pipelines-layout {
-  grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
-  align-items: start;
-}
-
 /* ---- Pipeline list ---- */
 
 .pipeline-item {
@@ -103,10 +98,6 @@
 
 .editor-card__actions {
   flex-wrap: wrap;
-}
-
-cerebro-code-editor {
-  isolation: isolate;
 }
 
 .panel-head {

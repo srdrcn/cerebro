@@ -1,7 +1,7 @@
 Cerebro
 ------------
 [![Docker Pulls](https://img.shields.io/docker/pulls/chosenwar/cerebro.svg)](https://hub.docker.com/r/chosenwar/cerebro)
-[![build and security](https://github.com/lmenezes/cerebro/actions/workflows/scala.yml/badge.svg?branch=master)](https://github.com/lmenezes/cerebro/actions/workflows/scala.yml)
+[![build and security](https://github.com/srdrcn/cerebro/actions/workflows/scala.yml/badge.svg?branch=main)](https://github.com/srdrcn/cerebro/actions/workflows/scala.yml)
 
 cerebro is an open source (MIT License) Elasticsearch administration tool built with Scala, Play Framework and Angular.
 
@@ -12,7 +12,7 @@ cerebro is an open source (MIT License) Elasticsearch administration tool built 
 - Nodes view with roles, versions, heap, disk, CPU and load usage, and live per-node activity charts with thread pool queues and rejections.
 - Performance: readable hot threads, live thread pools, the master's pending tasks and a slow log threshold editor with presets.
 - REST console with JSON editor, request history, saved requests (with export and import) and "copy as cURL".
-- Index details (settings, mappings, statistics, aliases, shards), index creation, aliases, cluster and index settings editors.
+- Index details (settings, mappings, statistics, aliases, shards, lifecycle), index creation, aliases, cluster and index settings editors.
 - Index operations wizard: shrink, split, clone, roll over and reindex with live preflight checks, a review of the exact requests and progress tracking.
 - Composable index templates, component templates and legacy templates.
 - Data streams, index lifecycle (ILM) policies and ingest pipelines with simulation.

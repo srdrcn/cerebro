@@ -28,12 +28,13 @@ class CommonsControllerSpec extends MockedServices {
                                                         ${step(play.api.Play.stop(application))}
       """
 
+  // getIndices asks _cat/indices for the index column only.
   def indices = {
     val expectedResponse = Json.parse(
       """
         |[
-        |  {"health":"green","status":"open","index":"index1","pri":"10","rep":"0","docs.count":"4330","docs.deleted":"10","store.size":"4.1mb","pri.store.size":"4.1mb"},
-        |  {"health":"green","status":"closed","index":"index2","pri":"10","rep":"0","docs.count":"1497203","docs.deleted":"5048","store.size":"860.9mb","pri.store.size":"860.9mb"}
+        |  {"index":"index1"},
+        |  {"index":"index2"}
         |]
       """.stripMargin
     )

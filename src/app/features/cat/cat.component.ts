@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -56,7 +57,8 @@ export interface CatResult {
   readonly rows: readonly CatRow[];
   readonly columns: readonly string[];
   readonly numeric: ReadonlySet<string>;
-  readonly loadedAt: Date;
+  /** Epoch milliseconds of the load. */
+  readonly loadedAt: number;
 }
 
 interface CatFailure {
@@ -66,7 +68,7 @@ interface CatFailure {
 
 @Component({
   selector: 'cerebro-cat',
-  imports: [EmptyStateComponent, FormsModule, NumberPipe, PagerComponent, PluralPipe, RouterLink, SearchInputComponent],
+  imports: [DatePipe, EmptyStateComponent, FormsModule, NumberPipe, PagerComponent, PluralPipe, RouterLink, SearchInputComponent],
   templateUrl: './cat.component.html',
   styleUrl: './cat.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -198,7 +200,7 @@ export class CatComponent {
         rows,
         columns,
         numeric: numericColumns(rows, columns),
-        loadedAt: new Date(),
+        loadedAt: Date.now(),
       });
       this.failure.set(null);
       const sortColumn = this.sort.field();

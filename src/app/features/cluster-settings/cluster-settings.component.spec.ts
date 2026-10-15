@@ -3,7 +3,9 @@ import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
+import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { RefreshService } from '../../core/refresh.service';
 import { ClusterSettingsComponent } from './cluster-settings.component';
 import { buildClusterSettingRows } from './cluster-settings.models';
 
@@ -52,5 +54,23 @@ describe('ClusterSettingsComponent', () => {
         items: ['cluster.routing.allocation.enable'],
       }),
     );
+  });
+
+  it('loads the settings on open and on Reload, not on refresh ticks', async () => {
+    const post = vi.fn(async () => ({ persistent: {}, transient: {}, defaults: {} }));
+    TestBed.overrideProvider(ClusterApiService, { useValue: { post } });
+    TestBed.inject(ConnectionService).connect('http://localhost:9200');
+    const target = TestBed.runInInjectionContext(() => new ClusterSettingsComponent());
+    TestBed.tick();
+    await vi.waitFor(() => expect(target.rows()).toBeDefined());
+    expect(post).toHaveBeenCalledTimes(1);
+
+    TestBed.inject(RefreshService).refresh();
+    TestBed.tick();
+    expect(post).toHaveBeenCalledTimes(1);
+
+    await target.reload();
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(target.reloading()).toBe(false);
   });
 });

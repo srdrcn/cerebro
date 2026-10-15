@@ -202,7 +202,6 @@ export class PipelinesComponent implements PendingChangesAware {
   readonly results = signal<readonly SimulationResult[] | undefined>(undefined);
   readonly resultInputs = signal<readonly SimulateDoc[]>([]);
   readonly resultBody = signal<string | null>(null);
-  readonly resultVerbose = signal(false);
   readonly openSteps = signal<ReadonlySet<string>>(new Set());
 
   readonly docsState = computed(() => parseSampleDocs(this.sampleDocs()));
@@ -655,7 +654,6 @@ export class PipelinesComponent implements PendingChangesAware {
       this.announcement.set(simulationAnnouncement(results));
       this.resultInputs.set(docsState.docs);
       this.resultBody.set(body);
-      this.resultVerbose.set(verbose);
       this.openSteps.set(new Set());
       queueMicrotask(() => this.resultsHeading()?.nativeElement.focus({ preventScroll: true }));
     } catch (error: unknown) {

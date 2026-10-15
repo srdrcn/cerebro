@@ -119,11 +119,6 @@
   flex-wrap: wrap;
 }
 
-/* Ace layers its gutter and scrollbars with z-indexes; keep them local. */
-.it-editor cerebro-code-editor {
-  isolation: isolate;
-}
-
 /* Facts about the edited template */
 .it-facts {
   display: grid;

@@ -13,7 +13,7 @@ import { ActivatedRoute, PRIMARY_OUTLET, Router, UrlTree } from '@angular/router
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiError } from '../../core/api-envelope';
 import { ConnectionService } from '../../core/connection.service';
-import { elasticsearchReason } from '../../core/errors';
+import { elasticsearchReason, readableReason } from '../../core/errors';
 import { RecentHostsService } from '../../core/recent-hosts.service';
 import { ThemeService } from '../../core/theme.service';
 import { LogoComponent } from '../../shared/logo.component';
@@ -144,8 +144,7 @@ export class ConnectComponent implements OnInit {
           this.feedback.set(this.describeFailure(target, response.status, response.body));
       }
     } catch (error: unknown) {
-      this.feedback.set(`Could not reach ${target}.`);
-      this.alerts.error(`Could not connect to ${target}`, this.errorDetails(error));
+      this.feedback.set(this.describeUnreachable(target, error));
     } finally {
       this.connecting.set(undefined);
     }
@@ -181,8 +180,7 @@ export class ConnectComponent implements OnInit {
           this.feedback.set(this.describeFailure(target, response.status, response.body));
       }
     } catch (error: unknown) {
-      this.feedback.set(`Could not reach ${target}.`);
-      this.alerts.error(`Could not connect to ${target}`, this.errorDetails(error));
+      this.feedback.set(this.describeUnreachable(target, error));
     } finally {
       this.connecting.set(undefined);
     }
@@ -235,6 +233,12 @@ export class ConnectComponent implements OnInit {
     delete params['returnUrl'];
     tree.queryParams = params;
     return tree;
+  }
+
+  /** The callout beside the form is the only report: no toast repeats it. */
+  private describeUnreachable(host: string, error: unknown): string {
+    const reason = readableReason(this.errorDetails(error));
+    return reason ? `Could not reach ${host}. ${reason}` : `Could not reach ${host}.`;
   }
 
   private describeFailure(host: string, status: number, body: unknown): string {

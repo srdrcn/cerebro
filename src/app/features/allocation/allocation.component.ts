@@ -60,6 +60,8 @@ import {
 const EXPAND_ALL_UP_TO = 6;
 /** Unassigned indices listed in the side panel before "and N more". */
 const UNASSIGNED_LIMIT = 25;
+/** Refresh ticks reload the index list at most this often (the index picker's policy). */
+const INDEX_LIST_MAX_AGE = 60_000;
 
 type ExplainState =
   | { readonly kind: 'idle' }
@@ -225,6 +227,10 @@ export class AllocationComponent {
   private explainSequence = 0;
   private liveSequence = 0;
   private firstTick = true;
+  /** When the index list was last loaded. */
+  private indicesAt = 0;
+  /** Cluster the page shows; the route is reused when only `?host=` changes. */
+  private loadedHost: string | undefined;
 
   constructor() {
     // Deep links (?index=&shard=&primary=&node=) and back/forward navigation.
@@ -256,13 +262,15 @@ export class AllocationComponent {
 
     effect(() => {
       this.refreshService.tick();
-      if (!this.connection.connected()) {
+      const host = this.connection.host();
+      if (host === undefined) {
         return;
       }
       untracked(() => {
+        const switched = this.forgetOtherCluster(host);
         this.now.set(Date.now());
-        void this.loadClusterData();
-        if (this.firstTick) {
+        void this.loadClusterData(false);
+        if (this.firstTick || switched) {
           this.firstTick = false;
           void this.explain(this.request());
         } else {
@@ -272,12 +280,19 @@ export class AllocationComponent {
     });
   }
 
-  /** Index names and shard copies (form options and the unassigned list). */
-  async loadClusterData(): Promise<void> {
+  /**
+   * Index names and shard copies (form options and the unassigned list). The
+   * shard copies are live; the index list only changes when someone edits it
+   * and listing indices makes every node compute index statistics, so refresh
+   * ticks (`listIndices` false) reload it once a minute at most.
+   */
+  async loadClusterData(listIndices = true): Promise<void> {
     const sequence = ++this.liveSequence;
     this.loadingCopies.set(true);
+    const indicesDue =
+      listIndices || this.indices() === undefined || Date.now() - this.indicesAt >= INDEX_LIST_MAX_AGE;
     const [indices, shards] = await Promise.allSettled([
-      this.api.post<readonly string[]>('commons/indices'),
+      indicesDue ? this.api.post<readonly string[]>('commons/indices') : Promise.resolve(null),
       this.api.post<unknown>('cat', { api: 'shards' }),
     ]);
     if (sequence !== this.liveSequence) {
@@ -285,7 +300,10 @@ export class AllocationComponent {
     }
     this.loadingCopies.set(false);
     if (indices.status === 'fulfilled') {
-      this.indices.set(Array.isArray(indices.value) ? indices.value : []);
+      if (indices.value !== null) {
+        this.indices.set(Array.isArray(indices.value) ? indices.value : []);
+        this.indicesAt = Date.now();
+      }
     } else if (this.indices() === undefined) {
       this.indices.set([]);
       this.alerts.error(failureMessage('Could not load the index list', indices.reason), indices.reason);
@@ -538,6 +556,38 @@ export class AllocationComponent {
     return nodes.length <= EXPAND_ALL_UP_TO
       ? new Set(nodes.filter((node) => node.blockers.length > 0).map((node) => node.id))
       : new Set();
+  }
+
+  /**
+   * Drops everything loaded from the previous cluster after a host change, so
+   * its explanation is never shown as stale data of the new one. Returns
+   * whether the host changed.
+   */
+  private forgetOtherCluster(host: string): boolean {
+    const switched = this.loadedHost !== undefined && this.loadedHost !== host;
+    this.loadedHost = host;
+    if (switched) {
+      this.liveSequence++;
+      this.explainSequence++;
+      this.indices.set(undefined);
+      this.indicesAt = 0;
+      this.copies.set(undefined);
+      this.copiesAt.set(null);
+      this.copiesFailed.set(false);
+      this.copiesError.set(undefined);
+      this.copiesStale.set(undefined);
+      this.loadingCopies.set(false);
+      this.explaining.set(false);
+      this.explainStale.set(undefined);
+      this.state.set({ kind: 'idle' });
+      this.expanded.set(new Set());
+      this.nodeNames.set(new Map());
+      this.nodeNamesLoaded = false;
+      if (this.request()?.node) {
+        void this.loadNodeNames();
+      }
+    }
+    return switched;
   }
 
   /** Node names for the node chip; cosmetic, so a failure keeps the value of the link. */

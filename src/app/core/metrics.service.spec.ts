@@ -93,7 +93,6 @@ describe('MetricsService', () => {
     await nextTick();
 
     expect(post).not.toHaveBeenCalled();
-    expect(metrics.active()).toBe(false);
     expect(metrics.samples()).toEqual([]);
   });
 
@@ -114,7 +113,6 @@ describe('MetricsService', () => {
     // 1,500 documents over the node's 15 seconds.
     expect(metrics.cluster().indexingRate.map((point) => point.value)).toEqual([null, 100]);
     expect(metrics.nodes().map((node) => node.name)).toEqual(['es-node-1']);
-    expect(metrics.spacing()).toBe(15_000);
     expect(metrics.latest().get('id-es-node-1')?.indexTotal).toBe(2_500);
     expect(metrics.interval()).toBe(15_000);
   });
@@ -136,7 +134,6 @@ describe('MetricsService', () => {
     releaseNodes();
     await nextTick();
     expect(post).toHaveBeenCalledTimes(2);
-    expect(metrics.active()).toBe(false);
     expect(metrics.samples()).toHaveLength(2);
   });
 
@@ -148,10 +145,10 @@ describe('MetricsService', () => {
 
     metrics.attach(destroyRef);
     await settle();
-    expect(metrics.active()).toBe(true);
+    expect(post).toHaveBeenCalledTimes(1);
     callbacks.forEach((callback) => callback());
-    TestBed.tick();
-    expect(metrics.active()).toBe(false);
+    await nextTick();
+    expect(post).toHaveBeenCalledTimes(1);
   });
 
   it('does not resample when a page attaches right after a sample (moving between pages)', async () => {

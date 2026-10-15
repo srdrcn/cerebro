@@ -19,7 +19,7 @@ import { failureMessage, readableReason } from '../../core/errors';
 import { formatBytes, formatTimestamp, pluralize } from '../../core/format';
 import { isRecord } from '../../core/json';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { NumberPipe } from '../../shared/format.pipes';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { HotNode, HotThread, HotThreadsRequest, HotThreadsType, StackFrame, StackGroup } from './performance.models';
 import {
   AUTO_CAPTURE_MAX_NODES,
@@ -68,7 +68,7 @@ const COLLAPSE_SLACK = 2;
 
 @Component({
   selector: 'cerebro-hot-threads',
-  imports: [EmptyStateComponent, FormsModule, NumberPipe],
+  imports: [EmptyStateComponent, FormsModule, NumberPipe, PluralPipe],
   templateUrl: './hot-threads.component.html',
   styleUrl: './hot-threads.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

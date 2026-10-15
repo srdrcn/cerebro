@@ -5,9 +5,21 @@
       <p class="page-subtitle">Dynamic settings apply to the whole cluster immediately, without a restart.</p>
     </div>
     @if (rows()) {
-      <div class="page-header__actions" role="group" aria-label="Explicitly set settings">
-        <span class="badge badge-lg badge-blue tabular">{{ overrides().persistent | num }} persistent</span>
-        <span class="badge badge-lg badge-purple tabular">{{ overrides().transient | num }} transient</span>
+      <div class="page-header__actions">
+        <div class="row" role="group" aria-label="Explicitly set settings">
+          <span class="badge badge-lg badge-blue tabular">{{ overrides().persistent | num }} persistent</span>
+          <span class="badge badge-lg badge-purple tabular">{{ overrides().transient | num }} transient</span>
+        </div>
+        <button
+          type="button"
+          class="btn"
+          [class.is-loading]="reloading()"
+          [disabled]="reloading()"
+          title="Read the settings again (they are not refreshed automatically)"
+          (click)="reload()"
+        >
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Reload
+        </button>
       </div>
     }
   </header>

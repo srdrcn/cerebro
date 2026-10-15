@@ -14,7 +14,7 @@ class AnalysisController @Inject()(val authentication: AuthenticationModule,
                                    client: ElasticClient) extends BaseController {
 
   def getIndices = process { request =>
-    client.getIndices(request.target).map {
+    client.getIndexStatuses(request.target).map {
       case Success(status, indices) => CerebroResponse(status, OpenIndices(indices))
       case Error(status, error) => CerebroResponse(status, error)
     }

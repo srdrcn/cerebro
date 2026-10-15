@@ -75,11 +75,6 @@
   margin-bottom: var(--space-5);
 }
 
-.ilm-layout {
-  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-  align-items: start;
-}
-
 /* ---- Policy list ---- */
 
 .policy-item {
@@ -362,10 +357,6 @@
 }
 
 /* ---- Editor ---- */
-
-.editor-card cerebro-code-editor {
-  isolation: isolate;
-}
 
 .name-field {
   max-width: 520px;

@@ -8,6 +8,8 @@
  * loosely and parsed defensively in `doctor.utils.ts`.
  */
 
+import { HealthTone } from '../../core/health';
+
 /* ------------------------------------------------------------------ */
 /* Raw report                                                          */
 /* ------------------------------------------------------------------ */
@@ -350,7 +352,7 @@ export interface HealthIndicatorView {
   readonly name: string;
   readonly label: string;
   readonly status: string;
-  readonly tone: 'green' | 'yellow' | 'red' | 'gray';
+  readonly tone: HealthTone;
   readonly statusLabel: string;
   readonly symptom: string;
   readonly impacts: readonly HealthImpactView[];
@@ -361,7 +363,7 @@ export type HealthReportView =
   | {
       readonly kind: 'report';
       readonly status: string;
-      readonly tone: 'green' | 'yellow' | 'red' | 'gray';
+      readonly tone: HealthTone;
       readonly indicators: readonly HealthIndicatorView[];
     }
   /** The cluster is older than 8.7. */

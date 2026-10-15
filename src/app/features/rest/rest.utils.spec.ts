@@ -13,12 +13,12 @@ import {
   getAutocompleteOptions,
   getPathSuggestions,
   historyBody,
+  historyMatcher,
   historyTimestamp,
   hostPrefix,
   isNdjsonPath,
   isRawTextPath,
   isTextCatPath,
-  matchesHistoryEntry,
   networkErrorText,
   parseEditorBody,
   parseStoredDraft,
@@ -277,9 +277,9 @@ describe('history helpers', () => {
   });
 
   it('filters by method, path and body', () => {
-    expect(matchesHistoryEntry(entry('DELETE', 'tmp'), 'delete')).toBe(true);
-    expect(matchesHistoryEntry(entry('GET', 'products/_search', '{"size":3}'), 'size')).toBe(true);
-    expect(matchesHistoryEntry(entry('GET', 'products'), 'orders')).toBe(false);
+    expect(historyMatcher('delete')(entry('DELETE', 'tmp'))).toBe(true);
+    expect(historyMatcher('size')(entry('GET', 'products/_search', '{"size":3}'))).toBe(true);
+    expect(historyMatcher('orders')(entry('GET', 'products'))).toBe(false);
   });
 
   it('prepends executed requests and drops identical older ones', () => {

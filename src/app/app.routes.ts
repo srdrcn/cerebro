@@ -1,4 +1,5 @@
 import { Route, Routes } from '@angular/router';
+import { CLUSTER_VIEW } from './core/cluster-route-reuse';
 import { hostOrParamsChange, requireConnection } from './core/connection.guard';
 import { confirmDiscardPendingChanges } from './core/pending-changes.guard';
 
@@ -8,10 +9,16 @@ import { confirmDiscardPendingChanges } from './core/pending-changes.guard';
  * Every feature is lazy loaded to keep the initial bundle small. Editor pages
  * implement `PendingChangesAware` and ask before unsaved edits are dropped.
  * Cluster views re-run their guards when only `?host=` changes, so the URL
- * and the connected cluster never disagree (see `requireConnection`).
+ * and the connected cluster never disagree (see `requireConnection`), and are
+ * then created again so no state of the previous cluster survives
+ * (`ClusterRouteReuseStrategy`).
  */
 function clusterViews(views: Route[]): Route[] {
-  return views.map((view) => ({ ...view, runGuardsAndResolvers: hostOrParamsChange }));
+  return views.map((view) => ({
+    ...view,
+    data: { ...view.data, [CLUSTER_VIEW]: true },
+    runGuardsAndResolvers: hostOrParamsChange,
+  }));
 }
 
 export const routes: Routes = [

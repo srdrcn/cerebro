@@ -86,6 +86,7 @@ export class PendingTasksComponent {
           this.tasks.set(undefined);
           this.loadError.set(undefined);
           this.staleReason.set(undefined);
+          this.count.emit(0);
         }
         if (active && host) {
           void this.load();

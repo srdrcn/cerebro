@@ -14,6 +14,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 import { ConnectionService } from '../../core/connection.service';
+import { formatNumber, pluralize } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { HotThreadsComponent } from './hot-threads.component';
 import { PendingTasksComponent } from './pending-tasks.component';
@@ -99,15 +100,15 @@ export class PerformanceComponent implements PendingChangesAware {
     switch (tab) {
       case 'pending-tasks': {
         const count = this.pendingCount();
-        return count ? { value: count, tone: count >= 10 ? 'badge-yellow' : '', label: `${count} pending` } : null;
+        return count ? { value: count, tone: count >= 10 ? 'badge-yellow' : '', label: `${formatNumber(count)} pending` } : null;
       }
       case 'thread-pools': {
         const count = this.newRejections();
-        return count ? { value: count, tone: 'badge-red', label: `${count} new rejections` } : null;
+        return count ? { value: count, tone: 'badge-red', label: pluralize(count, 'new rejection') } : null;
       }
       case 'slow-logs': {
         const count = this.slowLogIndices();
-        return count ? { value: count, tone: '', label: `${count} configured` } : null;
+        return count ? { value: count, tone: '', label: `${formatNumber(count)} configured` } : null;
       }
       default:
         return null;

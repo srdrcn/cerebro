@@ -8,7 +8,7 @@
  * of the same node, using the node's own `timestamp`; a latency is Δtime spent
  * / Δcount. Everything here is pure so it can be tested without a cluster.
  */
-import { formatCompact, severity } from './format';
+import { formatCompact, formatNumber, plural, severity } from './format';
 import { isRecord, stringList } from './json';
 
 /** Samples kept per host (60 × the refresh interval: 15 minutes at 15s). */
@@ -408,7 +408,7 @@ export const METRICS: Readonly<Record<MetricKey, MetricDefinition>> = {
   },
   cpu: {
     key: 'cpu',
-    label: 'CPU',
+    label: 'OS CPU',
     kind: 'percent',
     unit: '%',
     aggregate: 'average',
@@ -525,8 +525,6 @@ export interface MetricsHistory {
   readonly gaps: readonly boolean[];
   /** Per sample: some nodes did not answer (`_nodes.failed`), so cluster sums are not shown. */
   readonly partial: readonly boolean[];
-  /** Usual spacing of the recent samples (median), `null` before two samples. */
-  readonly spacing: number | null;
   /** Time covered by the samples. */
   readonly span: number;
   /** At least one interval has been measured: rates can be shown. */
@@ -557,12 +555,12 @@ function median(values: readonly number[]): number | null {
  * (`expected`), so switching auto refresh from 5s to 1m does not turn every
  * new interval into a gap. A sample taken while paused (`expected` 0) keeps
  * the `MIN_GAP_MS` rule; without `expected`, the spacing of the few previous
- * samples stands in for it. `spacing` is the median of the recent deltas.
+ * samples stands in for it.
  */
 export function sampleGaps(
   times: readonly number[],
   expected: readonly (number | undefined)[] = [],
-): { readonly gaps: boolean[]; readonly spacing: number | null } {
+): boolean[] {
   const deltas = times.slice(1).map((time, position) => time - (times[position] ?? time));
   const gaps = times.map((time, position) => {
     if (position === 0) {
@@ -576,7 +574,7 @@ export function sampleGaps(
         : Math.max(before ?? 0, after ?? 0);
     return time - (times[position - 1] ?? time) > Math.max(MIN_GAP_MS, GAP_FACTOR * usual);
   });
-  return { gaps, spacing: median(deltas.slice(-RECENT_DELTAS)) };
+  return gaps;
 }
 
 function ratio(numerator: number | null, denominator: number | null): number | null {
@@ -614,23 +612,6 @@ function pointValues(current: NodeCounters, interval: NodeInterval | null): Poin
     values.pressureRejected = interval.pressureRejected;
   }
   return values;
-}
-
-const INTERVAL_KEYS: ReadonlySet<MetricKey> = new Set([
-  'indexingRate',
-  'indexingLatency',
-  'searchRate',
-  'searchLatency',
-  'fetchRate',
-  'getRate',
-  'writeRejected',
-  'searchRejected',
-  'pressureRejected',
-]);
-
-/** Whether the metric is measured between two samples (a rate) rather than read at one. */
-export function isIntervalMetric(key: MetricKey): boolean {
-  return INTERVAL_KEYS.has(key);
 }
 
 function sum(values: readonly (number | null)[]): number | null {
@@ -702,7 +683,7 @@ function toSeries(
  */
 export function buildHistory(samples: readonly MetricsSample[]): MetricsHistory {
   const times = samples.map((sample) => sample.time);
-  const { gaps, spacing } = sampleGaps(
+  const gaps = sampleGaps(
     times,
     samples.map((sample) => sample.expected),
   );
@@ -761,7 +742,6 @@ export function buildHistory(samples: readonly MetricsSample[]): MetricsHistory 
     times,
     gaps,
     partial,
-    spacing,
     span: times.length > 1 ? (times[times.length - 1] ?? 0) - (times[0] ?? 0) : 0,
     ready,
     answered: total !== null && total > 0 ? { answered: Math.max(0, total - (failed ?? 0)), total } : null,
@@ -971,14 +951,25 @@ export function formatMetric(key: MetricKey, value: number | null | undefined): 
   return kind === 'latency' ? `${parts.value} ${parts.unit}` : `${parts.value}${parts.unit}`;
 }
 
-/** "every 15s", "every 1m" for the sampling interval. */
-export function formatSpacing(milliseconds: number | null | undefined): string {
-  if (milliseconds === null || milliseconds === undefined || !Number.isFinite(milliseconds) || milliseconds <= 0) {
-    return '–';
+const FORMATTERS = new Map<MetricKey, (value: number) => string>();
+
+/**
+ * `formatMetric` bound to one metric, created once per key: a chart's
+ * `[format]` input keeps the same function across change detection.
+ */
+export function metricFormatter(key: MetricKey): (value: number) => string {
+  let formatter = FORMATTERS.get(key);
+  if (!formatter) {
+    formatter = (value: number) => formatMetric(key, value);
+    FORMATTERS.set(key, formatter);
   }
-  if (milliseconds >= 60_000) {
-    const minutes = milliseconds / 60_000;
-    return `${trimmed(minutes, 1)}m`;
-  }
-  return `${trimmed(Math.round(milliseconds / 1000), 0)}s`;
+  return formatter;
+}
+
+/** "2 of 3 nodes answered" while some nodes did not answer the latest sample. */
+export function answeredLabel(history: Pick<MetricsHistory, 'answered'>): string | undefined {
+  const answered = history.answered;
+  return answered && answered.answered < answered.total
+    ? `${formatNumber(answered.answered)} of ${formatNumber(answered.total)} ${plural(answered.total, 'node')} answered`
+    : undefined;
 }

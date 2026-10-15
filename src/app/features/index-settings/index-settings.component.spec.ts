@@ -4,7 +4,9 @@ import { Router, provideRouter, withRouterConfig } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
+import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
+import { RefreshService } from '../../core/refresh.service';
 import { IndexSettingsComponent } from './index-settings.component';
 import { buildIndexSettingRows } from './index-settings.models';
 
@@ -102,5 +104,24 @@ describe('IndexSettingsComponent', () => {
     expect(dialogs.confirm).toHaveBeenCalledTimes(1);
     expect(target.loadedIndex()).toBe('products');
     expect(target.pending().length).toBe(1);
+  });
+
+  it('loads the settings on open and on Reload, not on refresh ticks', async () => {
+    const post = vi.fn(async () => ({ products: { settings: { index: { number_of_replicas: '1' } }, defaults: {} } }));
+    TestBed.overrideProvider(ClusterApiService, { useValue: { post } });
+    TestBed.inject(ConnectionService).connect('http://localhost:9200');
+    await TestBed.inject(Router).navigateByUrl('/?index=products');
+    const target = TestBed.runInInjectionContext(() => new IndexSettingsComponent());
+    TestBed.tick();
+    await vi.waitFor(() => expect(target.state()).toBe('ready'));
+    expect(post).toHaveBeenCalledTimes(1);
+
+    TestBed.inject(RefreshService).refresh();
+    TestBed.tick();
+    expect(post).toHaveBeenCalledTimes(1);
+
+    await target.reload();
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith('index_settings', { index: 'products' });
   });
 });

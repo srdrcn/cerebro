@@ -19,7 +19,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { elasticsearchReason, failureMessage, readableReason } from '../../core/errors';
-import { pluralize, textMatcher } from '../../core/format';
+import { formatNumber, pluralize, textMatcher } from '../../core/format';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
@@ -176,6 +176,7 @@ export class SlowLogsComponent {
           this.form.set(EMPTY_FORM);
           this.baseline.set(EMPTY_FORM);
           this.submitted.set(false);
+          this.configured.emit(0);
         }
         const opened = active && (!this.wasActive || hostChanged);
         this.wasActive = active;
@@ -576,5 +577,5 @@ export class SlowLogsComponent {
 function namedIndices(indices: readonly string[]): string {
   const shown = indices.slice(0, NAMED_INDICES).join(', ');
   const rest = indices.length - NAMED_INDICES;
-  return rest > 0 ? `${shown} and ${rest} more` : shown;
+  return rest > 0 ? `${shown} and ${formatNumber(rest)} more` : shown;
 }

@@ -18,6 +18,7 @@ object HTTPElasticClientSpec extends Specification {
       reset allocation to the default on enable             $enableAllocation
       build reroute commands as JSON                        $relocate
       build insight and index operation paths               $insightPaths
+      ask _cat/indices for the columns callers read         $indexLists
       """
 
   private case class Call(uri: String, method: String, body: Option[String])
@@ -107,6 +108,11 @@ object HTTPElasticClientSpec extends Specification {
       (record(_.getTasks(Some("node:42"), server)).uri mustEqual "/_tasks?detailed=true&group_by=none&parent_task_id=node%3A42") and
       (record(_.getIndexRoutingShards("logs", server)).uri mustEqual "/_cluster/state/metadata/logs?filter_path=metadata.indices.*.routing_num_shards") and
       (record(_.lookupIndices("logs-*,orders", server)).uri must startWith("/_cat/indices/logs-*%2Corders?format=json&bytes=b&expand_wildcards=open,closed&h="))
+  }
+
+  def indexLists = {
+    (record(_.getIndices(server)).uri mustEqual "/_cat/indices?format=json&h=index") and
+      (record(_.getIndexStatuses(server)).uri mustEqual "/_cat/indices?format=json&h=index,status")
   }
 
 }

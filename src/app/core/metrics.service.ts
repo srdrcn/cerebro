@@ -66,8 +66,6 @@ export class MetricsService {
     const samples = this.samplesState();
     return new Map((samples[samples.length - 1]?.nodes ?? []).map((node) => [node.id, node] as const));
   });
-  /** Usual spacing of the samples, measured. */
-  readonly spacing = computed(() => this.history().spacing);
   /** The configured sampling interval: the auto refresh interval (0 while paused). */
   readonly interval = computed(() => this.refresh.interval());
   readonly paused = computed(() => this.refresh.paused());

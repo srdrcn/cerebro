@@ -20,6 +20,12 @@ export interface SnapshotFailure {
   status?: string;
 }
 
+/** A feature (Elasticsearch system feature) whose state the snapshot holds. */
+export interface SnapshotFeatureState {
+  feature_name?: string;
+  indices?: string[];
+}
+
 export interface SnapshotRecord {
   snapshot: string;
   uuid?: string;
@@ -35,6 +41,7 @@ export interface SnapshotRecord {
   indices?: string[];
   data_streams?: string[];
   include_global_state?: boolean;
+  feature_states?: SnapshotFeatureState[];
   failures?: SnapshotFailure[];
   shards?: SnapshotShardStats;
   [key: string]: unknown;

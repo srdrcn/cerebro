@@ -15,6 +15,7 @@ object IndexDetailControllerSpec extends MockedServices {
     IndexDetailController should                         ${step(play.api.Play.start(application))}
       combine the sections of an index                   $combine
       return the settings error for a missing index      $missing
+      read routing shards of an index opened by alias    $alias
       require the index                                  $requireIndex
                                                          ${step(play.api.Play.stop(application))}
       """
@@ -53,6 +54,20 @@ object IndexDetailControllerSpec extends MockedServices {
     mockSections(Error(404, error))
     val response = route(application, FakeRequest(POST, "/index_detail").withBody(Json.obj("host" -> "somehost", "index" -> "logs"))).get
     ensure(response, 404, error)
+  }
+
+  // The cluster state is keyed by the concrete index, not by the alias asked for.
+  def alias = {
+    val target = Json.obj("logs-000002" -> Json.obj("settings" -> Json.obj()))
+    client.getIndexSettings("logs-write", server) returns Future.successful(Success(200, target))
+    client.getIndexMapping("logs-write", server) returns Future.successful(Success(200, mappings))
+    client.indexStats("logs-write", server) returns Future.successful(Success(200, stats))
+    client.getIndexAliases("logs-write", server) returns Future.successful(Success(200, Json.obj()))
+    client.getIndexShards("logs-write", server) returns Future.successful(Success(200, shards))
+    client.getIndexRoutingShards("logs-write", server) returns Future.successful(Success(200,
+      Json.obj("metadata" -> Json.obj("indices" -> Json.obj("logs-000002" -> Json.obj("routing_num_shards" -> 1024))))))
+    val response = route(application, FakeRequest(POST, "/index_detail").withBody(Json.obj("host" -> "somehost", "index" -> "logs-write"))).get
+    (contentAsJson(response) \ "body" \ "routing_num_shards").as[Int] mustEqual 1024
   }
 
   def requireIndex = {

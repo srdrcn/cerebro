@@ -11,6 +11,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AlertService } from '../../core/alert.service';
@@ -149,6 +150,7 @@ const BULK_OPERATIONS: readonly IndexOperation[] = ['open', 'close', 'merge', 'r
   imports: [
     BytesPipe,
     CompactNumberPipe,
+    DatePipe,
     EmptyStateComponent,
     MenuComponent,
     MeterComponent,
@@ -192,7 +194,7 @@ export class OverviewComponent {
   /** Reason of the last failed load, for the error state and the stale-data callout. */
   readonly loadError = signal<string | undefined>(undefined);
   /** Time of the last successful load, shown when a later refresh fails. */
-  readonly loadedAt = signal<Date | undefined>(undefined);
+  readonly loadedAt = signal<number | undefined>(undefined);
   /** Keys of running operations: `allocation`, `bulk`, `index:<name>`. */
   readonly busy = signal<ReadonlySet<string>>(new Set());
 
@@ -213,6 +215,8 @@ export class OverviewComponent {
   /** Name passed with `?filter=` whose closed/special chips still need revealing. */
   private pendingReveal: string | undefined;
   private loadSequence = 0;
+  /** Cluster the map was loaded from; the route is reused when only `?host=` changes. */
+  private loadedHost: string | undefined;
   /** Pending debounced write of the index filter to the `?filter=` query param. */
   private urlTimer: ReturnType<typeof setTimeout> | undefined;
   /** Navigations started by this component to sync the URL; their emissions are echoes. */
@@ -334,7 +338,6 @@ export class OverviewComponent {
     const data = this.data();
     return indexBreakdown(data?.total_indices ?? 0, data?.closed_indices ?? 0, data?.special_indices ?? 0);
   });
-  readonly loadedAtLabel = computed(() => this.loadedAt()?.toLocaleTimeString() ?? '');
 
   readonly selectedNodeName = computed(() => {
     const shard = this.selected();
@@ -356,7 +359,9 @@ export class OverviewComponent {
   constructor() {
     effect(() => {
       this.refreshService.tick();
-      if (this.connection.connected()) {
+      const host = this.connection.host();
+      if (host !== undefined) {
+        untracked(() => this.forgetOtherCluster(host));
         void this.load();
       }
     });
@@ -414,7 +419,7 @@ export class OverviewComponent {
       this.data.set(data);
       this.failed.set(false);
       this.loadError.set(undefined);
-      this.loadedAt.set(new Date());
+      this.loadedAt.set(Date.now());
       this.selected.set(stillRelocatable(data, this.selected()));
       if (!hasShardActivity({
         unassigned: data.unassigned_shards,
@@ -436,6 +441,22 @@ export class OverviewComponent {
       if (sequence === this.loadSequence) {
         this.loading.set(false);
       }
+    }
+  }
+
+  /** Never shows the map of the previous cluster as stale data of a new one. */
+  private forgetOtherCluster(host: string): void {
+    const switched = this.loadedHost !== undefined && this.loadedHost !== host;
+    this.loadedHost = host;
+    if (switched) {
+      this.loadSequence++;
+      this.data.set(undefined);
+      this.selected.set(undefined);
+      this.loadedAt.set(undefined);
+      this.loading.set(false);
+      this.failed.set(false);
+      this.loadError.set(undefined);
+      this.offset.set(0);
     }
   }
 

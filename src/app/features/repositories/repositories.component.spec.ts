@@ -160,14 +160,25 @@ describe('RepositoriesComponent', () => {
     }
   });
 
-  it('offers "New repository" only when the form is not already blank', async () => {
-    const target = component();
-    await target.load();
-    expect(target.blankForm()).toBe(true);
-    target.edit(local);
-    expect(target.blankForm()).toBe(false);
-    target.newRepository(false);
-    expect(target.blankForm()).toBe(true);
+  it('"New repository" clears the form of a clean repository and focuses the name', async () => {
+    const nameField = document.createElement('input');
+    nameField.id = 'repository-name';
+    document.body.appendChild(nameField);
+    try {
+      const target = component();
+      await target.load();
+      target.edit(local);
+
+      await target.startNew();
+
+      expect(dialogs.confirm).not.toHaveBeenCalled();
+      expect(target.editing()).toBeNull();
+      expect(target.name()).toBe('');
+      expect(target.type()).toBe('');
+      await vi.waitFor(() => expect(document.activeElement).toBe(nameField));
+    } finally {
+      nameField.remove();
+    }
   });
 
   it('deletes after a danger confirmation and clears the form of the deleted repository', async () => {

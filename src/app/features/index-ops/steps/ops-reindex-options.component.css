@@ -15,8 +15,3 @@
   color: var(--text-3);
   font-size: 0.85em;
 }
-
-/* Ace layers its gutter and scrollbars with z-indexes; keep them under the sticky footer. */
-cerebro-code-editor {
-  isolation: isolate;
-}

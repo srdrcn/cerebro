@@ -177,9 +177,14 @@ export function textMatcher(expression: string): (value: string) => boolean {
   }
 }
 
-/** One-off form of `textMatcher`: does `value` match the filter `expression`? */
-export function matchesText(value: string, expression: string): boolean {
-  return textMatcher(expression)(value);
+/**
+ * The first `limit` names of a list for a sentence: "logs, metrics and 4 more"
+ * (all of them when they fit).
+ */
+export function listSample(names: readonly string[], limit: number): string {
+  const shown = names.slice(0, Math.max(1, limit)).join(', ');
+  const rest = names.length - Math.max(1, limit);
+  return rest > 0 ? `${shown} and ${formatNumber(rest)} more` : shown;
 }
 
 export function sortByName<T extends string>(values: readonly T[]): T[] {

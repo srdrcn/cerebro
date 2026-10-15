@@ -295,6 +295,9 @@ describe('closed indices and summary', () => {
     expect(indexHealth(noStats, shardRows([catRow()]))).toBe('green');
     expect(indexHealth(noStats, shardRows([catRow(), catRow({ prirep: 'r', state: 'UNASSIGNED' })]))).toBe('yellow');
     expect(indexHealth(noStats, shardRows([catRow({ state: 'UNASSIGNED' })]))).toBe('red');
+    expect(indexHealth(noStats, shardRows([catRow({ state: 'INITIALIZING' })]))).toBe('red');
+    expect(indexHealth(noStats, shardRows([catRow(), catRow({ prirep: 'r', state: 'INITIALIZING' })]))).toBe('yellow');
+    expect(indexHealth(noStats, shardRows([catRow({ state: 'RELOCATING' }), catRow({ prirep: 'r' })]))).toBe('green');
   });
 });
 

@@ -222,10 +222,6 @@ export function taskQueryMatcher(query: string): (task: Task) => boolean {
   return (task) => [task.action, task.label, task.description, task.key, task.nodeName].some(matches);
 }
 
-export function matchesTaskQuery(task: Task, query: string): boolean {
-  return taskQueryMatcher(query)(task);
-}
-
 function passesToggles(task: Task, filter: TaskFilter): boolean {
   return (!filter.hideInternal || !task.internal) && (!filter.onlyCancellable || task.cancellable);
 }

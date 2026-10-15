@@ -94,16 +94,11 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
     execute(path, "GET", None, target)
   }
 
-  def putClusterSettings(settings: String, target: ElasticServer) = {
-    val path = "/_cluster/settings"
-    execute(path, "PUT", Some(settings), target, Seq(JsonContentType))
-  }
-
   def enableShardAllocation(target: ElasticServer) =
-    putClusterSettings(allocationSettings(JsNull).toString, target)
+    saveClusterSettings(allocationSettings(JsNull), target)
 
   def disableShardAllocation(target: ElasticServer, kind: String) =
-    putClusterSettings(allocationSettings(JsString(kind)).toString, target)
+    saveClusterSettings(allocationSettings(JsString(kind)), target)
 
   def getShardStats(index: String, target: ElasticServer) = {
     val path = s"/${encoded(index)}/_stats?level=shards&human=true"
@@ -148,9 +143,13 @@ class HTTPElasticClient @Inject()(client: WSClient) extends ElasticClient {
     execute(path, "PUT", Some(metadata.toString), target, Seq(JsonContentType))
   }
 
-  // Callers only use the names; asking for that column keeps the answer small.
+  // Index lists only use the names; asking for that column keeps the answer small.
   def getIndices(target: ElasticServer) =
     execute("/_cat/indices?format=json&h=index", "GET", None, target)
+
+  // Names with their status (open or close), for lists that only offer open indices.
+  def getIndexStatuses(target: ElasticServer) =
+    execute("/_cat/indices?format=json&h=index,status", "GET", None, target)
 
   def getTemplates(target: ElasticServer) = {
     val path = s"/_template"

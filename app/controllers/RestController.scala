@@ -73,7 +73,7 @@ class RestController @Inject()(val authentication: AuthenticationModule,
         CerebroResponse(200, JsArray(body))
     }.recover {
       case NonFatal(e) =>
-        CerebroResponse(500, Json.obj("Error" -> JsString(s"Error while loading requests history: ${e.getMessage}")))
+        CerebroResponse(500, Json.obj("error" -> JsString(s"Error while loading requests history: ${e.getMessage}")))
     }
   }
 

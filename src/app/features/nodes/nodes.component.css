@@ -151,8 +151,10 @@
   white-space: nowrap;
 }
 
-/* Below 1180px the table keeps its expand and action buttons in view by
-   moving uptime into the node's meta line. */
+/* Below 1180px uptime moves into the node's meta line, and the table may
+   scroll sideways: the expand and action buttons then stay pinned to the
+   right edge of the card. The pinned cell paints the row's background (the
+   card surface plus the hover or selected tint) over the cells beneath it. */
 @media (max-width: 1180px) {
   .nodes-table .uptime-col {
     display: none;
@@ -160,6 +162,28 @@
 
   .node-meta__uptime {
     display: inline;
+  }
+
+  .nodes-table > * > tr > .actions {
+    position: sticky;
+    right: 0;
+    background-color: var(--surface);
+    background-image: linear-gradient(var(--row-tint, transparent), var(--row-tint, transparent));
+    box-shadow: inset 1px 0 0 var(--border-subtle);
+  }
+
+  .nodes-table > thead > tr > .actions {
+    z-index: 2;
+    background-color: var(--surface-2);
+  }
+
+  .nodes-table > tbody > .node-row.is-selected > .actions {
+    --row-tint: var(--accent-soft);
+  }
+
+  /* Hover wins over the selected tint, as on the row itself. */
+  .nodes-table > tbody > .node-row:hover > .actions {
+    --row-tint: var(--surface-hover);
   }
 }
 

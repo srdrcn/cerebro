@@ -115,7 +115,7 @@ describe('OverviewLiveComponent', () => {
     expect(text(element.querySelector('.ov-live__window'))).toBe('last 15s');
     expect(element.querySelectorAll('cerebro-sparkline')).toHaveLength(5);
     expect(element.querySelector('.ov-live__tile .sparkline__chart')?.getAttribute('aria-label')).toBe(
-      'Indexing: 400/s',
+      'Indexing rate: 400/s',
     );
     expect(text(element.querySelectorAll('.ov-live__meta')[3] ?? null)).toBe('max 79% on es-node-2');
     // The tile colours the average (70%), below the 75% warning level.

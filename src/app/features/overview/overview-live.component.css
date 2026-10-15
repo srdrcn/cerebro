@@ -162,9 +162,13 @@
   margin: 2px 0;
 }
 
+/* Wraps rather than truncating: the busiest node's name ends the line, and
+   touch screens never show a title tooltip. */
 .ov-live__meta {
   color: var(--text-3);
   font-size: var(--text-sm);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1180px) {

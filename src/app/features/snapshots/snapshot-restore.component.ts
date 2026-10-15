@@ -27,6 +27,7 @@ import {
   restoreTargetState,
   snapshotIndices,
   snapshotStart,
+  snapshotSystemIndices,
   validateRename,
 } from './snapshots.utils';
 
@@ -78,12 +79,21 @@ export class SnapshotRestoreComponent {
   /** `index → aliases` from `_cat/aliases`, or null until it answered. */
   readonly clusterAliases = signal<ReadonlyMap<string, readonly IndexAlias[]> | null>(null);
 
+  /**
+   * System indices (`.tasks`, …) come back only with their feature state, as
+   * part of the global state: Elasticsearch skips them in a full restore and
+   * rejects the request when one is named. They are never listed or sent.
+   */
+  readonly systemIndices = computed(() => snapshotSystemIndices(this.snapshot()));
+
+  /** The indices and data streams that can be picked, without system indices. */
   readonly indexNames = computed(() => {
     const snapshot = this.snapshot();
     const streams = Array.isArray(snapshot.data_streams) ? snapshot.data_streams : [];
-    return [...new Set([...snapshotIndices(snapshot), ...streams])].sort((left, right) =>
-      left.localeCompare(right),
-    );
+    const system = new Set(this.systemIndices());
+    return [...new Set([...snapshotIndices(snapshot), ...streams])]
+      .filter((name) => !system.has(name))
+      .sort((left, right) => left.localeCompare(right));
   });
 
   private readonly dataStreams = computed(
@@ -201,13 +211,15 @@ export class SnapshotRestoreComponent {
   }
 
   /**
-   * The landing data only lists index names. Restoring over a closed index
-   * replaces it while an open one makes the restore fail, so fetch the
-   * status once; on failure every existing name keeps counting as open.
+   * The landing data only lists visible index names. Restoring over a closed
+   * index replaces it while an open one makes the restore fail, so fetch the
+   * status of every index once, hidden ones included (`*,.*` matches hidden
+   * indices, such as data stream backing indices); on failure every known
+   * name keeps counting as open.
    */
   async loadIndexStatus(): Promise<void> {
     try {
-      const rows = await this.api.post<unknown>('cat', { api: 'indices' });
+      const rows = await this.api.post<unknown>('commons/indices/lookup', { expression: '*,.*' });
       this.indexStatus.set(indexStatuses(rows));
     } catch {
       // Best effort: the names from the landing call are still used.

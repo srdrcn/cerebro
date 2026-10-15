@@ -1638,7 +1638,15 @@ export class IndexOpsStore {
     }
     this.updateRun('reindex', { cancelling: true });
     try {
-      await this.api.post<unknown>('tasks/cancel', { task_id: run.taskId });
+      const response = await this.api.post<unknown>('tasks/cancel', { task_id: run.taskId });
+      // `_cancel` answers 200 even when nothing was cancelled: the reason then sits in a failure list.
+      const failures = isRecord(response) ? [response['task_failures'], response['node_failures']].find((list) => Array.isArray(list) && list.length > 0) : undefined;
+      if (Array.isArray(failures)) {
+        const reason = readableReason(failures[0]) ?? 'Elasticsearch reported a failure while cancelling the task.';
+        this.alerts.error(`Could not cancel the reindex: ${reason}`);
+        this.updateRun('reindex', { cancelling: false });
+        return;
+      }
       this.announcement.set('Cancelling the reindex');
     } catch (error: unknown) {
       this.alerts.error(failureMessage('Could not cancel the reindex', error), error);

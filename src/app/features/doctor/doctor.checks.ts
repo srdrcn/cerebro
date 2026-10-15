@@ -143,6 +143,11 @@ function indexLink(index: string, tab?: string): DoctorLink {
   };
 }
 
+/** The index operations wizard, ready to shrink this index (index details are one click away there). */
+function shrinkLink(index: string): DoctorLink {
+  return { label: 'Shrink…', icon: 'bi-arrows-angle-contract', route: '/index_ops', params: { op: 'shrink', index } };
+}
+
 function indexSettingsLink(index: string): DoctorLink {
   return { label: 'Index settings', icon: 'bi-gear', route: '/index_settings', params: { index } };
 }
@@ -1194,7 +1199,7 @@ const overSharded: DoctorCheck = {
           kind: 'index',
           name: row.name,
           detail: `${pluralize(row.primaries, 'primary shard')} · ${formatBytes(row.primarySize)} in total`,
-          link: indexLink(row.name, 'shards'),
+          link: shrinkLink(row.name),
         })),
         resourceLabel: 'Affected indices',
         fixes: [],

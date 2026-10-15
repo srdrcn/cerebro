@@ -27,8 +27,11 @@
   margin-bottom: var(--space-6);
 }
 
+/* max-width: on phones the header stacks (column), where a long title (an
+   index name) would otherwise keep its full width and widen the page. */
 .page-header__text {
   min-width: 0;
+  max-width: 100%;
 }
 
 .page-header__eyebrow {
@@ -117,9 +120,16 @@
 
 .layout-sidebar-start {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
   gap: var(--space-5);
   align-items: start;
+}
+
+/* Master/detail editors (a .list-card beside the editor) share one list
+   width, so the editor starts at the same place on every page. Pages never
+   override it. */
+.layout-sidebar-start:has(> .list-card) {
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
 }
 
 .layout-sidebar-end {
@@ -338,12 +348,6 @@
   font-size: var(--text-sm);
 }
 
-.btn-lg {
-  height: 42px;
-  padding: 0 18px;
-  font-size: var(--text-md);
-}
-
 .btn-icon {
   width: var(--control-height);
   padding: 0;
@@ -552,8 +556,7 @@
   min-width: 0;
 }
 
-.input-group > .bi:first-child,
-.input-group > .input-icon {
+.input-group > .bi:first-child {
   position: absolute;
   left: 11px;
   z-index: 1;
@@ -561,8 +564,7 @@
   pointer-events: none;
 }
 
-.input-group > .bi:first-child + .input,
-.input-group > .input-icon + .input {
+.input-group > .bi:first-child + .input {
   padding-left: 33px;
 }
 
@@ -795,9 +797,9 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Full strength: the pressed tint leaves no contrast to spare (AA 4.5:1). */
 .chip-toggle[aria-pressed="true"] .count {
   color: inherit;
-  opacity: 0.8;
 }
 
 /* ------------------------------------------------------------------ */
@@ -820,11 +822,6 @@
   gap: var(--space-3);
   padding: 12px var(--space-5);
   border-bottom: 1px solid var(--border);
-}
-
-.card-header--plain {
-  border-bottom: 0;
-  padding-bottom: 0;
 }
 
 .card-title {
@@ -863,10 +860,6 @@
 
 .card-body {
   padding: var(--space-5);
-}
-
-.card-body--flush {
-  padding: 0;
 }
 
 .card-footer {
@@ -1361,12 +1354,6 @@ kbd,
   flex: 1;
 }
 
-.toolbar-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-}
-
 .toolbar .input-group {
   width: min(320px, 100%);
 }
@@ -1653,6 +1640,13 @@ kbd,
   text-align: center;
 }
 
+/* Grid items keep their min-content width: without these a long unbroken
+   reason (an exception name, a URL, an index name) widens the page. */
+.empty > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .empty__icon {
   width: 44px;
   height: 44px;
@@ -1670,11 +1664,13 @@ kbd,
   color: var(--text);
   font-size: var(--text-md);
   font-weight: 620;
+  overflow-wrap: anywhere;
 }
 
 .empty__text {
-  max-width: 420px;
+  max-width: min(420px, 100%);
   color: var(--text-3);
+  overflow-wrap: anywhere;
 }
 
 .empty__actions {
@@ -1685,6 +1681,13 @@ kbd,
 
 .empty--compact {
   padding: 26px 16px;
+}
+
+/* "All good" states (nothing unassigned, no problems found). */
+.empty--success .empty__icon {
+  border-color: color-mix(in srgb, var(--green) 35%, transparent);
+  background: var(--green-soft);
+  color: var(--green-text);
 }
 
 .spinner {
@@ -1987,17 +1990,25 @@ kbd,
    Browsers decide whether focus needs scrolling from the scroll container's
    scroll-padding (scroll-margin on the field is ignored for that), so
    html widens it while a page shows extra sticky bars. base.css covers the
-   top bar. Add a rule here for every new sticky bar. */
+   top bar. Add a rule here for every new sticky bar.
+   --toast-offset lifts the notifications (shell.css) above the same bars, so
+   a toast never covers their primary action (Save, Apply). */
 html:has(.card--sticky-footer),
 html:has(.settings-actionbar),
 html:has(.create-actions) {
-  scroll-padding-bottom: calc(var(--control-height) + var(--space-10) + var(--space-4));
+  --toast-offset: calc(var(--control-height) + var(--space-10) + var(--space-4));
+  scroll-padding-bottom: var(--toast-offset);
+}
+
+/* The overview's relocation bar takes no focusable fields away. */
+html:has(.ov-relocation) {
+  --toast-offset: calc(var(--control-height) + var(--space-10) + var(--space-4));
 }
 
 @media (max-width: 760px) {
   /* Create index's action bar stacks its summary above the buttons. */
   html:has(.create-actions) {
-    scroll-padding-bottom: calc(2 * var(--control-height) + var(--space-10) + var(--space-4));
+    --toast-offset: calc(2 * var(--control-height) + var(--space-10) + var(--space-4));
   }
 }
 
@@ -2074,6 +2085,7 @@ html:has(.create-actions) {
 @media (max-width: 1180px) {
   .layout-split,
   .layout-sidebar-start,
+  .layout-sidebar-start:has(> .list-card),
   .layout-sidebar-end {
     grid-template-columns: minmax(0, 1fr);
   }

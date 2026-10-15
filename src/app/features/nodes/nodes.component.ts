@@ -184,6 +184,8 @@ export class NodesComponent {
   private readonly formatters = new Map<MetricKey, (value: number) => string>();
 
   private loadSequence = 0;
+  /** Cluster the nodes were loaded from; the route is reused when only `?host=` changes. */
+  private loadedHost: string | undefined;
   /** `?node=` still to reveal once the nodes are loaded. */
   private pendingReveal: string | undefined;
   /** Navigations started here to sync the URL; their emissions are echoes. */
@@ -194,13 +196,17 @@ export class NodesComponent {
 
     effect(() => {
       this.refreshService.tick();
+      this.connection.host();
       if (this.connection.connected()) {
+        untracked(() => this.forgetOtherCluster());
         void this.load();
       }
     });
 
     // `?node=` deep links (cluster doctor, bookmarks): expand that node.
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
+      // Back to another cluster: never resolve the node against the old list.
+      this.forgetOtherCluster();
       const name = params.get('node');
       if (this.urlWrites > 0 || name === untracked(this.expanded)) {
         return;
@@ -304,6 +310,24 @@ export class NodesComponent {
 
   retryMetrics(): void {
     void this.metrics.sampleNow();
+  }
+
+  /** Drops the nodes of the previous cluster after a host change. */
+  private forgetOtherCluster(): void {
+    const host = untracked(this.connection.host);
+    if (host === this.loadedHost) {
+      return;
+    }
+    const switched = this.loadedHost !== undefined;
+    this.loadedHost = host;
+    if (switched) {
+      this.loadSequence++;
+      this.nodes.set(undefined);
+      this.loadedAt.set(null);
+      this.loading.set(false);
+      this.failed.set(false);
+      this.loadError.set(undefined);
+    }
   }
 
   /** Expands the `?node=` node once known: clears filters that hide it and scrolls to it. */

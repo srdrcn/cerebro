@@ -128,7 +128,6 @@ export interface NodesSummary {
   readonly master?: string;
   readonly versions: readonly string[];
   readonly averageHeap: number | null;
-  readonly averageCpu: number | null;
   readonly diskUsed: number;
   readonly diskTotal: number;
 }
@@ -143,9 +142,6 @@ export function summarizeNodes(nodes: readonly NodesNode[]): NodesSummary {
     ...(master ? { master } : {}),
     versions: [...new Set(nodes.map((node) => node.version))].sort(),
     averageHeap: average(nodes.map((node) => node.heap.percent)),
-    averageCpu: average(
-      nodes.flatMap((node) => (node.cpu.process === null ? [] : [node.cpu.process])),
-    ),
     diskUsed,
     diskTotal,
   };

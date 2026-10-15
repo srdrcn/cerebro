@@ -238,7 +238,11 @@ describe('runChecks on the live 8.15 report', () => {
   it('suggests fewer shards for small multi-shard indices', () => {
     const small = finding(report, 'over-sharded');
     expect(small.severity).toBe('info');
-    expect(small.resources[0]).toMatchObject({ name: 'search-sessions', detail: '5 primary shards · 1.2 KB in total' });
+    expect(small.resources[0]).toMatchObject({
+      name: 'search-sessions',
+      detail: '5 primary shards · 1.2 KB in total',
+      link: { label: 'Shrink…', icon: 'bi-arrows-angle-contract', route: '/index_ops', params: { op: 'shrink', index: 'search-sessions' } },
+    });
     expect(small.resources.map((item) => item.name)).toContain('tmp-doctor-shards');
     expect(small.resources.some((item) => item.name.startsWith('.'))).toBe(false);
   });

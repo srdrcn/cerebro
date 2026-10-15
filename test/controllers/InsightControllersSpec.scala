@@ -19,15 +19,19 @@ object InsightControllersSpec extends MockedServices {
       capture hot threads of one node with options       $hotThreadsOptions
       reject an unknown hot threads type                 $hotThreadsType
       reject an invalid hot threads interval             $hotThreadsInterval
+      keep hot threads between 1 and 50 threads          $hotThreadsCount
       list thread pools                                  $threadPools
       list pending cluster tasks                         $pendingTasks
       read slow log settings                             $slowlog
       shrink an index                                    $shrink
       reject an unknown resize operation                 $unknownResize
+      require the target of a resize                     $resizeTarget
       roll over an alias as a dry run                    $rolloverDryRun
       roll over into a named index                       $rolloverNamed
+      require the alias to roll over                     $rolloverAlias
       start a reindex task                               $reindex
       reject invalid reindex slices                      $reindexSlices
+      reject an invalid reindex throttle                 $reindexRate
       return a task                                      $getTask
                                                          ${step(play.api.Play.stop(application))}
       """
@@ -71,6 +75,12 @@ object InsightControllersSpec extends MockedServices {
   def hotThreadsInterval =
     ensure(post("/performance/hot_threads", Json.obj("interval" -> "1h")), 400, Json.obj("error" -> "interval must look like 500ms or 2s"))
 
+  def hotThreadsCount = {
+    val error = Json.obj("error" -> "threads must be between 1 and 50")
+    ensure(post("/performance/hot_threads", Json.obj("threads" -> 0)), 400, error) and
+      ensure(post("/performance/hot_threads", Json.obj("threads" -> 51)), 400, error)
+  }
+
   def threadPools = {
     val pools = Json.arr(Json.obj("node_name" -> "es-node-1", "name" -> "search", "rejected" -> "0"))
     client.catThreadPools(server) returns Future.successful(Success(200, pools))
@@ -98,6 +108,9 @@ object InsightControllersSpec extends MockedServices {
   def unknownResize =
     ensure(post("/index_ops/resize", Json.obj("kind" -> "merge", "index" -> "logs", "target" -> "x")), 400, Json.obj("error" -> "Unknown resize operation merge"))
 
+  def resizeTarget =
+    ensure(post("/index_ops/resize", Json.obj("kind" -> "shrink", "index" -> "logs")), 400, Json.obj("error" -> "Missing required parameter target"))
+
   def rolloverDryRun = {
     val body = Json.obj("conditions" -> Json.obj("max_age" -> "7d"))
     val result = Json.obj("dry_run" -> true, "rolled_over" -> false)
@@ -111,6 +124,9 @@ object InsightControllersSpec extends MockedServices {
     ensure(post("/index_ops/rollover", Json.obj("alias" -> "logs-write", "new_index" -> "logs-000002")), 200, result)
   }
 
+  def rolloverAlias =
+    ensure(post("/index_ops/rollover", Json.obj("dry_run" -> true)), 400, Json.obj("error" -> "Missing required parameter alias"))
+
   def reindex = {
     val body = Json.obj("source" -> Json.obj("index" -> "logs"), "dest" -> Json.obj("index" -> "logs-copy"))
     val task = Json.obj("task" -> "node:42")
@@ -121,6 +137,12 @@ object InsightControllersSpec extends MockedServices {
   def reindexSlices = {
     val body = Json.obj("source" -> Json.obj("index" -> "logs"), "dest" -> Json.obj("index" -> "logs-copy"))
     ensure(post("/index_ops/reindex", Json.obj("body" -> body, "slices" -> "many")), 400, Json.obj("error" -> "slices must be auto or a positive number"))
+  }
+
+  def reindexRate = {
+    val body = Json.obj("source" -> Json.obj("index" -> "logs"), "dest" -> Json.obj("index" -> "logs-copy"))
+    ensure(post("/index_ops/reindex", Json.obj("body" -> body, "requests_per_second" -> "fast")), 400,
+      Json.obj("error" -> "requests_per_second must be a positive number or -1"))
   }
 
   def getTask = {
