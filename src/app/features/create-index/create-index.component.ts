@@ -17,7 +17,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage } from '../../core/errors';
-import { pluralize } from '../../core/format';
+import { groupIndexNames, pluralize } from '../../core/format';
 import { INVALID_INDEX_NAME_CHARACTERS } from '../../core/names';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
@@ -34,7 +34,6 @@ import {
   cloneIndexMetadata,
   linkPrefill,
   shardLayout,
-  sortIndexNames,
   validateCount,
   validateIndexName,
 } from './create-index.models';
@@ -93,7 +92,7 @@ export class CreateIndexComponent implements PendingChangesAware {
   /** Set once the index exists: leaving for the overview drops nothing. */
   readonly created = signal(false);
 
-  readonly indexGroups = computed(() => sortIndexNames(this.indices() ?? []));
+  readonly indexGroups = computed(() => groupIndexNames(this.indices() ?? []));
 
   readonly nameCheck = computed(() =>
     validateIndexName(this.name(), this.indices() ?? [], this.aliases()),

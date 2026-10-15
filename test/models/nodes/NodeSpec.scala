@@ -1,7 +1,6 @@
 package models.nodes
 
 import models.commons.NodeInfoData
-import models.overview.NodeSpec.noAttributesNode
 import org.specs2.Specification
 import play.api.libs.json.Json
 

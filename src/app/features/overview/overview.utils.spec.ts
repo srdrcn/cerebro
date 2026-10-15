@@ -166,7 +166,7 @@ describe('overview helpers', () => {
     data: true,
     coordinating: false,
     ingest: false,
-    heap: { used: 1, committed: 2, used_percent: 50, max: 2 },
+    heap: { used: 1, used_percent: 50, max: 2 },
     disk: { total: 10, free: 5, used_percent: 50 },
     attributes: {},
     ...overrides,

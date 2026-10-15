@@ -7,7 +7,6 @@ import {
   cloneIndexMetadata,
   linkPrefill,
   shardLayout,
-  sortIndexNames,
   validateCount,
   validateIndexName,
 } from './create-index.models';
@@ -232,15 +231,6 @@ describe('cloning index metadata', () => {
     const cloned = cloneIndexMetadata({ settings: { index: { hidden: 'true' } }, mappings: { properties: {} } });
     expect(cloned.metadata['settings']).toEqual({ index: { hidden: 'true' } });
     expect(cloned.removedMappings).toEqual([]);
-  });
-});
-
-describe('index name sorting', () => {
-  it('lists regular indices before dot-prefixed ones', () => {
-    expect(sortIndexNames(['products', '.kibana', 'customers', 'products'])).toEqual({
-      regular: ['customers', 'products'],
-      special: ['.kibana'],
-    });
   });
 });
 

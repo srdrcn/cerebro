@@ -177,12 +177,6 @@
   gap: var(--space-4);
 }
 
-.grid-3 {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-
 .col-span-all {
   grid-column: 1 / -1;
 }
@@ -742,7 +736,6 @@
   color: var(--text);
 }
 
-.segmented > button.is-active,
 .segmented > button[aria-pressed="true"],
 .segmented > button[aria-checked="true"],
 .segmented > button[aria-selected="true"] {
@@ -2208,8 +2201,7 @@ html:has(.ov-relocation) {
     margin-bottom: var(--space-5);
   }
 
-  .grid-2,
-  .grid-3 {
+  .grid-2 {
     grid-template-columns: minmax(0, 1fr);
   }
 

@@ -1,11 +1,6 @@
 name := "cerebro"
 
-maintainer := "Leonardo Menezes <leonardo.menezes@xing.com>"
-
-packageSummary := "Elasticsearch web admin tool"
-
-packageDescription := """cerebro is an open source(MIT License) elasticsearch web admin tool built
-  using Scala, Play Framework and Angular."""
+maintainer := "cerebro maintainers <https://github.com/srdrcn/cerebro>"
 
 version := "0.9.4"
 
@@ -18,12 +13,6 @@ val logbackVersion = "1.5.38"
 
 javacOptions ++= Seq("--release", "17")
 scalacOptions += "-release:17"
-
-rpmVendor := "lmenezes"
-
-rpmLicense := Some("MIT")
-
-rpmUrl := Some("http://github.com/lmenezes/cerebro")
 
 libraryDependencies ++= Seq(
   "org.playframework" %% "play"                    % playVersion,
@@ -57,17 +46,10 @@ libraryDependencies += ws
 libraryDependencies += guice
 
 lazy val root = (project in file(".")).
-  enablePlugins(PlayScala, BuildInfoPlugin, LauncherJarPlugin, JDebPackaging, RpmPlugin).
+  enablePlugins(PlayScala, BuildInfoPlugin, LauncherJarPlugin).
   settings(
-    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
+    buildInfoKeys := Seq[BuildInfoKey](version),
     buildInfoPackage := "models"
   )
 
 Compile / doc / sources := Seq.empty
-
-enablePlugins(JavaServerAppPackaging)
-enablePlugins(SystemdPlugin)
-
-Debian / systemdSuccessExitStatus += "143"
-Rpm / systemdSuccessExitStatus += "143"
-linuxPackageMappings += packageTemplateMapping(s"/var/lib/${packageName.value}")() withUser((Linux / daemonUser).value) withGroup((Linux / daemonGroup).value)

@@ -37,7 +37,7 @@ function normalize(group: Record<string, unknown> | undefined): IndexSettingValu
   return values;
 }
 
-export function isVisibleIndexSetting(name: string): boolean {
+function isVisibleIndexSetting(name: string): boolean {
   return HIDDEN_INDEX_METADATA.every((metadata) => !name.includes(metadata));
 }
 
@@ -45,7 +45,7 @@ function matches(name: string, names: ReadonlySet<string>, patterns: readonly Re
   return names.has(name) || patterns.some((pattern) => pattern.test(name));
 }
 
-export function isDynamicIndexSetting(name: string): boolean {
+function isDynamicIndexSetting(name: string): boolean {
   return matches(name, DYNAMIC_INDEX_SETTINGS, DYNAMIC_INDEX_SETTING_PATTERNS);
 }
 

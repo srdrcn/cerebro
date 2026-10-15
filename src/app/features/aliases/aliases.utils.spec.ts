@@ -17,7 +17,6 @@ import {
   routingTags,
   sameSettings,
   sortAliasRows,
-  sortIndexOptions,
   stageAddition,
   stageRemoval,
   summarizePendingItem,
@@ -275,14 +274,6 @@ describe('display helpers', () => {
     expect(filterLabel({ term: {}, range: {} })).toBe('2 clauses');
     expect(filterLabel({})).toBe('empty');
     expect(filterLabel('raw')).toBe('filter');
-  });
-
-  it('lists regular indices before dot-prefixed ones, without duplicates', () => {
-    expect(sortIndexOptions(['products', '.kibana', 'audit', 'products'])).toEqual([
-      'audit',
-      'products',
-      '.kibana',
-    ]);
   });
 
   it('lists distinct alias names', () => {

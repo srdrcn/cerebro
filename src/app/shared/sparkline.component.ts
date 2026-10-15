@@ -144,7 +144,6 @@ let nextId = 0;
     '[class.tone-blue]': 'tone() === "blue"',
     '[class.tone-purple]': 'tone() === "purple"',
     '[class.tone-gray]': 'tone() === "gray"',
-    '[class.has-value]': 'showValue()',
   },
   template: `
     <div
@@ -190,9 +189,6 @@ let nextId = 0;
         </span>
       }
     </div>
-    @if (showValue()) {
-      <span class="sparkline__value">{{ end() ? format()(end()!.value) : '–' }}</span>
-    }
     @if (focusable()) {
       <span class="visually-hidden" [id]="hintId">Use the left and right arrow keys to read each sample, Home and End for the first and latest.</span>
       <span class="visually-hidden" aria-live="polite">{{ announcement() }}</span>
@@ -301,14 +297,6 @@ let nextId = 0;
       font-variant-numeric: tabular-nums;
       font-weight: 650;
     }
-
-    .sparkline__value {
-      flex: none;
-      color: var(--text-2);
-      font-size: var(--text-sm);
-      font-variant-numeric: tabular-nums;
-      font-weight: 600;
-    }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -325,8 +313,6 @@ export class SparklineComponent {
   readonly minDomain = input<number | undefined>(undefined);
   /** Marks the latest value with a dot (inline sparklines of a few dozen pixels leave it out). */
   readonly dot = input(true);
-  /** Shows the latest value to the right of the chart. */
-  readonly showValue = input(false);
   /** A tab stop whose arrow keys walk the points (charts that are not one of many). */
   readonly focusable = input(false);
 

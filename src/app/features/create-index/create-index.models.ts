@@ -1,5 +1,5 @@
 import { JsonRecord, isRecord } from '../../core/json';
-import { INVALID_INDEX_NAME_CHARACTERS, invalidCharacters } from '../../core/names';
+import { indexNameFormatError } from '../../core/names';
 
 export interface IndexMetadata {
   settings?: unknown;
@@ -106,12 +106,6 @@ export interface NameCheck {
   readonly warning: string | null;
 }
 
-const MAX_INDEX_NAME_BYTES = 255;
-
-function utf8Length(value: string): number {
-  return new TextEncoder().encode(value).length;
-}
-
 /**
  * Mirrors the index name rules enforced by Elasticsearch. `existing` and
  * `aliases` are the index and alias names already used on the cluster.
@@ -124,30 +118,9 @@ export function validateIndexName(
   const ok = (warning: string | null = null): NameCheck => ({ error: null, warning });
   const fail = (error: string): NameCheck => ({ error, warning: null });
 
-  if (!name) {
-    return fail('Enter a name for the index');
-  }
-  if (name !== name.toLowerCase()) {
-    return fail('Index names must be lowercase');
-  }
-  if (/\s/.test(name)) {
-    return fail('Index names cannot contain spaces');
-  }
-  if (name === '.' || name === '..') {
-    return fail('Index names cannot be "." or ".."');
-  }
-  const first = name.charAt(0);
-  if (first === '-' || first === '_' || first === '+') {
-    return fail(`Index names cannot start with "${first}"`);
-  }
-  const invalid = invalidCharacters(name, INVALID_INDEX_NAME_CHARACTERS);
-  if (invalid.length > 0) {
-    const list = invalid.map((character) => `"${character}"`).join(', ');
-    return fail(`Index names cannot contain ${list}`);
-  }
-  const bytes = utf8Length(name);
-  if (bytes > MAX_INDEX_NAME_BYTES) {
-    return fail(`Index names are limited to ${MAX_INDEX_NAME_BYTES} bytes (this one has ${bytes})`);
+  const format = indexNameFormatError(name);
+  if (format) {
+    return fail(format);
   }
   if (existing.includes(name)) {
     return fail(`An index named "${name}" already exists`);
@@ -155,7 +128,7 @@ export function validateIndexName(
   if (aliases.includes(name)) {
     return fail(`An alias named "${name}" already exists`);
   }
-  if (first === '.') {
+  if (name.startsWith('.')) {
     return ok('Names starting with "." are reserved for hidden and system indices');
   }
   return ok();
@@ -348,15 +321,6 @@ export const EXAMPLE_INDEX_BODY = JSON.stringify(
   null,
   2,
 );
-
-/** Sorts index names, regular indices first and dot-prefixed ones last. */
-export function sortIndexNames(names: readonly string[]): { regular: string[]; special: string[] } {
-  const sorted = [...new Set(names)].sort((left, right) => left.localeCompare(right));
-  return {
-    regular: sorted.filter((name) => !name.startsWith('.')),
-    special: sorted.filter((name) => name.startsWith('.')),
-  };
-}
 
 /** Alias names reported by `_cat/aliases` (one row per alias and index). */
 export function aliasNames(rows: unknown): string[] {

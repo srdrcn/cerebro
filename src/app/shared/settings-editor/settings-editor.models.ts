@@ -149,7 +149,7 @@ export function humanizeSettingKey(key: string): string {
 }
 
 /** Key of the group holding `GroupingOptions.featured` settings. */
-export const FEATURED_GROUP_KEY = '@featured';
+const FEATURED_GROUP_KEY = '@featured';
 
 function relativeName(name: string, stripPrefix: string): string {
   return stripPrefix && name.startsWith(stripPrefix) ? name.slice(stripPrefix.length) : name;

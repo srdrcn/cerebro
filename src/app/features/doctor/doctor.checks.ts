@@ -1,5 +1,5 @@
 import { formatBytes, formatDuration, formatNumber, plural, pluralize } from '../../core/format';
-import { isRecord, stringList } from '../../core/json';
+import { isRecord, stringList, toNumber } from '../../core/json';
 import { unassignedReason } from '../../core/shards';
 import {
   CheckOutcome,
@@ -39,7 +39,6 @@ import {
   roundPercent,
   settingValue,
   sortFindings,
-  toNumber,
   unavailableReason,
   versionAtLeast,
 } from './doctor.utils';
@@ -50,19 +49,19 @@ import {
 
 const GB = 1024 ** 3;
 /** Elastic's sizing guidance: "aim for shard sizes between 10GB and 50GB". */
-export const OVERSIZED_SHARD_BYTES = 50 * GB;
+const OVERSIZED_SHARD_BYTES = 50 * GB;
 /** Primaries below this are "small" for the over-sharding check. */
-export const SMALL_SHARD_BYTES = GB;
+const SMALL_SHARD_BYTES = GB;
 /** `cluster.max_shards_per_node` default (7.0+). */
-export const DEFAULT_MAX_SHARDS_PER_NODE = 1000;
-export const SHARD_LIMIT_WARNING = 0.8;
-export const SHARD_LIMIT_CRITICAL = 0.95;
-export const HEAP_WARNING = 85;
-export const HEAP_CRITICAL = 95;
+const DEFAULT_MAX_SHARDS_PER_NODE = 1000;
+const SHARD_LIMIT_WARNING = 0.8;
+const SHARD_LIMIT_CRITICAL = 0.95;
+const HEAP_WARNING = 85;
+const HEAP_CRITICAL = 95;
 /** Old-generation GC time as a share of uptime. */
-export const GC_TIME_SHARE = 0.05;
+const GC_TIME_SHARE = 0.05;
 /** Average old-generation collection time. */
-export const GC_AVERAGE_MS = 1_000;
+const GC_AVERAGE_MS = 1_000;
 
 /* ------------------------------------------------------------------ */
 /* Wording helpers                                                     */
@@ -269,7 +268,7 @@ interface NodeDiskState {
  * requires, as in `DiskThresholdMonitor` (it checks the least available data
  * path). Dedicated frozen nodes only have a flood stage watermark.
  */
-export function nodeDiskStates(input: DoctorInput, thresholds: DiskThresholds): NodeDiskState[] {
+function nodeDiskStates(input: DoctorInput, thresholds: DiskThresholds): NodeDiskState[] {
   return (input.nodes ?? [])
     .filter((node) => isDataNode(node) && node.disk !== null)
     .map((node) => {
@@ -591,7 +590,7 @@ const impossibleReplicas: DoctorCheck = {
  */
 const BACKING_INDEX = /^\.ds-(.+?)-(?:\d{4}\.\d{2}\.\d{2}-)?\d+$/;
 
-export function backingDataStream(index: string): string | null {
+function backingDataStream(index: string): string | null {
   return BACKING_INDEX.exec(index)?.[1] ?? null;
 }
 
@@ -1300,7 +1299,7 @@ const ilmErrors: DoctorCheck = {
  * with G1 (it climbs high before every young collection), so it is only the
  * fallback when the pool is not reported.
  */
-export function memoryPressure(node: NodeInfo): { percent: number; oldGen: boolean } | null {
+function memoryPressure(node: NodeInfo): { percent: number; oldGen: boolean } | null {
   if (node.oldGenUsed !== null && node.oldGenMax !== null && node.oldGenMax > 0) {
     return { percent: (node.oldGenUsed / node.oldGenMax) * 100, oldGen: true };
   }
@@ -1655,7 +1654,7 @@ function deprecationResource(kind: ResourceKind, name: string, detail: string | 
 }
 
 /** Flattens every section of `_migration/deprecations` into items with their resources. */
-export function parseDeprecations(response: Readonly<Record<string, unknown>>): DeprecationItem[] {
+function parseDeprecations(response: Readonly<Record<string, unknown>>): DeprecationItem[] {
   const items: DeprecationItem[] = [];
   const add = (raw: Record<string, unknown>, resources: DoctorResource[]) => {
     const message = typeof raw['message'] === 'string' ? raw['message'] : '';
@@ -1860,7 +1859,7 @@ export const CHECKS: readonly DoctorCheck[] = [
   upgradeReadiness,
 ];
 
-export function runCheck(check: DoctorCheck, input: DoctorInput): CheckOutcome {
+function runCheck(check: DoctorCheck, input: DoctorInput): CheckOutcome {
   const base = { id: check.id, category: check.category, title: check.title, description: check.description };
   const missing = check.sources.find((source) => !hasSource(input, source));
   if (missing) {
@@ -1885,7 +1884,7 @@ const COVERED_BY: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** Drops findings that repeat what another finding reports (one root cause, one finding). */
-export function consolidate(outcomes: readonly CheckOutcome[]): CheckOutcome[] {
+function consolidate(outcomes: readonly CheckOutcome[]): CheckOutcome[] {
   const present = new Set(outcomes.flatMap((outcome) => outcome.findings.map((finding) => finding.id)));
   return outcomes.map((outcome) => {
     const findings = outcome.findings.filter((finding) => !(COVERED_BY[finding.id] ?? []).some((id) => present.has(id)));

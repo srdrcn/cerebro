@@ -263,7 +263,7 @@ function isStringArray(value: unknown): boolean {
  * Problems of an index template body. `components` lists the existing
  * component templates; null (not loaded yet) skips the existence check.
  */
-export function checkIndexTemplate(body: JsonRecord, components: readonly string[] | null): BodyProblem[] {
+function checkIndexTemplate(body: JsonRecord, components: readonly string[] | null): BodyProblem[] {
   const problems: BodyProblem[] = [];
   const patterns = body['index_patterns'];
   if (patterns === undefined || (Array.isArray(patterns) && patterns.length === 0) || patterns === '') {
@@ -303,7 +303,7 @@ export function checkIndexTemplate(body: JsonRecord, components: readonly string
 }
 
 /** Structural checks of a component template body (errors block saving). */
-export function checkComponentTemplate(body: JsonRecord): BodyProblem[] {
+function checkComponentTemplate(body: JsonRecord): BodyProblem[] {
   const problems: BodyProblem[] = [];
   if (body['template'] === undefined) {
     problems.push({ level: 'error', message: 'Add a "template" object with settings, mappings or aliases' });
@@ -389,7 +389,7 @@ export function flattenSettings(settings: unknown): SettingEntry[] {
   return entries.sort((left, right) => left.key.localeCompare(right.key));
 }
 
-export function normalizeSettingKey(key: string): string {
+function normalizeSettingKey(key: string): string {
   return key.startsWith('index.') ? key : `index.${key}`;
 }
 
@@ -477,7 +477,7 @@ export function aliasEntries(aliases: unknown): AliasEntry[] {
 }
 
 /** Name of the ILM policy set by resolved settings, if any. */
-export function lifecyclePolicy(settings: readonly SettingEntry[]): string | null {
+function lifecyclePolicy(settings: readonly SettingEntry[]): string | null {
   return settings.find((entry) => entry.key === 'index.lifecycle.name')?.value ?? null;
 }
 
@@ -492,7 +492,7 @@ interface OriginMaps {
  * setting, field and alias. Later sources win, like in Elasticsearch: the
  * components in `composed_of` order, then the template's own block.
  */
-export function originMaps(
+function originMaps(
   template: IndexTemplateBody | undefined,
   components: readonly ComponentTemplateEntry[],
 ): OriginMaps {

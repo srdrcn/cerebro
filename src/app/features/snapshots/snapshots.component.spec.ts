@@ -194,7 +194,7 @@ describe('SnapshotsComponent', () => {
     await target.load();
 
     let resolveAlpha: (value: SnapshotRecord[]) => void = () => undefined;
-    post.mockImplementation((path: string, body?: { repository?: string }) => {
+    post.mockImplementation((_path: string, body?: { repository?: string }) => {
       if (body?.repository === 'alpha') {
         return new Promise<SnapshotRecord[]>((resolve) => (resolveAlpha = resolve));
       }

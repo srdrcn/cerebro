@@ -9,7 +9,7 @@ Apart from testing user credentials, it does an additional check to see if the u
 So, first, services should be run with:
 
 ```
-docker-compose up -d
+docker compose up -d
 ```
 
 The open ldap server contains an admin user (username: `admin` / password: `admin`). For testing purposes a new
@@ -53,9 +53,10 @@ uniqueMember: uid=test,ou=people,dc=example,dc=org
 
 In the context shown above, cerebro can test that the user has valid credentials and, also, check that the user belongs 
 to the cerebro group.
-In order to do achieve that we need to use this environment variables:
+In order to achieve that we need to use these environment variables:
 
 ```
+- CEREBRO_SECRET=replace-with-a-long-random-secret
 - AUTH_TYPE=ldap
 - LDAP_URL=ldap://ldap:389
 - LDAP_BASE_DN=ou=people,dc=example,dc=org
@@ -82,7 +83,7 @@ just a string with the username. If we use for example `mail` attribute (because
 our users in our company), then this should be configured as `%s@example.org`.  
 - `LDAP_GROUP`: Condition that test the membership of an user. In the example: `memberof=cn=cerebro,ou=groups,dc=example,dc=org`
 
-If group membership check keeps failing, we can take into consideration that cerebro performs the following query: `"(& ($LDAP_USER_ATTR:${_ouput_of_appliying_LDAP_USER_ATTR_TEMPLATE}})($LDAP_GROUP))"`.
+If group membership check keeps failing, we can take into consideration that cerebro performs the following query: `"(& ($LDAP_USER_ATTR:${_output_of_applying_LDAP_USER_ATTR_TEMPLATE}})($LDAP_GROUP))"`.
 So according to the example it should look like `"(& (uid=test)(memberof=cn=cerebro,ou=groups,dc=example,dc=org))"` and this 
 can be tested with `ldapsearch` command as follows:
 

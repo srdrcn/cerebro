@@ -1,6 +1,6 @@
 import { elasticsearchReason } from '../../core/errors';
 import { textMatcher } from '../../core/format';
-import { isRecord } from '../../core/json';
+import { isRecord, stringifyForDisplay } from '../../core/json';
 import type {
   BodyState,
   QuickStart,
@@ -69,7 +69,7 @@ export function parseEditorBody(path: string, source: string): unknown {
   }
 }
 
-export function formatNdjson(source: string): string {
+function formatNdjson(source: string): string {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
 
   while (lines.at(-1)?.trim() === '') {
@@ -302,18 +302,6 @@ export function getPathSuggestions(indices: readonly string[], path: string): st
   return options;
 }
 
-export function responseText(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value, null, 2) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
-
 function errorResponse(error: unknown): unknown {
   if (isRecord(error)) {
     if ('error' in error) {
@@ -326,7 +314,7 @@ function errorResponse(error: unknown): unknown {
   return error;
 }
 
-export function isBlankBody(source: string): boolean {
+function isBlankBody(source: string): boolean {
   return source.trim() === '';
 }
 
@@ -639,7 +627,7 @@ export function networkErrorText(error: unknown): string {
       return details;
     }
     if (typeof details === 'object' && details !== null && !(details instanceof Event)) {
-      const text = responseText(details);
+      const text = stringifyForDisplay(details);
       if (text !== '{}') {
         return text;
       }

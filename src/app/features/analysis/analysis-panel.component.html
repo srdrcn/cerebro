@@ -30,9 +30,9 @@
           @for (name of indexGroups().regular; track name) {
             <option [value]="name">{{ name }}</option>
           }
-          @if (indexGroups().hidden.length > 0) {
+          @if (indexGroups().system.length > 0) {
             <optgroup label="Hidden and system">
-              @for (name of indexGroups().hidden; track name) {
+              @for (name of indexGroups().system; track name) {
                 <option [value]="name">{{ name }}</option>
               }
             </optgroup>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRecord, stringList } from './json';
+import { isRecord, stringList, toNumber } from './json';
 
 describe('json helpers', () => {
   it('recognises plain objects only', () => {
@@ -14,5 +14,13 @@ describe('json helpers', () => {
     expect(stringList('logs-*')).toEqual(['logs-*']);
     expect(stringList('')).toEqual([]);
     expect(stringList({})).toEqual([]);
+  });
+
+  it('reads numbers from _cat strings', () => {
+    expect(toNumber('42')).toBe(42);
+    expect(toNumber(7)).toBe(7);
+    expect(toNumber('')).toBeNull();
+    expect(toNumber(null)).toBeNull();
+    expect(toNumber('12kb')).toBeNull();
   });
 });

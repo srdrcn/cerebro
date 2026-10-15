@@ -23,7 +23,7 @@ class AuthController @Inject()(authentication: AuthenticationModule,
 
   def index = Action { implicit request =>
     if (authentication.isEnabled) {
-      request.session.get(AuthAction.SESSION_USER).map { user =>
+      request.session.get(AuthAction.SESSION_USER).map { _ =>
         request.session.get(AuthAction.REDIRECT_URL) match {
           case Some(url) =>
             Redirect(safeRedirectTarget(url), play.api.http.Status.SEE_OTHER)
@@ -40,7 +40,7 @@ class AuthController @Inject()(authentication: AuthenticationModule,
 
   def login = Action { implicit request =>
     LoginForm.form.bindFromRequest().fold(
-      formWithErrors => {
+      _ => {
         log.error(badFormMsg)
         BadRequest(badFormMsg)
       },

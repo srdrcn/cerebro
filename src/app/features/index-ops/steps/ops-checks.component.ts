@@ -25,12 +25,12 @@ const FIX_LABELS: Readonly<Record<CheckFix, string>> = {
     <section class="ops-section" aria-labelledby="ops-checks-title">
       <div class="ops-section__head">
         <h3 id="ops-checks-title" class="section-title" tabindex="-1">
-          <i class="bi bi-clipboard-check" aria-hidden="true"></i> {{ title() }}
+          <i class="bi bi-clipboard-check" aria-hidden="true"></i> Checks
         </h3>
         <span class="count-label">{{ summaryText() }}</span>
       </div>
       @if (checks().length === 0) {
-        <p class="ops-section__hint">{{ emptyText() }}</p>
+        <p class="ops-section__hint">Choose the options above to run the checks.</p>
       } @else {
         <ul class="ops-checks">
           @for (check of checks(); track check.id) {
@@ -157,8 +157,6 @@ const FIX_LABELS: Readonly<Record<CheckFix, string>> = {
 })
 export class OpsChecksComponent {
   readonly checks = input.required<readonly Check[]>();
-  readonly title = input('Checks');
-  readonly emptyText = input('Choose the options above to run the checks.');
   /** The fix whose request is in flight. */
   readonly busy = input<CheckFix | null>(null);
   readonly fix = output<CheckFix>();

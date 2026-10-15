@@ -13,9 +13,7 @@ object Index {
       "special" -> JsBoolean(name.startsWith(".")),
       "unhealthy" -> JsBoolean(isIndexUnhealthy(shardMap)),
       "doc_count" -> (stats \ "primaries" \ "docs" \ "count").asOpt[JsNumber].getOrElse(JsNumber(0)),
-      "deleted_docs" -> (stats \ "primaries" \ "docs" \ "deleted").asOpt[JsNumber].getOrElse(JsNumber(0)),
       "size_in_bytes" -> (stats \ "primaries" \ "store" \ "size_in_bytes").asOpt[JsNumber].getOrElse(JsNumber(0)),
-      "total_size_in_bytes" -> (stats \ "total" \ "store" \ "size_in_bytes").asOpt[JsNumber].getOrElse(JsNumber(0)),
       "aliases" -> JsArray(aliases.as[JsObject].keys.map(JsString(_)).toSeq), // 1.4 < does not return aliases obj
       "num_shards" -> JsNumber((routingTable \ "shards").as[JsObject].keys.map(_.toInt).max + 1),
       "num_replicas" -> JsNumber((routingTable \ "shards" \ "0").as[JsArray].value.size - 1),

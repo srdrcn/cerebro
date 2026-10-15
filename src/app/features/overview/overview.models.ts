@@ -15,9 +15,7 @@ export interface OverviewIndex {
   readonly special: boolean;
   readonly unhealthy: boolean;
   readonly doc_count: number;
-  readonly deleted_docs?: number;
   readonly size_in_bytes: number;
-  readonly total_size_in_bytes?: number;
   readonly aliases: readonly string[];
   readonly num_shards: number;
   readonly num_replicas: number;
@@ -37,7 +35,6 @@ export interface OverviewNode {
   readonly current_master: boolean;
   readonly name: string;
   readonly host: string | null;
-  readonly ip?: string | null;
   readonly es_version: string;
   readonly jvm_version: string | null;
   readonly load_average: number;
@@ -49,7 +46,6 @@ export interface OverviewNode {
   readonly ingest: boolean;
   readonly heap: {
     readonly used: number;
-    readonly committed: number;
     readonly used_percent: number;
     readonly max: number;
   };

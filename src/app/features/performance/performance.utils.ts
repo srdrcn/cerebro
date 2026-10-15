@@ -1,4 +1,4 @@
-import { formatNumber, humanize, pluralize, textMatcher } from '../../core/format';
+import { formatNumber, humanize, pluralize, sortIndexNames, textMatcher } from '../../core/format';
 import { isRecord } from '../../core/json';
 import {
   FrameKind,
@@ -467,7 +467,7 @@ function frameId(frame: StackFrame): string {
   return `${frame.className}.${frame.method}`;
 }
 
-export function isIdleFrame(frame: StackFrame | undefined): boolean {
+function isIdleFrame(frame: StackFrame | undefined): boolean {
   return !!frame && IDLE_FRAMES.has(frameId(frame));
 }
 
@@ -520,7 +520,7 @@ function focusFrame(groups: readonly StackGroup[]): { readonly frame: StackFrame
 }
 
 /** Load of a thread for sorting: percent of the interval, or allocated bytes. */
-export function threadLoad(thread: HotThread): number {
+function threadLoad(thread: HotThread): number {
   return thread.percent ?? thread.allocatedBytes ?? 0;
 }
 
@@ -839,7 +839,7 @@ export function quietHeading(type: HotThreadsType): string {
 // ==== Thread pools ==============================================================
 
 /** Pools that matter most for diagnosis, in display order. */
-export const INTERESTING_POOLS: readonly string[] = [
+const INTERESTING_POOLS: readonly string[] = [
   'search',
   'write',
   'get',
@@ -1035,12 +1035,12 @@ export function summarizeThreadPools(rows: readonly ThreadPoolRow[]): ThreadPool
 
 // ==== Pending tasks =============================================================
 
-export const PENDING_PRIORITIES: readonly string[] = ['IMMEDIATE', 'URGENT', 'HIGH', 'NORMAL', 'LOW', 'LANGUID'];
+const PENDING_PRIORITIES: readonly string[] = ['IMMEDIATE', 'URGENT', 'HIGH', 'NORMAL', 'LOW', 'LANGUID'];
 
 /** Waiting longer than this is worth a warning. */
 export const SLOW_PENDING_MILLIS = 30_000;
 
-export function priorityRank(priority: string): number {
+function priorityRank(priority: string): number {
   const index = PENDING_PRIORITIES.indexOf(priority.toUpperCase());
   return index >= 0 ? index : PENDING_PRIORITIES.length;
 }
@@ -1563,13 +1563,6 @@ export function describeForm(form: SlowlogForm): string[] {
 export function filterIndexNames(names: readonly string[], query: string): string[] {
   const matches = textMatcher(query);
   return names.filter((name) => matches(name));
-}
-
-/** Sorts index names with regular indices first, then dot-prefixed system and hidden ones. */
-export function sortIndexNames(names: readonly string[]): string[] {
-  return [...new Set(names)].sort(
-    (left, right) => Number(left.startsWith('.')) - Number(right.startsWith('.')) || left.localeCompare(right),
-  );
 }
 
 /** `.ds-<stream>-<date>-<generation>`: a backing index of a data stream. */

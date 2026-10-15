@@ -77,8 +77,7 @@
   color: var(--text);
 }
 
-.auth-brand__mark .brand-mark,
-.auth-brand__mark img {
+.auth-brand__mark .brand-mark {
   width: 44px;
   height: 44px;
 }

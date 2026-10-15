@@ -6,13 +6,13 @@ import { MetricsSample, appendSample, buildHistory, parseNodeMetrics } from './m
 import { RefreshService } from './refresh.service';
 
 /** A refresh that comes sooner than this after the last sample is skipped (noisy rates). */
-export const MIN_SAMPLE_SPACING_MS = 1_000;
+const MIN_SAMPLE_SPACING_MS = 1_000;
 /**
  * With auto refresh on, a tick is skipped when the last sample is younger than
  * half the interval, capped here: a page that sampled on arrival is not
  * sampled again by the timer a second later.
  */
-export const MAX_TICK_SPACING_MS = 5_000;
+const MAX_TICK_SPACING_MS = 5_000;
 /** While auto refresh is paused, opening a page samples again once the last sample is this old. */
 export const PAUSED_RESAMPLE_MS = 5_000;
 /**
@@ -22,7 +22,7 @@ export const PAUSED_RESAMPLE_MS = 5_000;
  */
 export const FOLLOW_UP_MS = 3_000;
 /** A sample still running after this many intervals is reported as late. */
-export const STALE_INTERVALS = 3;
+const STALE_INTERVALS = 3;
 
 /**
  * Samples `POST metrics/nodes` on every refresh tick while at least one page
@@ -52,7 +52,6 @@ export class MetricsService {
   /** Buffered samples, oldest first. */
   readonly samples = this.samplesState.asReadonly();
   readonly history = computed(() => buildHistory(this.samplesState()));
-  readonly cluster = computed(() => this.history().cluster);
   readonly nodes = computed(() => this.history().nodes);
   /** Rates can be shown once two samples of a node have been compared. */
   readonly ready = computed(() => this.history().ready);

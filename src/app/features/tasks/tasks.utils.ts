@@ -291,7 +291,7 @@ export function countDescendants(node: TaskTreeNode): number {
 }
 
 /** Wait this long before asking for node names again after a failed lookup. */
-export const NODE_LOOKUP_BACKOFF_MILLIS = 60_000;
+const NODE_LOOKUP_BACKOFF_MILLIS = 60_000;
 
 /**
  * Whether the (heavy) nodes call is worth making: only for node ids never
@@ -346,7 +346,7 @@ export function isSystemTask(task: Task): boolean {
   return task.internal || task.type === 'persistent';
 }
 
-export const SYSTEM_TASK_WARNING =
+const SYSTEM_TASK_WARNING =
   'This is a built-in Elasticsearch task. It is usually restarted automatically, and cancelling it can interrupt cluster features such as health reporting or GeoIP updates.';
 
 /** "Cancel task Reindex?" message describing what cancelling keeps. */

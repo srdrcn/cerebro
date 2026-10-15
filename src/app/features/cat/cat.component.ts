@@ -44,7 +44,7 @@ import {
 } from './cat.utils';
 
 /** Rows rendered per page; CAT shards/segments can be very large. */
-export const CAT_PAGE_SIZE = 250;
+const CAT_PAGE_SIZE = 250;
 
 interface CatApiOption {
   readonly api: CatApi;

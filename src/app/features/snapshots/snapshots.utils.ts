@@ -208,7 +208,7 @@ export function uniqueName(base: string, taken: ReadonlySet<string>): string {
 }
 
 /** Date math names such as `<nightly-{now/d}>` are resolved by Elasticsearch. */
-export function isDateMathName(name: string): boolean {
+function isDateMathName(name: string): boolean {
   return /^<.+>$/.test(name);
 }
 

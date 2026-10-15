@@ -28,7 +28,6 @@ import {
   sameRequest,
   shardCount,
   shardSize,
-  sortIndexNames,
   sortNodeDecisions,
   summarizeDecisions,
   unassignedGroups,
@@ -181,10 +180,6 @@ describe('text helpers', () => {
       ['zone', 'a'],
     ]);
     expect(visibleAttributes(undefined)).toEqual([]);
-  });
-
-  it('lists regular indices before hidden ones', () => {
-    expect(sortIndexNames(['b', '.ds-x', 'a', 'b', '.kibana'])).toEqual(['a', 'b', '.ds-x', '.kibana']);
   });
 });
 

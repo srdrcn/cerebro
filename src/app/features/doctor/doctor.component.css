@@ -390,7 +390,7 @@
 /* ---- Checks that could not run ----------------------------------------- */
 
 .doctor-gaps__reasons {
-  margin: var(--space-1) 0 var(--space-2);
+  margin: 4px 0 var(--space-2);
   padding-left: var(--space-5);
 }
 

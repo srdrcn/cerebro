@@ -20,7 +20,6 @@ import {
   settingValue,
   severityParam,
   sortFindings,
-  toNumber,
   unavailableReason,
   versionAtLeast,
 } from './doctor.utils';
@@ -28,14 +27,6 @@ import {
 const GB = 1024 ** 3;
 
 describe('primitive parsing', () => {
-  it('reads numbers from _cat strings', () => {
-    expect(toNumber('42')).toBe(42);
-    expect(toNumber(7)).toBe(7);
-    expect(toNumber('')).toBeNull();
-    expect(toNumber(null)).toBeNull();
-    expect(toNumber('12kb')).toBeNull();
-  });
-
   it('parses Elasticsearch byte sizes with binary units', () => {
     expect(parseByteSize('500mb')).toBe(500 * 1024 ** 2);
     expect(parseByteSize('150GB')).toBe(150 * GB);

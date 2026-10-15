@@ -338,8 +338,4 @@ export class NodesComponent {
   attributes(node: NodesNode): readonly (readonly [string, string])[] {
     return attributeEntries(node.attributes, this.showInternalAttributes());
   }
-
-  diskUsed(node: NodesNode): number | null {
-    return node.disk ? node.disk.total - node.disk.available : null;
-  }
 }

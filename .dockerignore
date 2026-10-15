@@ -9,11 +9,8 @@ target
 project/target
 project/project
 logs
-tmp
 cerebro.db
 public/js
 .angular
-out-tsc
-coverage
 *.iml
 *.log

@@ -1,7 +1,7 @@
 /** Naming rules Elasticsearch enforces, checked before a request is sent. */
 
 /** Characters no index, template, snapshot or repository name may contain. */
-export const INVALID_NAME_CHARACTERS: readonly string[] = [
+const INVALID_NAME_CHARACTERS: readonly string[] = [
   '\\',
   '/',
   '*',
@@ -49,4 +49,40 @@ export function validateResourceName(name: string, noun: string): string | null 
     return `${plural} cannot contain ${invalid.map((character) => `"${character}"`).join(', ')}`;
   }
   return null;
+}
+
+/** Elasticsearch's limit of index name length in bytes. */
+const MAX_INDEX_NAME_BYTES = 255;
+
+function utf8Length(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+/**
+ * The format rules Elasticsearch enforces on index names (not whether the
+ * name is taken). Returns an error message or `null`.
+ */
+export function indexNameFormatError(name: string): string | null {
+  if (!name) {
+    return 'Enter a name for the index';
+  }
+  if (name !== name.toLowerCase()) {
+    return 'Index names must be lowercase';
+  }
+  if (/\s/.test(name)) {
+    return 'Index names cannot contain spaces';
+  }
+  if (name === '.' || name === '..') {
+    return 'Index names cannot be "." or ".."';
+  }
+  const first = name.charAt(0);
+  if (first === '-' || first === '_' || first === '+') {
+    return `Index names cannot start with "${first}"`;
+  }
+  const invalid = invalidCharacters(name, INVALID_INDEX_NAME_CHARACTERS);
+  if (invalid.length > 0) {
+    return `Index names cannot contain ${invalid.map((character) => `"${character}"`).join(', ')}`;
+  }
+  const bytes = utf8Length(name);
+  return bytes > MAX_INDEX_NAME_BYTES ? `Index names are limited to ${MAX_INDEX_NAME_BYTES} bytes (this one has ${bytes})` : null;
 }

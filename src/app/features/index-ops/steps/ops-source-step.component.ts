@@ -1,9 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ConnectionService } from '../../../core/connection.service';
-import { listSample } from '../../../core/format';
+import { groupIndexNames, listSample } from '../../../core/format';
 import { healthLabel, healthTone } from '../../../core/health';
-import { groupIndexOptions } from '../../../shared/index-picker.component';
 import { BytesPipe, NumberPipe, PluralPipe } from '../../../shared/format.pipes';
 import { isResizeKind } from '../index-ops.models';
 import { IndexOpsStore } from '../index-ops.store';
@@ -28,7 +27,7 @@ export class OpsSourceStepComponent {
   readonly healthTone = healthTone;
 
   readonly isResize = computed(() => isResizeKind(this.store.operation()));
-  readonly groups = computed(() => groupIndexOptions(this.store.indices() ?? []));
+  readonly groups = computed(() => groupIndexNames(this.store.indices() ?? []));
 
   readonly aliasTargets = computed(() => this.store.rolloverTargets().filter((target) => target.kind === 'alias' && !target.hidden));
   readonly streamTargets = computed(() => this.store.rolloverTargets().filter((target) => target.kind === 'data-stream' && !target.hidden));

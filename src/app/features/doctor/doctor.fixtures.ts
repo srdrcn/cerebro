@@ -10,7 +10,7 @@
  * (4 replicas) and overflow-test (3 replicas), tmp-doctor-ilm-1 (ILM ERROR in
  * attempt-rollover), tmp-doctor-shards (3 tiny primaries).
  */
-export const LIVE_REPORT: Record<string, any> = {
+const LIVE_REPORT: Record<string, any> = {
   "health": {
     "cluster_name": "cerebro-demo",
     "status": "yellow",

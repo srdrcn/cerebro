@@ -52,7 +52,7 @@ export function normalizeOverview(data: RawOverviewData): OverviewData {
 }
 
 /** Compiles `filter` once into a test for many indices. */
-export function overviewIndexMatcher(filter: OverviewIndexFilter): (index: OverviewIndex) => boolean {
+function overviewIndexMatcher(filter: OverviewIndexFilter): (index: OverviewIndex) => boolean {
   const matches = textMatcher(filter.name);
   return (index) => {
     if ((!filter.special && index.special) || (!filter.closed && index.closed)) {

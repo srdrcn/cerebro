@@ -111,7 +111,7 @@ describe('MetricsService', () => {
     expect(post).toHaveBeenCalledTimes(2);
     expect(metrics.ready()).toBe(true);
     // 1,500 documents over the node's 15 seconds.
-    expect(metrics.cluster().indexingRate.map((point) => point.value)).toEqual([null, 100]);
+    expect(metrics.history().cluster.indexingRate.map((point) => point.value)).toEqual([null, 100]);
     expect(metrics.nodes().map((node) => node.name)).toEqual(['es-node-1']);
     expect(metrics.latest().get('id-es-node-1')?.indexTotal).toBe(2_500);
     expect(metrics.interval()).toBe(15_000);
@@ -282,7 +282,7 @@ describe('MetricsService', () => {
     await metrics.sampleNow();
     expect(metrics.failed()).toBe(false);
     expect(metrics.lastError()).toBeUndefined();
-    expect(metrics.cluster().indexingRate.map((point) => point.value)).toEqual([null, 500 / 30]);
+    expect(metrics.history().cluster.indexingRate.map((point) => point.value)).toEqual([null, 500 / 30]);
   });
 
   it('does nothing without a connection', async () => {
@@ -312,7 +312,7 @@ describe('MetricsService', () => {
       await runFollowUp();
       expect(post).toHaveBeenCalledTimes(2);
       expect(metrics.ready()).toBe(true);
-      expect(metrics.cluster().indexingRate.map((point) => point.value)).toEqual([null, 100]);
+      expect(metrics.history().cluster.indexingRate.map((point) => point.value)).toEqual([null, 100]);
 
       // Later samples follow the refresh ticks only.
       await runFollowUp(10_000);
@@ -399,7 +399,7 @@ describe('MetricsService', () => {
     }
     expect(metrics.samples().at(-1)?.expected).toBe(60_000);
     expect(metrics.history().gaps.slice(-3)).toEqual([false, false, false]);
-    expect(metrics.cluster().indexingRate.slice(-3).map((point) => point.value)).toEqual([1_000 / 60, 1_000 / 60, 1_000 / 60]);
+    expect(metrics.history().cluster.indexingRate.slice(-3).map((point) => point.value)).toEqual([1_000 / 60, 1_000 / 60, 1_000 / 60]);
   });
 
   it('reports a sample that has been running for several intervals as late', async () => {

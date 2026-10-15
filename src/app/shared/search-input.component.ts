@@ -7,8 +7,6 @@ import {
   viewChild,
 } from '@angular/core';
 
-let nextSearchId = 0;
-
 /** Search field with a leading icon and a clear button: `[(value)]`. */
 @Component({
   selector: 'cerebro-search',
@@ -20,7 +18,6 @@ let nextSearchId = 0;
       type="search"
       class="input"
       [class.input-sm]="small()"
-      [id]="inputId()"
       [placeholder]="placeholder()"
       [attr.aria-label]="ariaLabel() || placeholder()"
       [value]="value()"
@@ -52,7 +49,6 @@ export class SearchInputComponent {
   readonly placeholder = input('Search');
   readonly ariaLabel = input('');
   readonly small = input(false);
-  readonly inputId = input(`cerebro-search-${nextSearchId++}`);
 
   private readonly inputRef = viewChild.required<ElementRef<HTMLInputElement>>('input');
 

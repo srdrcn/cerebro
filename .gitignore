@@ -5,12 +5,9 @@ project/project/
 public/js/
 node_modules/
 .angular/
-out-tsc/
-coverage/
 
 # Runtime files
 logs/
-tmp/
 cerebro.db
 *.log
 

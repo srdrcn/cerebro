@@ -3,15 +3,15 @@ import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core'
 import { readPreference, writePreference } from './preferences';
 
 /** Auto-refresh intervals in milliseconds. `0` pauses automatic refresh. */
-export const REFRESH_INTERVALS = [0, 5_000, 10_000, 15_000, 30_000, 60_000] as const;
+const REFRESH_INTERVALS = [0, 5_000, 10_000, 15_000, 30_000, 60_000] as const;
 export type RefreshInterval = (typeof REFRESH_INTERVALS)[number];
 
-export const DEFAULT_REFRESH_INTERVAL: RefreshInterval = 15_000;
+const DEFAULT_REFRESH_INTERVAL: RefreshInterval = 15_000;
 export const REFRESH_STORAGE_KEY = 'cerebro.refresh-interval';
 /** The last interval that was not "Off", restored by `resume()`. */
 export const LAST_ACTIVE_REFRESH_STORAGE_KEY = 'cerebro.refresh-interval-active';
 
-export function isRefreshInterval(value: number): value is RefreshInterval {
+function isRefreshInterval(value: number): value is RefreshInterval {
   return REFRESH_INTERVALS.some((candidate) => candidate === value);
 }
 

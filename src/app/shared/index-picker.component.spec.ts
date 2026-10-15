@@ -6,7 +6,7 @@ import { ClusterApiError } from '../core/api-envelope';
 import { ClusterApiService } from '../core/cluster-api.service';
 import { ConnectionService } from '../core/connection.service';
 import { RefreshService } from '../core/refresh.service';
-import { IndexPickerComponent, groupIndexOptions } from './index-picker.component';
+import { IndexPickerComponent } from './index-picker.component';
 
 @Component({
   imports: [IndexPickerComponent],
@@ -17,15 +17,6 @@ class HostComponent {
   readonly index = signal('');
   readonly picked: string[] = [];
 }
-
-describe('groupIndexOptions', () => {
-  it('sorts indices and lists dot-prefixed ones separately', () => {
-    expect(groupIndexOptions(['orders', '.kibana', 'customers', 'orders'])).toEqual({
-      regular: ['customers', 'orders'],
-      system: ['.kibana'],
-    });
-  });
-});
 
 describe('IndexPickerComponent', () => {
   const post = vi.fn();

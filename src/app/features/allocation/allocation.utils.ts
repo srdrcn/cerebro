@@ -1,5 +1,5 @@
 import { elasticsearchReason } from '../../core/errors';
-import { formatBytes, formatDuration, humanize, sentence } from '../../core/format';
+import { formatBytes, formatDuration, humanize, sentence, sortIndexNames } from '../../core/format';
 import { isRecord } from '../../core/json';
 import { isInternalAttribute } from '../../core/node-attributes';
 import { unassignedReason } from '../../core/shards';
@@ -57,18 +57,6 @@ export function visibleAttributes(
     .map(([name, value]) => [name, String(value)] as const);
 }
 
-/** Regular indices alphabetically, then hidden/system ones (leading dot). */
-export function sortIndexNames(names: readonly string[]): string[] {
-  return [...new Set(names)].sort((left, right) => {
-    const leftHidden = left.startsWith('.');
-    const rightHidden = right.startsWith('.');
-    if (leftHidden !== rightHidden) {
-      return leftHidden ? 1 : -1;
-    }
-    return left.localeCompare(right);
-  });
-}
-
 /* ------------------------------------------------------------------ */
 /* Decisions and deciders                                              */
 /* ------------------------------------------------------------------ */
@@ -90,7 +78,7 @@ const DECISIONS: Readonly<Record<string, DecisionMeta>> = {
   no_attempt: { label: 'Not attempted', tone: 'gray' },
 };
 
-export function normalizeDecision(value: string | undefined): string {
+function normalizeDecision(value: string | undefined): string {
   return (value ?? '').trim().toLocaleLowerCase();
 }
 
@@ -100,7 +88,7 @@ export function decisionMeta(value: string | undefined): DecisionMeta {
 }
 
 /** Status mark of a decision: check for yes, cross for no, hourglass while throttled. */
-export function decisionIcon(value: string | undefined): string {
+function decisionIcon(value: string | undefined): string {
   switch (normalizeDecision(value)) {
     case 'yes':
       return 'bi-check-lg';
@@ -124,7 +112,7 @@ const DECISION_RANK: Readonly<Record<string, number>> = {
   no: 4,
 };
 
-export function decisionRank(value: string | undefined): number {
+function decisionRank(value: string | undefined): number {
   return DECISION_RANK[normalizeDecision(value)] ?? 5;
 }
 
@@ -220,11 +208,11 @@ export function deciderLabel(name: string): string {
   return DECIDERS[name]?.label ?? (humanize(name) || 'Unknown decider');
 }
 
-export function deciderHint(name: string): string | undefined {
+function deciderHint(name: string): string | undefined {
   return DECIDERS[name]?.hint;
 }
 
-export function toDeciderView(raw: RawDecider): DeciderView {
+function toDeciderView(raw: RawDecider): DeciderView {
   const decider = raw.decider ?? '';
   const meta = decisionMeta(raw.decision);
   const hint = deciderHint(decider);
@@ -268,7 +256,7 @@ const STATES: Readonly<Record<string, DecisionMeta>> = {
   relocating: { label: 'Relocating', tone: 'purple' },
 };
 
-export function shardStateMeta(state: string | undefined): DecisionMeta {
+function shardStateMeta(state: string | undefined): DecisionMeta {
   const key = (state ?? '').toLocaleLowerCase();
   return STATES[key] ?? { label: humanize(key) || 'Unknown', tone: 'gray' };
 }
@@ -289,7 +277,7 @@ export function lastAllocationStatusLabel(status: string | undefined): string | 
   return LAST_ALLOCATION_STATUS[status.toLocaleLowerCase()] ?? humanize(status);
 }
 
-export function toUnassignedView(info: RawUnassignedInfo): UnassignedView {
+function toUnassignedView(info: RawUnassignedInfo): UnassignedView {
   const reason = info.reason ?? '';
   const meta = unassignedReason(reason);
   const at = info.at ? Date.parse(info.at) : Number.NaN;
@@ -443,7 +431,7 @@ export function buildVerdict(raw: RawAllocationExplain): VerdictView {
  * from `can_rebalance_to_other_node` and `can_rebalance_cluster` (the raw
  * `rebalance_explanation` reads like an error even when all is well).
  */
-export function rebalanceClause(raw: RawAllocationExplain): string {
+function rebalanceClause(raw: RawAllocationExplain): string {
   const cluster = normalizeDecision(raw.can_rebalance_cluster);
   switch (normalizeDecision(raw.can_rebalance_to_other_node)) {
     case 'yes':
@@ -503,7 +491,7 @@ export function describeStore(store: RawNodeStore | undefined): string | undefin
  * `hints: false` drops the remedy hints: for an assigned, healthy shard the
  * other nodes refusing it is expected, and "add a data node" would be bad advice.
  */
-export function toNodeDecisionView(raw: RawNodeDecision, options: { readonly hints?: boolean } = {}): NodeDecisionView {
+function toNodeDecisionView(raw: RawNodeDecision, options: { readonly hints?: boolean } = {}): NodeDecisionView {
   const meta = decisionMeta(raw.node_decision);
   const store = describeStore(raw.store);
   const blockers = blockingDeciders(raw.deciders);

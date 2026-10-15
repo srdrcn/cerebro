@@ -32,7 +32,7 @@ export function normalizeName(name: string): string {
 }
 
 /** Names are unique regardless of case and surrounding whitespace. */
-export function nameKey(name: string): string {
+function nameKey(name: string): string {
   return normalizeName(name).toLocaleLowerCase();
 }
 

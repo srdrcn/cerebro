@@ -280,14 +280,6 @@ export function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2) ?? '';
 }
 
-/** Regular indices first, hidden/system (dot-prefixed) ones last. */
-export function sortIndexOptions(indices: readonly string[]): string[] {
-  const unique = [...new Set(indices)];
-  const regular = unique.filter((name) => !name.startsWith('.')).sort((a, b) => a.localeCompare(b));
-  const special = unique.filter((name) => name.startsWith('.')).sort((a, b) => a.localeCompare(b));
-  return [...regular, ...special];
-}
-
 export function aliasNames(aliases: readonly AliasRecord[]): string[] {
   return [...new Set(aliases.map((alias) => alias.alias))].sort((a, b) => a.localeCompare(b));
 }

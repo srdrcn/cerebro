@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { stringifyForDisplay } from './dialog.service';
+import { stringifyForDisplay } from './json';
 
 export type AlertLevel = 'success' | 'error' | 'info' | 'warn';
 
@@ -127,13 +127,6 @@ export class AlertService {
     for (const [id, countdown] of this.countdowns) {
       this.start(id, countdown);
     }
-  }
-
-  clear(): void {
-    for (const id of [...this.countdowns.keys()]) {
-      this.cancel(id);
-    }
-    this.alertsState.set([]);
   }
 
   formatResponse(response: unknown): string {

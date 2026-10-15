@@ -97,7 +97,7 @@ export function isManagedPolicy(name: string, policy: IlmPolicyBody | undefined)
   return name.startsWith('.') || policy?._meta?.['managed'] === true;
 }
 
-export function phaseTone(name: string | null | undefined): PhaseTone {
+function phaseTone(name: string | null | undefined): PhaseTone {
   return PHASE_ORDER.includes(name as never) ? (name as PhaseTone) : 'other';
 }
 

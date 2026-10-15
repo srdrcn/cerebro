@@ -17,6 +17,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage } from '../../core/errors';
+import { stringifyForDisplay } from '../../core/json';
 import { revealWhenStacked } from '../../core/layout';
 import { pluralize } from '../../core/format';
 import {
@@ -89,7 +90,6 @@ import {
   requestPath,
   responseHint,
   responseSize,
-  responseText,
   restoredBody,
   statusText,
   statusTone,
@@ -526,7 +526,7 @@ export class RestComponent {
       method: payload.method,
       path: payload.path,
       status,
-      text: responseText(value),
+      text: stringifyForDisplay(value),
       json,
       elapsedMs,
       bytes: responseSize(value),

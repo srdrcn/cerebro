@@ -15,23 +15,8 @@ import { AlertService } from '../core/alert.service';
 import { ClusterApiService } from '../core/cluster-api.service';
 import { ConnectionService } from '../core/connection.service';
 import { failureMessage, readableReason } from '../core/errors';
-import { sortByName } from '../core/format';
+import { groupIndexNames } from '../core/format';
 import { RefreshService } from '../core/refresh.service';
-
-export interface IndexOptionGroups {
-  readonly regular: readonly string[];
-  /** Dot-prefixed system and hidden indices, listed last. */
-  readonly system: readonly string[];
-}
-
-/** Splits the index picker options into regular and dot-prefixed indices. */
-export function groupIndexOptions(names: readonly string[]): IndexOptionGroups {
-  const sorted = sortByName(names);
-  return {
-    regular: sorted.filter((name) => !name.startsWith('.')),
-    system: sorted.filter((name) => name.startsWith('.')),
-  };
-}
 
 /**
  * Header select (`.context-picker`) that picks the index a page shows. It
@@ -49,7 +34,7 @@ export function groupIndexOptions(names: readonly string[]): IndexOptionGroups {
   selector: 'cerebro-index-picker',
   host: { class: 'context-picker' },
   template: `
-    <label class="visually-hidden" [for]="inputId()">{{ label() }}</label>
+    <label class="visually-hidden" [for]="inputId()">Index</label>
     <i class="bi bi-database" aria-hidden="true"></i>
     <select
       #select
@@ -93,8 +78,6 @@ export class IndexPickerComponent {
   readonly inputId = input.required<string>();
   /** The index the page shows ('' for none); may be an alias or a name the list does not have. */
   readonly index = input.required<string>();
-  /** Visually hidden label of the select. */
-  readonly label = input('Index');
 
   /** The user chose another option ('' for "Choose an index…"). */
   readonly picked = output<string>();
@@ -105,7 +88,7 @@ export class IndexPickerComponent {
   readonly failed = signal(false);
   /** Why the list could not be loaded, as Elasticsearch put it. */
   readonly loadError = signal<string | undefined>(undefined);
-  readonly groups = computed(() => groupIndexOptions(this.indices() ?? []));
+  readonly groups = computed(() => groupIndexNames(this.indices() ?? []));
   /** The current index when the list does not contain it (an alias, or not loaded yet). */
   readonly extra = computed(() => {
     const index = this.index();

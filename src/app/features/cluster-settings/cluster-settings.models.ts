@@ -29,7 +29,7 @@ export function isDynamicClusterSetting(name: string): boolean {
   );
 }
 
-export const STATIC_CLUSTER_SETTING_REASON =
+const STATIC_CLUSTER_SETTING_REASON =
   'Static setting: it can only be set in elasticsearch.yml and needs a node restart.';
 
 /**

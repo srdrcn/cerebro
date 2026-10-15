@@ -8,6 +8,7 @@ import {
   formatNumber,
   formatRelative,
   formatTimestamp,
+  groupIndexNames,
   humanize,
   listSample,
   plural,
@@ -15,6 +16,7 @@ import {
   sentence,
   severity,
   sortByName,
+  sortIndexNames,
   textMatcher,
 } from './format';
 
@@ -83,6 +85,23 @@ describe('format helpers', () => {
 
   it('sorts and de-duplicates names', () => {
     expect(sortByName(['b', 'a', 'b'])).toEqual(['a', 'b']);
+  });
+
+  it('lists regular indices before dot-prefixed ones, without duplicates', () => {
+    expect(sortIndexNames(['b', '.ds-x', 'a', 'b', '.kibana'])).toEqual(['a', 'b', '.ds-x', '.kibana']);
+    expect(sortIndexNames(['logs', '.kibana', 'audit', 'logs'])).toEqual(['audit', 'logs', '.kibana']);
+    expect(sortIndexNames(['products', '.kibana', 'audit', 'products'])).toEqual(['audit', 'products', '.kibana']);
+  });
+
+  it('groups index names into regular and dot-prefixed indices', () => {
+    expect(groupIndexNames(['orders', '.kibana', 'customers', 'orders'])).toEqual({
+      regular: ['customers', 'orders'],
+      system: ['.kibana'],
+    });
+    expect(groupIndexNames(['products', '.kibana', 'logs', '.tasks'])).toEqual({
+      regular: ['logs', 'products'],
+      system: ['.kibana', '.tasks'],
+    });
   });
 
   it('pluralizes counts with grouped digits', () => {

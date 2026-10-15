@@ -1,7 +1,7 @@
 /*
- * Ace editor theme driven by the design tokens, so the editor follows the
- * light/dark theme without re-initialising Ace. Registered as
- * "ace/theme/cerebro" by CodeEditorComponent.
+ * Ace editor theme driven by the design tokens. CodeEditorComponent applies it
+ * as an inline Ace theme (cssClass "ace-cerebro"), so the editor follows the
+ * light/dark theme without re-initialising Ace.
  */
 
 .ace-cerebro {

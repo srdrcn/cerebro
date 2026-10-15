@@ -57,7 +57,7 @@ export const EMPTY_ALIAS_DRAFT: Readonly<AliasDraft> = {
   hidden: false,
 };
 
-export function parseAliasFilter(source: string): JsonRecord | undefined {
+function parseAliasFilter(source: string): JsonRecord | undefined {
   if (!source.trim()) {
     return undefined;
   }

@@ -1,6 +1,6 @@
 package models.commons
 
-import play.api.libs.json.{JsObject, JsValue, Json}
+import play.api.libs.json.{JsObject, JsValue}
 
 trait NodeInfo {
 

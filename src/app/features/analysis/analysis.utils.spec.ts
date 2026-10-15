@@ -7,7 +7,6 @@ import {
   asTokens,
   defaultTarget,
   parseSelection,
-  splitIndices,
   textSegments,
   tokenSummary,
 } from './analysis.utils';
@@ -32,13 +31,6 @@ describe('analysis option normalization', () => {
   it('keeps only non-empty string names from a response', () => {
     expect(asNames(['b', 3, '', null, 'a', 'b'])).toEqual(['a', 'b']);
     expect(asNames({ error: 'x' })).toEqual([]);
-  });
-
-  it('puts hidden and system indices in their own group', () => {
-    expect(splitIndices(['products', '.kibana', 'logs', '.tasks'])).toEqual({
-      regular: ['logs', 'products'],
-      hidden: ['.kibana', '.tasks'],
-    });
   });
 });
 

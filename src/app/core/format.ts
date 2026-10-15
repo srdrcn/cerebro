@@ -190,3 +190,24 @@ export function listSample(names: readonly string[], limit: number): string {
 export function sortByName<T extends string>(values: readonly T[]): T[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
+
+/**
+ * Index names without duplicates, sorted and split into regular indices and
+ * dot-prefixed system and hidden ones.
+ */
+export function groupIndexNames(names: readonly string[]): {
+  readonly regular: readonly string[];
+  readonly system: readonly string[];
+} {
+  const sorted = sortByName(names);
+  return {
+    regular: sorted.filter((name) => !name.startsWith('.')),
+    system: sorted.filter((name) => name.startsWith('.')),
+  };
+}
+
+/** Index names without duplicates, sorted, regular indices first and dot-prefixed ones last. */
+export function sortIndexNames(names: readonly string[]): string[] {
+  const { regular, system } = groupIndexNames(names);
+  return [...regular, ...system];
+}

@@ -6,7 +6,6 @@ import {
   AnalysisSelection,
   AnalysisToken,
   BUILT_IN_ANALYZERS,
-  IndexGroups,
   LANGUAGE_ANALYZERS,
   OptionGroup,
   TextSegment,
@@ -19,15 +18,6 @@ export function asNames(value: unknown): readonly string[] {
     return [];
   }
   return sortByName(value.filter((name): name is string => typeof name === 'string' && name !== ''));
-}
-
-/** Regular indices first; hidden/system ones (".kibana") in their own group. */
-export function splitIndices(names: readonly string[]): IndexGroups {
-  const sorted = sortByName(names);
-  return {
-    regular: sorted.filter((name) => !name.startsWith('.')),
-    hidden: sorted.filter((name) => name.startsWith('.')),
-  };
 }
 
 /**

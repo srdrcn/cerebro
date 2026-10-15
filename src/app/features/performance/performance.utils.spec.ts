@@ -67,7 +67,6 @@ import {
   sameForm,
   settingLabel,
   sortHotNodes,
-  sortIndexNames,
   sortPendingTasks,
   sortThreadPools,
   sourceError,
@@ -931,9 +930,7 @@ describe('slow logs', () => {
     });
   });
 
-  it('sorts and filters index names', () => {
-    const names = ['logs', '.kibana', 'audit', 'logs'];
-    expect(sortIndexNames(names)).toEqual(['audit', 'logs', '.kibana']);
+  it('filters index names', () => {
     expect(filterIndexNames(['logs-1', 'audit', 'logs-2'], '^logs')).toEqual(['logs-1', 'logs-2']);
     expect(filterIndexNames(['a[b', 'c'], 'a[')).toEqual(['a[b']);
   });

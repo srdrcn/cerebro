@@ -335,7 +335,6 @@ export class RecoveryComponent {
   readonly groupBytesLabel = groupBytesLabel;
   readonly typeMeta = typeMeta;
   readonly stageLabel = stageLabel;
-  readonly bytesRemaining = bytesRemaining;
   readonly pluralize = pluralize;
 
   /** Fast polling only while something recovers in "In progress" mode and the tab is visible. */

@@ -9,9 +9,8 @@ object Node extends NodeInfo {
     val nodeRoles = NodeRoles(stats)
 
 
-    // AWS nodes return no host/ip info
+    // AWS nodes return no host info
     val host = (stats \ "host").asOpt[JsString].getOrElse(JsNull)
-    val ip = (stats \ "ip").asOpt[JsString].getOrElse(JsNull)
     val jvmVersion = (info \ "jvm" \ "version").asOpt[JsString].getOrElse(JsNull)
 
     Json.obj(
@@ -19,7 +18,6 @@ object Node extends NodeInfo {
       "current_master" -> JsBoolean(id.equals(masterNodeId)),
       "name" -> (stats \ "name").as[JsString],
       "host" -> host,
-      "ip" -> ip,
       "es_version" -> (info \ "version").as[JsString],
       "jvm_version" -> jvmVersion,
       "load_average" -> loadAverage(stats),
@@ -31,7 +29,6 @@ object Node extends NodeInfo {
       "ingest" -> JsBoolean(nodeRoles.ingest),
       "heap" -> Json.obj(
         "used" -> (stats \ "jvm" \ "mem" \ "heap_used_in_bytes").as[JsNumber],
-        "committed" -> (stats \ "jvm" \ "mem" \ "heap_committed_in_bytes").as[JsNumber],
         "used_percent" -> (stats \ "jvm" \ "mem" \ "heap_used_percent").as[JsNumber],
         "max" -> (stats \ "jvm" \ "mem" \ "heap_max_in_bytes").as[JsNumber]
       ),

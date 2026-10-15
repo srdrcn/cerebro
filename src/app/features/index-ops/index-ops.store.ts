@@ -8,6 +8,7 @@ import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
 import { formatBytes, pluralize } from '../../core/format';
 import { isRecord } from '../../core/json';
+import { indexNameFormatError } from '../../core/names';
 import { RefreshService } from '../../core/refresh.service';
 import { cancelFailure } from '../../core/tasks';
 import {
@@ -56,7 +57,6 @@ import {
   describedReindex,
   diskWatermarks,
   explicitWriteIndexRequest,
-  indexNameFormatError,
   interpretRollover,
   minNodeVersion,
   needsSliceChildren,

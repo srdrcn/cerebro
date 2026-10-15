@@ -5,10 +5,10 @@ In this tutorial we are focusing in LDAP authentication without validating if th
 ## Setting up the environment
 
 `docker-compose.yml` configured two services: cerebro and an open ldap server (based on osixia/openldap docker image).
-So, fist of all service should be run with:
+So, first of all, the services should be run with:
 
 ```
-docker-compose up -d
+docker compose up -d
 ```
 
 The open ldap server contains an admin user (username: `admin` / password: `admin`). For testing purpose a new
@@ -38,9 +38,10 @@ gecos: test User
 
 ## Setting up cerebro
 
-Based in what it's shown above, the environment variables that cerebro needs are the following:
+Based on what is shown above, the environment variables that cerebro needs are the following:
 
 ```
+- CEREBRO_SECRET=replace-with-a-long-random-secret
 - AUTH_TYPE=ldap
 - LDAP_METHOD=simple
 - LDAP_URL=ldap://ldap:389
@@ -48,6 +49,7 @@ Based in what it's shown above, the environment variables that cerebro needs are
 - LDAP_USER_TEMPLATE=uid=%s,%s
 ```
 
+- `CEREBRO_SECRET`: The application secret, required by the image. Use a random value of at least 32 characters.
 - `LDAP_URL`: The url to an LDAP server. In the example is `ldap://ldap:389` because the container name configured in the `docker-compose` file is `ldap`
 - `LDAP_BASE_DN`: It's the base DN where users belong to. In the example `test` users belong to `dc=example,dc=org`
 - `LDAP_USER_TEMPLATE`: Since it's weird to ask the user to input the full `dn` (`test` user is `uid=test,dc=example,dc=org`)

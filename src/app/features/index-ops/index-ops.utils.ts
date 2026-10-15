@@ -1,8 +1,8 @@
 import { elasticsearchReason } from '../../core/errors';
 import { formatBytes, formatNumber, humanize, pluralize, sentence } from '../../core/format';
 import { healthFromShardCopies, healthTone } from '../../core/health';
-import { isRecord } from '../../core/json';
-import { INVALID_INDEX_NAME_CHARACTERS, invalidCharacters } from '../../core/names';
+import { isRecord, toNumber } from '../../core/json';
+import { indexNameFormatError } from '../../core/names';
 import {
   CatShardRow,
   Check,
@@ -122,8 +122,6 @@ export const OPERATIONS: Readonly<Record<OperationKind, OperationInfo>> = {
 export const MAX_DOCS_PER_SHARD = 2_147_483_519;
 /** Elasticsearch's limit of primary shards per index. */
 export const MAX_SHARDS_PER_INDEX = 1024;
-/** Elasticsearch's limit of index name length in bytes. */
-export const MAX_INDEX_NAME_BYTES = 255;
 
 /* ---- Settings and numbers ---------------------------------------------------------- */
 
@@ -161,18 +159,6 @@ function settingString(settings: unknown, key: string): string | null {
 function settingTrue(settings: unknown, key: string): boolean {
   const value = settingValue(settings, key);
   return value === true || value === 'true';
-}
-
-/** A finite number from a number or a numeric string, else `null`. */
-export function toNumber(value: unknown): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === 'string' && value.trim() !== '') {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : null;
-  }
-  return null;
 }
 
 function pathNumber(source: unknown, path: string): number | null {
@@ -1083,36 +1069,6 @@ export interface TakenNames {
   readonly dataStreams: readonly string[];
 }
 
-function utf8Length(value: string): number {
-  return new TextEncoder().encode(value).length;
-}
-
-/** Format errors of an index name (not whether it is taken), or `null`. */
-export function indexNameFormatError(name: string): string | null {
-  if (!name) {
-    return 'Enter a name for the index';
-  }
-  if (name !== name.toLowerCase()) {
-    return 'Index names must be lowercase';
-  }
-  if (/\s/.test(name)) {
-    return 'Index names cannot contain spaces';
-  }
-  if (name === '.' || name === '..') {
-    return 'Index names cannot be "." or ".."';
-  }
-  const first = name.charAt(0);
-  if (first === '-' || first === '_' || first === '+') {
-    return `Index names cannot start with "${first}"`;
-  }
-  const invalid = invalidCharacters(name, INVALID_INDEX_NAME_CHARACTERS);
-  if (invalid.length > 0) {
-    return `Index names cannot contain ${invalid.map((character) => `"${character}"`).join(', ')}`;
-  }
-  const bytes = utf8Length(name);
-  return bytes > MAX_INDEX_NAME_BYTES ? `Index names are limited to ${MAX_INDEX_NAME_BYTES} bytes (this one has ${bytes})` : null;
-}
-
 /** Error of a name for a new index: format, then names already in use. */
 export function newIndexNameError(name: string, taken: TakenNames): string | null {
   const format = indexNameFormatError(name);
@@ -1620,7 +1576,7 @@ function routingCheck(source: SourceIndex, primaries: number, target: number | n
 /* ---- Resize requests ------------------------------------------------------------------- */
 
 /** `PUT /{index}/_settings` through `index_settings/update`. */
-export function settingsRequest(index: string, settings: Record<string, unknown>, title: string): PlannedRequest {
+function settingsRequest(index: string, settings: Record<string, unknown>, title: string): PlannedRequest {
   return {
     endpoint: 'index_settings/update',
     payload: { index, settings },
@@ -2319,7 +2275,7 @@ export interface ReindexCheckInput {
 }
 
 /** Elasticsearch's ceiling for `slices=auto` (`BulkByScrollParallelizationHelper.AUTO_SLICE_CEILING`). */
-export const AUTO_SLICE_CEILING = 20;
+const AUTO_SLICE_CEILING = 20;
 
 /** The slices `slices=auto` uses: one per shard of the source with the fewest shards, at most 20. */
 export function autoSlices(indices: readonly SourceIndex[]): number | null {

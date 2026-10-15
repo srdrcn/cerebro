@@ -19,7 +19,7 @@ export const STALE_HISTORY_MS = 10 * 60_000;
  * Two samples further apart than this, and than 3 × the interval they were
  * taken at, are not joined (a hidden tab, a laptop that slept).
  */
-export const MIN_GAP_MS = 30_000;
+const MIN_GAP_MS = 30_000;
 const GAP_FACTOR = 3;
 /** Deltas the usual spacing is measured over when samples do not say their interval. */
 const RECENT_DELTAS = 5;
@@ -498,7 +498,7 @@ export const METRICS: Readonly<Record<MetricKey, MetricDefinition>> = {
   },
 };
 
-export const METRIC_KEYS = Object.keys(METRICS) as readonly MetricKey[];
+const METRIC_KEYS = Object.keys(METRICS) as readonly MetricKey[];
 
 export interface MetricPoint {
   readonly time: number;

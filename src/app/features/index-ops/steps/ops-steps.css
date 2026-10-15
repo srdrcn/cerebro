@@ -85,12 +85,6 @@
   overflow-wrap: anywhere;
 }
 
-.ops-facts dd small {
-  color: var(--text-3);
-  font-size: var(--text-xs);
-  font-weight: 500;
-}
-
 /* Index name heading of a source panel. */
 .ops-subject {
   display: flex;

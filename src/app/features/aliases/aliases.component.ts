@@ -20,7 +20,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
-import { plural, pluralize } from '../../core/format';
+import { plural, pluralize, sortIndexNames } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
 import { RefreshService } from '../../core/refresh.service';
 import { CodeEditorComponent } from '../../shared/code-editor.component';
@@ -65,7 +65,6 @@ import {
   revertChange,
   routingTags,
   sortAliasRows,
-  sortIndexOptions,
   stageAddition,
   stageRemoval,
   summarizePendingItem,
@@ -347,7 +346,7 @@ export class AliasesComponent implements PendingChangesAware {
       }
       if (indices.status === 'fulfilled') {
         if (indices.value !== null) {
-          this.indices.set(sortIndexOptions(indices.value));
+          this.indices.set(sortIndexNames(indices.value));
           this.indicesLoadedAt = Date.now();
         }
       } else if (aliasesLoaded) {

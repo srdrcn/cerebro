@@ -40,9 +40,7 @@ object IndexSpec extends Specification {
         |  "special": false,
         |  "unhealthy": false,
         |  "doc_count": 62064,
-        |  "deleted_docs": 0,
         |  "size_in_bytes": 163291998,
-        |  "total_size_in_bytes": 326583996,
         |  "aliases": [
         |    "fancyAlias"
         |  ],
@@ -125,9 +123,7 @@ object IndexSpec extends Specification {
         |  "special": false,
         |  "unhealthy": true,
         |  "doc_count": 62064,
-        |  "deleted_docs": 0,
         |  "size_in_bytes": 163291998,
-        |  "total_size_in_bytes": 326583996,
         |  "aliases": [
         |    "fancyAlias"
         |  ],
@@ -219,9 +215,7 @@ object IndexSpec extends Specification {
         |  "special": false,
         |  "unhealthy": true,
         |  "doc_count": 62064,
-        |  "deleted_docs": 0,
         |  "size_in_bytes": 163291998,
-        |  "total_size_in_bytes": 326583996,
         |  "aliases": [
         |    "fancyAlias"
         |  ],
@@ -312,9 +306,7 @@ object IndexSpec extends Specification {
         |  "special": true,
         |  "unhealthy": false,
         |  "doc_count": 62064,
-        |  "deleted_docs": 0,
         |  "size_in_bytes": 163291998,
-        |  "total_size_in_bytes": 326583996,
         |  "aliases": [
         |    "fancyAlias"
         |  ],
@@ -397,9 +389,7 @@ object IndexSpec extends Specification {
         |  "special": false,
         |  "unhealthy": false,
         |  "doc_count": 62064,
-        |  "deleted_docs": 0,
         |  "size_in_bytes": 163291998,
-        |  "total_size_in_bytes": 326583996,
         |  "aliases": [
         |    "fancyAlias"
         |  ],

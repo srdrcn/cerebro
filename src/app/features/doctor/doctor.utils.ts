@@ -1,7 +1,7 @@
 import { elasticsearchReason } from '../../core/errors';
 import { formatBytes, humanize, sentence } from '../../core/format';
 import { healthLabel, healthTone } from '../../core/health';
-import { JsonRecord, isRecord, stringList } from '../../core/json';
+import { JsonRecord, isRecord, stringList, toNumber } from '../../core/json';
 import {
   CATEGORIES,
   ClusterHealthInfo,
@@ -29,18 +29,6 @@ import {
 /* ------------------------------------------------------------------ */
 /* Primitive parsing                                                   */
 /* ------------------------------------------------------------------ */
-
-/** A finite number from a number or a numeric string (`_cat` returns strings). */
-export function toNumber(value: unknown): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;

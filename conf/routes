@@ -149,6 +149,4 @@ POST        /auth/login                               controllers.AuthController
 POST        /auth/logout                              controllers.AuthController.logout
 GET         /login                                    controllers.AuthController.index
 
-# Map the JS resource paths
-GET         /public/*file                             controllers.Assets.at(path="/public", file)
 GET         /*file                                    controllers.Assets.versioned(path="/public", file: Asset)

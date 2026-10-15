@@ -40,15 +40,15 @@ src/
 | `ClusterStatusService` | Cluster health/name polled by the shell; also sets the document title and favicon. A new host clears the previous cluster's name, health and user until it answers. |
 | `ClusterChangesService` | Announces nodes that joined or left and indices created or deleted outside the app. Index changes made through `overview/delete_indices`, `create_index/create` and `snapshots/restore` are recognised automatically (via `ClusterApiService.onSuccess`); call `expect({ created, deleted })` after other endpoints that create or delete indices so the user is not told twice. |
 | `ThemeService` | `preference()`, `resolved()`, `set()`, `cycle()`. |
-| `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `formatDate`, `formatTimestamp`, `formatRelative`, `pluralize` ("3 nodes"), `plural` (the noun alone, for labels that style the number), `sentence`, `humanize`, `severity`, `clampPercent`, `textMatcher(query)` (compiles a filter once: case-insensitive regular expression when valid, substring otherwise; use it for every list or table filter), `listSample(names, limit)` ("logs, metrics and 4 more" in sentences), `sortByName`. Never filter with a bare `includes()`: all filters accept the same queries. |
+| `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `formatDate`, `formatTimestamp`, `formatRelative`, `pluralize` ("3 nodes"), `plural` (the noun alone, for labels that style the number), `sentence`, `humanize`, `severity`, `clampPercent`, `textMatcher(query)` (compiles a filter once: case-insensitive regular expression when valid, substring otherwise; use it for every list or table filter), `listSample(names, limit)` ("logs, metrics and 4 more" in sentences), `sortByName`, `sortIndexNames` (regular indices first, dot-prefixed system and hidden ones last) and `groupIndexNames` (the same split as `{ regular, system }` for `<optgroup>`s). Never filter with a bare `includes()`: all filters accept the same queries. |
 | `errors.ts` | `elasticsearchReason(error)` extracts the most specific readable reason from a `ClusterApiError`, an Elasticsearch error body, a string or an `Error` (HTML error pages are ignored); `readableReason(error)` returns it as a sentence for error states; `failureMessage(action, error)` builds "Could not delete index: no such index [logs]"; `isUnknownEndpoint(error, endpoints?)` tells an Elasticsearch that does not know an API (404/405, "no handler found", `_data_stream` read as an invalid index name) from one that is down or refusing, for "needs Elasticsearch x.y" hints. |
 | `health.ts` | `healthTone(status)` (`green` / `yellow` / `red` / `gray`, case-insensitive) and `healthLabel(status)` for Elasticsearch health colours; `HealthTone` is the only health union; `healthFromShardCopies(copies)` derives an index's health from its shard copies by Elasticsearch's rules when the statistics do not say it. |
-| `json.ts` | `isRecord`, `stringList` for defensive parsing of Elasticsearch responses. |
+| `json.ts` | `isRecord`, `stringList`, `toNumber` (a number or numeric string, as `_cat` returns them) for defensive parsing of Elasticsearch responses; `stringifyForDisplay` (strings as they are, anything else as indented JSON) for JSON viewers and alert details. |
 | `layout.ts` | `STACKED_LAYOUT_QUERY` (the 1180px breakpoint of rule 11), `isStackedLayout()`, `revealWhenStacked(element, { onlyBelowFold? })`: after a pick in a master/detail list, scrolls the editor or detail into view when the layout is stacked. Never repeat the breakpoint in TypeScript. |
-| `names.ts` | `validateResourceName(name, noun)` (template, snapshot and repository names) and the invalid character lists for resource and index names. ILM policy and pipeline ids follow their own rules in their features. |
+| `names.ts` | `validateResourceName(name, noun)` (template, snapshot and repository names), `indexNameFormatError(name)` (the index name format rules, not whether the name is taken) and the invalid character list for index names (`INVALID_INDEX_NAME_CHARACTERS`). ILM policy and pipeline ids follow their own rules in their features. |
 | `shards.ts` | `unassignedReason(reason)`: label and explanation of an `unassigned.reason`. |
 | `tasks.ts` | `cancelFailure(response)`: why `_tasks/<id>/_cancel` cancelled nothing (Elasticsearch answers 200 with `node_failures` / `task_failures`), `null` when it did. |
-| `MetricsService` | Live node activity. `attach(destroyRef?)` returns a release function; it samples `metrics/nodes` on refresh ticks only while something is attached, keeps the history across pages and resets it on host change. Signals `history`, `cluster`, `nodes`, `latest`, `ready`, `sampling`, `failed`, `lastError`, `late`, `interval`, `paused`; `sampleNow()`. |
+| `MetricsService` | Live node activity. `attach(destroyRef?)` returns a release function; it samples `metrics/nodes` on refresh ticks only while something is attached, keeps the history across pages and resets it on host change. Signals `history`, `nodes`, `latest`, `ready`, `sampling`, `failed`, `lastError`, `late`, `interval`, `paused`; `sampleNow()`. |
 | `metrics.ts` | Pure sampling logic: `parseNodeMetrics`, `buildHistory` (rates from each node's own timestamps, latencies Δtime/Δcount, cluster sums rates and averages gauges, counter resets and gaps give `null`), `METRICS` definitions (their labels are the names every page uses), `formatRate`, `formatLatency`, `metricParts`, `seriesTone`, `metricFormatter(key)` (one stable formatter per metric for chart `[format]` inputs), `answeredLabel(history)` ("2 of 3 nodes answered"). |
 | `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
 | `pending-changes.guard.ts` | `PendingChangesAware` (`confirmDiscard()`) and the `confirmDiscardPendingChanges` route guard. |
@@ -69,8 +69,8 @@ src/
 | `createSort()` | Sortable table state from `shared/sort-state.ts`: `sortBy`, `isActive`, `ariaSort` and `icon` for `.sort-button` headers. |
 | `dialog[cerebroModal]` | `ModalDialogDirective` for page-owned native dialogs: opens as a modal after the first render (`(opened)` to focus a field), turns Escape and backdrop clicks into `(dismiss)` so the page decides whether to close. `cerebroModal="manual"` + `open()` / `close()` for dialogs that stay rendered; `[dismissible]="false"` while a request runs keeps it open. |
 | `[cerebroScrollTabs]` | `ScrollTabsDirective` for a `.tabs` `role="tablist"` whose tabs may not fit (phones): the strip scrolls sideways (`.tabs--scroll`) and fades the edges that hide tabs (`.is-overflow-start` / `.is-overflow-end`), measured on scroll and whenever the strip or a tab changes size. The selected tab (`aria-selected="true"`) is scrolled clear of the fades after the first render, whenever the selection moves and whenever the layout changes, so the page only renders its tabs; `reveal()` (`#strip="cerebroScrollTabs"`) does it on demand. The fade width is `--tabs-fade` on `.tabs--scroll` in `components.css`, which the directive reads; pages add only their spacing, tab height and scrollbar choice. |
-| `<cerebro-sparkline>` | Dependency-free SVG line for a series with gaps: `[points]`, `label` (required, starts the accessible summary), `[format]`, `tone` (`.tone-*` names or `accent`), `[height]`, `[domainMax]` (100 for percentages), `[minDomain]`, `[dot]` (off for inline sparklines under ~80px), `[showValue]`, `[focusable]` (arrow keys walk the points with a live readout; otherwise `role="img"` with a now/low/high summary). |
-| `<cerebro-index-picker>` | Header index select (`.context-picker`) that loads the index list itself, grouped into regular and system/hidden indices: `inputId`, `index`, `label`, `(picked)`. Through a template reference: `indices()`, `failed()`, `loadError()`, `groups()`, `retry()`, `focus()`, `revert()` (after a declined pick). |
+| `<cerebro-sparkline>` | Dependency-free SVG line for a series with gaps: `[points]`, `label` (required, starts the accessible summary), `[format]`, `tone` (`.tone-*` names or `accent`), `[height]`, `[domainMax]` (100 for percentages), `[minDomain]`, `[dot]` (off for inline sparklines under ~80px), `[focusable]` (arrow keys walk the points with a live readout; otherwise `role="img"` with a now/low/high summary). |
+| `<cerebro-index-picker>` | Header index select (`.context-picker`) that loads the index list itself, grouped into regular and system/hidden indices: `inputId`, `index`, `(picked)`. Through a template reference: `indices()`, `failed()`, `loadError()`, `groups()`, `retry()`, `focus()`, `revert()` (after a declined pick). |
 | `<cerebro-settings-editor>` | Settings table with filter, inline editing, pending changes and add-setting form, shared by cluster and index settings (`shared/settings-editor/`). |
 | Pipes | `bytes`, `num`, `compact`, `duration`, `plural` (`{{ n \| plural: 'index' : 'indices' }}`) from `shared/format.pipes`. |
 
@@ -299,8 +299,8 @@ templates, lifecycle policies, pipelines, repositories) share one layout:
   with a leading icon that picks the page's index or repository),
   `.section-label`, `.layout-split`,
   `.layout-sidebar-start`, `.layout-sidebar-end`, `.stack`, `.stack-sm`,
-  `.stack-lg`, `.row`, `.row-wrap`, `.spacer`, `.grid-2`, `.grid-3`,
-  `.col-span-all`, `.section-title`, `.section-subtitle`.
+  `.stack-lg`, `.row`, `.row-wrap`, `.spacer`, `.grid-2`, `.col-span-all`,
+  `.section-title`, `.section-subtitle`.
 * Text: `.text-muted`, `.text-secondary`, `.text-danger`, `.text-success`,
   `.text-warning`, `.text-sm`, `.text-xs`, `.mono`, `.tabular`, `.truncate`,
   `.break-all`, `.min-w-0`.
@@ -313,8 +313,8 @@ templates, lifecycle policies, pipelines, repositories) share one layout:
   `.input-mono` (resource names, with an "e.g. …" placeholder), `.is-invalid`
   (inputs, selects and textareas); `.check` (checkbox/radio label wrapper) with
   `.check-description`; `.switch`; `.segmented` (+ `.segmented-sm`, buttons with
-  `aria-pressed` / `.is-active`); `.chip-toggle[aria-pressed]` for filter
-  chips; `.input-group` for icon inputs.
+  `aria-pressed` (or `aria-checked` / `aria-selected`));
+  `.chip-toggle[aria-pressed]` for filter chips; `.input-group` for icon inputs.
 * Surfaces: `.card`, `.card-header`, `.card-icon` (tinted icon
   tile before a card title), `.card-title`,
   `.card-subtitle`, `.card-body`, `.card-footer` (`--between`),
@@ -350,6 +350,7 @@ templates, lifecycle policies, pipelines, repositories) share one layout:
 ```sh
 npm run typecheck      # strict template + TypeScript checks
 npm test               # Vitest unit tests
+npm run test:watch     # Vitest in watch mode
 npm run build          # production bundle into public/js
 npm start              # development build in watch mode
 ```

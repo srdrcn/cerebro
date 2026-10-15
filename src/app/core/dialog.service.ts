@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationStart, Router } from '@angular/router';
+import { stringifyForDisplay } from './json';
 
 export type DialogTone = 'default' | 'warning' | 'danger';
 
@@ -25,17 +26,6 @@ export type DialogState =
       tone: DialogTone;
     }>
   | Readonly<{ kind: 'json'; title: string; subtitle?: string; text: string }>;
-
-export function stringifyForDisplay(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-  try {
-    return JSON.stringify(value, null, 2) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
 
 /**
  * Drives the single <cerebro-dialog-host> mounted by the app root.

@@ -2,7 +2,7 @@ package models.overview
 
 import org.specs2.Specification
 
-object ClusterOverviewSpec extends Specification {
+object ClusterOverviewSpec extends Specification with org.specs2.matcher.ThrownExpectations {
 
   def is =
     s2"""

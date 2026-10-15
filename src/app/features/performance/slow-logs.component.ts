@@ -19,7 +19,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { elasticsearchReason, failureMessage, readableReason } from '../../core/errors';
-import { formatNumber, listSample, pluralize, textMatcher } from '../../core/format';
+import { formatNumber, listSample, pluralize, sortIndexNames, textMatcher } from '../../core/format';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { MenuComponent } from '../../shared/menu.component';
@@ -52,7 +52,6 @@ import {
   presetThresholds,
   resetSlowlogSettings,
   sameForm,
-  sortIndexNames,
   thresholdWarning,
   validateSlowlogForm,
   verifySlowlog,

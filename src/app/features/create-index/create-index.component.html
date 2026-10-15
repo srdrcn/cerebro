@@ -139,9 +139,9 @@
                   }
                 </optgroup>
               }
-              @if (indexGroups().special.length > 0) {
+              @if (indexGroups().system.length > 0) {
                 <optgroup label="Hidden and system">
-                  @for (index of indexGroups().special; track index) {
+                  @for (index of indexGroups().system; track index) {
                     <option [value]="index" [selected]="index === sourceIndex()">{{ index }}</option>
                   }
                 </optgroup>

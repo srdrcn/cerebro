@@ -17,7 +17,7 @@ import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
-import { pluralize } from '../../core/format';
+import { groupIndexNames, pluralize } from '../../core/format';
 import { readJsonPreference, writeJsonPreference } from '../../core/preferences';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { NumberPipe } from '../../shared/format.pipes';
@@ -29,7 +29,6 @@ import {
   asTokens,
   defaultTarget,
   parseSelection,
-  splitIndices,
   textSegments,
   tokenSummary,
 } from './analysis.utils';
@@ -125,7 +124,7 @@ export class AnalysisPanelComponent {
   readonly pinned = signal<number | null>(null);
   readonly active = computed(() => this.hovered() ?? this.pinned());
 
-  readonly indexGroups = computed(() => splitIndices(this.indices()));
+  readonly indexGroups = computed(() => groupIndexNames(this.indices()));
 
   readonly targetGroups = computed<readonly OptionGroup[]>(() =>
     this.mode() === 'analyzer'

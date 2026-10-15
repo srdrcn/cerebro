@@ -29,7 +29,6 @@ export class ConnectionService {
   private readonly passwordState = signal<string | undefined>(undefined);
 
   readonly host = this.hostState.asReadonly();
-  readonly username = this.usernameState.asReadonly();
   readonly connected = computed(() => this.hostState() !== undefined);
   /** Query parameters every in-app link carries to keep the target host. */
   readonly hostQuery = computed(() => ({ host: this.hostState() ?? null }));

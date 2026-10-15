@@ -7,7 +7,6 @@
   "scripts": {
     "start": "ng build --configuration development --watch",
     "build": "ng build --configuration production",
-    "build:dev": "ng build --configuration development",
     "test": "ng test --watch=false",
     "test:watch": "ng test",
     "typecheck": "ngc -p tsconfig.app.json --noEmit",

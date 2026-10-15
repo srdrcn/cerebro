@@ -17,7 +17,7 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
-import { formatRelative, formatTimestamp, pluralize } from '../../core/format';
+import { formatRelative, formatTimestamp, pluralize, sortIndexNames } from '../../core/format';
 import { RefreshService } from '../../core/refresh.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { BytesPipe, NumberPipe } from '../../shared/format.pipes';
@@ -50,7 +50,6 @@ import {
   requestFor,
   sameRequest,
   shardCount,
-  sortIndexNames,
   sortNodeDecisions,
   summarizeDecisions,
   unassignedGroups,

@@ -31,12 +31,6 @@ export interface OptionGroup {
   readonly options: readonly string[];
 }
 
-export interface IndexGroups {
-  readonly regular: readonly string[];
-  /** Hidden and system indices (names starting with a dot). */
-  readonly hidden: readonly string[];
-}
-
 /** A run of the analyzed text and the tokens whose offsets cover it. */
 export interface TextSegment {
   readonly text: string;

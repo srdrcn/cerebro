@@ -126,7 +126,6 @@ describe('sparklineSummary', () => {
       [height]="30"
       [focusable]="focusable()"
       [dot]="dot()"
-      [showValue]="true"
     />
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -161,7 +160,6 @@ describe('SparklineComponent', () => {
     expect(chart.style.height).toBe('30px');
     expect(element.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 100 30');
     expect(element.querySelector('.sparkline__line')?.getAttribute('d')).toBe('M0 19 L50 3 L100 11');
-    expect(element.querySelector('.sparkline__value')?.textContent?.trim()).toBe('2 q/s');
     expect(element.querySelectorAll('.sparkline__dot')).toHaveLength(1);
   });
 
@@ -246,6 +244,5 @@ describe('SparklineComponent', () => {
     expect(chart.hasAttribute('tabindex')).toBe(false);
     expect(element.querySelector('[aria-live]')).toBeNull();
     expect(element.querySelector('.sparkline__dot')).toBeNull();
-    expect(element.querySelector('.sparkline__value')?.textContent?.trim()).toBe('–');
   });
 });

@@ -81,7 +81,6 @@ import {
   defaultRoutingShards,
   foreignRestrictions,
   divisors,
-  indexNameFormatError,
   interpretRollover,
   maxDocsPerTargetShard,
   needsSliceChildren,
@@ -395,16 +394,6 @@ describe('shard counts', () => {
 });
 
 describe('names', () => {
-  it('validates index names', () => {
-    expect(indexNameFormatError('')).toBe('Enter a name for the index');
-    expect(indexNameFormatError('Logs')).toBe('Index names must be lowercase');
-    expect(indexNameFormatError('_x')).toBe('Index names cannot start with "_"');
-    expect(indexNameFormatError('a*b,c')).toBe('Index names cannot contain "*", ","');
-    expect(indexNameFormatError('a:b')).toBe('Index names cannot contain ":"');
-    expect(indexNameFormatError('x'.repeat(256))).toBe('Index names are limited to 255 bytes (this one has 256)');
-    expect(indexNameFormatError('logs-shrunk')).toBeNull();
-  });
-
   it('refuses names in use', () => {
     const taken = { indices: ['logs'], aliases: ['catalog'], dataStreams: ['events'] };
     expect(newIndexNameError('logs', taken)).toBe('An index named "logs" already exists');

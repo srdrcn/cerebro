@@ -39,7 +39,7 @@ import {
 /* ---- Generic helpers ---------------------------------------------------- */
 
 /** Reads `a.b.c` from nested objects; `undefined` when any step is missing. */
-export function readPath(source: unknown, path: string): unknown {
+function readPath(source: unknown, path: string): unknown {
   let current: unknown = source;
   for (const part of path.split('.')) {
     if (!isRecord(current)) {
@@ -73,7 +73,7 @@ function readString(source: unknown, path: string): string | null {
 }
 
 /** Scalars as text, arrays as a comma separated list, objects as compact JSON. */
-export function displayValue(value: unknown): string {
+function displayValue(value: unknown): string {
   if (value === null || value === undefined) {
     return '';
   }
