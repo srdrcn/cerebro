@@ -29,7 +29,10 @@ RUN --mount=type=cache,target=/root/.cache/coursier \
 FROM ${RUNTIME_IMAGE} AS runtime
 
 ARG APP_VERSION=0.9.4-secure
-RUN apk add --no-cache openjdk-17-default-jvm=17.0.20.1-r0 \
+# The pinned base image fixes the starting point; upgrading its packages
+# picks up Wolfi's OS security fixes released since (glibc, zlib, ...).
+RUN apk upgrade --no-cache \
+    && apk add --no-cache openjdk-17-default-jvm=17.0.20.1-r0 \
     && mkdir -p /opt/cerebro/logs /var/lib/cerebro /tmp/sqlite \
     && chown -R 65532:65532 /opt/cerebro /var/lib/cerebro /tmp/sqlite \
     && chmod 700 /tmp/sqlite

@@ -392,13 +392,13 @@ First cerebro release.
 #### Security updates
 
 - Migrate the backend to Play 3.0.11, Pekko, Scala 2.13.18 and a Java 17 baseline.
-- Align Jackson 2.18.10, Logback 1.5.38 and SQLite JDBC 3.53.2.1 to patched releases.
+- Align Jackson 2.18.11, Logback 1.5.38 and SQLite JDBC 3.53.2.1 to patched releases.
 - Replace AngularJS, Bootstrap 3, Grunt, Karma and PhantomJS with Angular 22 and Vitest.
 - Restore Play CSRF, allowed-host and security-header filters; require a production application secret.
 - Harden session cookies, redirects and LDAP filter construction.
 - Add npm, staged-JAR and legacy-bundle security gates to CI.
-- Add a non-root Wolfi/OpenJDK 17 multiarch image and zero-finding container gates for amd64 and arm64.
-- Upgrade transitive `lz4-java` to 1.11.1 for CVE-2026-59949.
+- Add a non-root Wolfi/OpenJDK 17 multiarch image and zero-finding container gates for amd64 and arm64. The image upgrades its base packages at build time, so it picks up Wolfi's OS security fixes.
+- Upgrade transitive `lz4-java` to 1.11.4 (CVE-2026-59949 and CVE-2026-106449 to CVE-2026-106453).
 - Upgrade Angular to 22.2.3 (CLI and build 22.2.2) and refresh the npm lockfile for the October 2026 advisories (`@angular/router`, `piscina`, `undici`, `fast-uri`, `source-map-js`); drop the npm `overrides`, which no longer matched the dependency tree.
 
 #### Compatibility

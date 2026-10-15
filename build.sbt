@@ -13,7 +13,7 @@ scalaVersion := "2.13.18"
 
 val playVersion = "3.0.11"
 val playSlickVersion = "6.2.0"
-val jacksonVersion = "2.18.10"
+val jacksonVersion = "2.18.11"
 val logbackVersion = "1.5.38"
 
 javacOptions ++= Seq("--release", "17")
@@ -39,7 +39,7 @@ libraryDependencies ++= Seq(
 // Keep every Jackson module on the same patched line. Play 3.0.x otherwise
 // brings an older Jackson family transitively through Play and Pekko.
 dependencyOverrides ++= Seq(
-  "at.yawk.lz4"                       % "lz4-java"                     % "1.11.1",
+  "at.yawk.lz4"                       % "lz4-java"                     % "1.11.4",
   "com.fasterxml.jackson.core"       % "jackson-annotations"           % jacksonVersion,
   "com.fasterxml.jackson.core"       % "jackson-core"                  % jacksonVersion,
   "com.fasterxml.jackson.core"       % "jackson-databind"              % jacksonVersion,
