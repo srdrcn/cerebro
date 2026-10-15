@@ -1,16 +1,5 @@
 import { JsonPipe } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  ElementRef,
-  afterRenderEffect,
-  computed,
-  effect,
-  inject,
-  signal,
-  untracked,
-  viewChild,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
@@ -28,6 +17,7 @@ import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { BytesPipe, NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import { IndexPickerComponent } from '../../shared/index-picker.component';
 import { MenuComponent } from '../../shared/menu.component';
+import { ScrollTabsDirective } from '../../shared/scroll-tabs.directive';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { createSort } from '../../shared/sort-state';
 import {
@@ -77,8 +67,6 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'missing' | 'multiple' | 'error'
 type StatsScope = 'primaries' | 'total';
 type ShardFilter = 'all' | 'primaries' | 'replicas' | 'problems';
 
-/** Width of the faded edges of the tab strip (`--tabs-fade` in the stylesheet). */
-const TAB_FADE = 48;
 const QUICK_PICKS = 8;
 
 @Component({
@@ -92,6 +80,7 @@ const QUICK_PICKS = 8;
     NumberPipe,
     PluralPipe,
     RouterLink,
+    ScrollTabsDirective,
     SearchInputComponent,
   ],
   templateUrl: './index-detail.component.html',
@@ -202,9 +191,6 @@ export class IndexDetailComponent {
 
   readonly problemShards = computed(() => this.shards().filter((row) => row.state !== 'started').length);
 
-  private readonly tablist = viewChild<ElementRef<HTMLElement>>('tablist');
-  /** Which edges of the tab strip hide tabs, to fade them as a scroll cue. */
-  readonly tabsOverflow = signal<{ readonly start: boolean; readonly end: boolean }>({ start: false, end: false });
   private loadSequence = 0;
   private loadedIndex = '';
   private lastResponse = '';
@@ -222,26 +208,6 @@ export class IndexDetailComponent {
   readonly formatTimestamp = formatTimestamp;
 
   constructor() {
-    // Keep the selected tab visible in the horizontally scrolling tab strip.
-    afterRenderEffect(() => {
-      this.tab();
-      this.tablist();
-      untracked(() => this.revealActiveTab());
-    });
-    // Tabs move when the page narrows or their badges fill in.
-    effect((onCleanup) => {
-      const list = this.tablist()?.nativeElement;
-      if (!list || typeof ResizeObserver === 'undefined') {
-        return;
-      }
-      const observer = new ResizeObserver(() => this.revealActiveTab());
-      observer.observe(list);
-      for (const button of Array.from(list.children)) {
-        observer.observe(button);
-      }
-      onCleanup(() => observer.disconnect());
-    });
-
     // Another cluster creates the page again; another index resets it.
     effect(() => {
       this.refreshService.tick();
@@ -369,33 +335,6 @@ export class IndexDetailComponent {
     this.selectTab(next);
     const tablist = (event.currentTarget as HTMLElement | null)?.parentElement;
     tablist?.querySelector<HTMLElement>(`#index-tab-${next}`)?.focus();
-  }
-
-  /** Scrolls the selected tab clear of the strip's faded edges. */
-  private revealActiveTab(): void {
-    const list = this.tablist()?.nativeElement;
-    const button = list?.querySelector<HTMLElement>(`#index-tab-${this.tab()}`);
-    if (list && button && list.scrollWidth > list.clientWidth) {
-      const left = button.getBoundingClientRect().left - list.getBoundingClientRect().left + list.scrollLeft;
-      const right = left + button.offsetWidth;
-      const max = list.scrollWidth - list.clientWidth;
-      const start = list.scrollLeft + (list.scrollLeft > 1 ? TAB_FADE : 0);
-      const end = list.scrollLeft + list.clientWidth - (list.scrollLeft < max - 1 ? TAB_FADE : 0);
-      if (left < start || right > end) {
-        list.scrollLeft = Math.min(max, Math.max(0, left - (list.clientWidth - button.offsetWidth) / 2));
-      }
-    }
-    this.measureTabs();
-  }
-
-  measureTabs(): void {
-    const list = this.tablist()?.nativeElement;
-    const start = !!list && list.scrollLeft > 1;
-    const end = !!list && list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
-    const current = untracked(this.tabsOverflow);
-    if (current.start !== start || current.end !== end) {
-      this.tabsOverflow.set({ start, end });
-    }
   }
 
   tabCount(tab: DetailTab): number | null {

@@ -99,35 +99,13 @@
   overflow: hidden;
 }
 
-/* Tabs that do not fit scroll; a thin scrollbar and faded edges show it. */
+/* Scrolls when the tabs do not fit (cerebroScrollTabs); the thin scrollbar
+   stays as a second cue beside the faded edges. */
 .detail-tabs {
-  --tabs-fade: 48px;
   padding: 0 var(--space-3);
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-}
-
-.detail-tabs.is-overflow-end {
-  mask-image: linear-gradient(to right, black calc(100% - var(--tabs-fade)), transparent);
-}
-
-.detail-tabs.is-overflow-start {
-  mask-image: linear-gradient(to left, black calc(100% - var(--tabs-fade)), transparent);
-}
-
-.detail-tabs.is-overflow-start.is-overflow-end {
-  mask-image: linear-gradient(
-    to right,
-    transparent,
-    black var(--tabs-fade),
-    black calc(100% - var(--tabs-fade)),
-    transparent
-  );
 }
 
 .detail-tabs > button {
-  flex: none;
   height: 46px;
 }
 

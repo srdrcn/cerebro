@@ -1430,6 +1430,42 @@ kbd,
   padding: 0 6px;
 }
 
+/* A strip whose tabs may not fit scrolls sideways (set by
+   [cerebroScrollTabs], with .is-overflow-start / .is-overflow-end on the
+   edges that hide tabs). Those edges fade out as a scroll cue. --tabs-fade
+   is the one place their width lives: the directive reads it to keep the
+   selected tab clear of the fade, so it must stay a px length (the raw
+   value is parsed, not resolved). Pages add only their own spacing, tab
+   height and scrollbar choice. */
+.tabs--scroll {
+  --tabs-fade: 48px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+
+.tabs--scroll > button {
+  flex: none;
+}
+
+.tabs--scroll.is-overflow-end {
+  mask-image: linear-gradient(to right, black calc(100% - var(--tabs-fade)), transparent);
+}
+
+.tabs--scroll.is-overflow-start {
+  mask-image: linear-gradient(to left, black calc(100% - var(--tabs-fade)), transparent);
+}
+
+.tabs--scroll.is-overflow-start.is-overflow-end {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--tabs-fade),
+    black calc(100% - var(--tabs-fade)),
+    transparent
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Lists                                                               */
 /* ------------------------------------------------------------------ */

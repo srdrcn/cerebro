@@ -1,5 +1,6 @@
 import { Type, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertService } from '../../core/alert.service';
@@ -9,8 +10,10 @@ import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { RefreshService } from '../../core/refresh.service';
+import { ScrollTabsDirective } from '../../shared/scroll-tabs.directive';
 import { HotThreadsComponent } from './hot-threads.component';
 import { PendingTasksComponent } from './pending-tasks.component';
+import { PerformanceComponent } from './performance.component';
 import {
   BUSY_CPU_CAPTURE,
   BUSY_SEARCH_CAPTURE,
@@ -513,6 +516,17 @@ describe('performance tabs', () => {
       target.pickerQuery.set('logs');
       expect(target.hiddenSelected()).toBe(2);
       expect(target.pickerGroups()).toEqual({ regular: ['logs'], backing: [], system: [] });
+    });
+  });
+
+  describe('PerformanceComponent', () => {
+    it('lets the shared directive scroll its tab strip', async () => {
+      routes({ nodes: NODES, 'performance/hot_threads': BUSY_CPU_CAPTURE });
+      const fixture = TestBed.createComponent(PerformanceComponent);
+      await fixture.whenStable();
+      const strip = fixture.debugElement.query(By.directive(ScrollTabsDirective));
+      expect(strip.attributes['role']).toBe('tablist');
+      expect(strip.queryAll(By.css('[role="tab"]'))).toHaveLength(4);
     });
   });
 });

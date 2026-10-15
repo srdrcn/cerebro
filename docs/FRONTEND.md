@@ -68,6 +68,7 @@ src/
 | `<cerebro-pager>` | "1–20 of 143" + previous/next: `[page] [pageSize] [total] noun (pageChange)`; helpers `clampPage()` and `pageSlice()`. |
 | `createSort()` | Sortable table state from `shared/sort-state.ts`: `sortBy`, `isActive`, `ariaSort` and `icon` for `.sort-button` headers. |
 | `dialog[cerebroModal]` | `ModalDialogDirective` for page-owned native dialogs: opens as a modal after the first render (`(opened)` to focus a field), turns Escape and backdrop clicks into `(dismiss)` so the page decides whether to close. `cerebroModal="manual"` + `open()` / `close()` for dialogs that stay rendered; `[dismissible]="false"` while a request runs keeps it open. |
+| `[cerebroScrollTabs]` | `ScrollTabsDirective` for a `.tabs` `role="tablist"` whose tabs may not fit (phones): the strip scrolls sideways (`.tabs--scroll`) and fades the edges that hide tabs (`.is-overflow-start` / `.is-overflow-end`), measured on scroll and whenever the strip or a tab changes size. The selected tab (`aria-selected="true"`) is scrolled clear of the fades after the first render, whenever the selection moves and whenever the layout changes, so the page only renders its tabs; `reveal()` (`#strip="cerebroScrollTabs"`) does it on demand. The fade width is `--tabs-fade` on `.tabs--scroll` in `components.css`, which the directive reads; pages add only their spacing, tab height and scrollbar choice. |
 | `<cerebro-sparkline>` | Dependency-free SVG line for a series with gaps: `[points]`, `label` (required, starts the accessible summary), `[format]`, `tone` (`.tone-*` names or `accent`), `[height]`, `[domainMax]` (100 for percentages), `[minDomain]`, `[dot]` (off for inline sparklines under ~80px), `[showValue]`, `[focusable]` (arrow keys walk the points with a live readout; otherwise `role="img"` with a now/low/high summary). |
 | `<cerebro-index-picker>` | Header index select (`.context-picker`) that loads the index list itself, grouped into regular and system/hidden indices: `inputId`, `index`, `label`, `(picked)`. Through a template reference: `indices()`, `failed()`, `loadError()`, `groups()`, `retry()`, `focus()`, `revert()` (after a declined pick). |
 | `<cerebro-settings-editor>` | Settings table with filter, inline editing, pending changes and add-setting form, shared by cluster and index settings (`shared/settings-editor/`). |
@@ -261,6 +262,12 @@ templates, lifecycle policies, pipelines, repositories) share one layout:
   editor beside them is already in New mode.
 * The list card header follows the recipe above: icon, title, right-aligned
   `.count-label`, then "New <noun>". Every list item has an icon tile.
+  Its shape follows the card's own width (a `list-card` container query),
+  never the count or the refresh spinner, so typing in the filter never
+  moves the list: up to 480px wide (beside the editor, phones) it has two
+  rows, title, spinner and count first and "New <noun>" right-aligned below;
+  wider (stacked layouts) one row. The title is never squeezed; an extreme
+  count ends in an ellipsis.
 * The selection lives in the URL (`?name=`, `?policy=`, `?pipeline=`,
   `?repository=`), written with `replaceUrl` and
   `queryParamsHandling: 'merge'`; an unknown name shows a
@@ -317,12 +324,18 @@ templates, lifecycle policies, pipelines, repositories) share one layout:
   `.list-card` (sticky master/detail list card) with `__toolbar`, `__switch`,
   `__list` (scrolls) and `__note`;
   `.callout` + `-info` | `-warning` | `-danger` | `-success`;
-  `.stat-grid` > `.stat` > `.stat__label`, `.stat__value`, `.stat__meta`.
+  `.stat-grid` > `.stat` > `.stat__label`, `.stat__value`, `.stat__meta`;
+  `.stat__value--text` for a word or name in place of a number ("8h ago",
+  the elected master): smaller text that keeps the numeric line box, so the
+  meta lines stay level across the row.
 * Data: `.table-wrap` > `.data-table` (`--compact`), cells `.num`, `.actions`,
-  rows `.is-selected`, `.is-muted`; `.sort-button` (`.is-active`);
+  rows `.is-selected`, `.is-muted`; `.sort-button` (`.is-active`), whose sort
+  icon (hidden until hover) goes before the label in a right-aligned
+  `th.num`, so the label stays flush with the numbers below;
   `.list` > `.list-item` (`--interactive`, `.is-selected`) with
   `__icon`, `__body`, `__title`, `__meta`, `__actions`; `.tabs` with
-  `button[aria-selected]`.
+  `button[aria-selected]`, `.tabs--scroll` (with `.is-overflow-start` /
+  `.is-overflow-end` and `--tabs-fade`) set by `[cerebroScrollTabs]` only.
 * Indicators: `.badge` + `-green` | `-yellow` | `-red` | `-blue` | `-purple` |
   `-accent` | `-outline`, `.badge-lg`, `.badge-uppercase`; `.tag` (with
   `.tag-key`); `.dot` + `-green` | `-yellow` | `-red` | `-gray`, `.dot-pulse`,

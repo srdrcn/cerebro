@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
-  afterRenderEffect,
   computed,
   effect,
   inject,
@@ -16,6 +15,7 @@ import { map } from 'rxjs';
 import { ConnectionService } from '../../core/connection.service';
 import { formatNumber, pluralize } from '../../core/format';
 import { PendingChangesAware } from '../../core/pending-changes.guard';
+import { ScrollTabsDirective } from '../../shared/scroll-tabs.directive';
 import { HotThreadsComponent } from './hot-threads.component';
 import { PendingTasksComponent } from './pending-tasks.component';
 import { PerformanceTab } from './performance.models';
@@ -31,7 +31,14 @@ import { ThreadPoolsComponent } from './thread-pools.component';
  */
 @Component({
   selector: 'cerebro-performance',
-  imports: [HotThreadsComponent, PendingTasksComponent, RouterLink, SlowLogsComponent, ThreadPoolsComponent],
+  imports: [
+    HotThreadsComponent,
+    PendingTasksComponent,
+    RouterLink,
+    ScrollTabsDirective,
+    SlowLogsComponent,
+    ThreadPoolsComponent,
+  ],
   host: { '(window:beforeunload)': 'onBeforeUnload($event)' },
   templateUrl: './performance.component.html',
   styleUrl: './performance.component.css',
@@ -67,10 +74,6 @@ export class PerformanceComponent implements PendingChangesAware {
           this.visitedTabs.update((tabs) => new Set([...tabs, tab]));
         }
       });
-    });
-    afterRenderEffect(() => {
-      this.tab();
-      untracked(() => this.revealActiveTab());
     });
   }
 
@@ -122,19 +125,6 @@ export class PerformanceComponent implements PendingChangesAware {
   onBeforeUnload(event: BeforeUnloadEvent): void {
     if (this.slowLogs()?.dirty()) {
       event.preventDefault();
-    }
-  }
-
-  /** Keeps the selected tab visible when the strip scrolls (phones). */
-  private revealActiveTab(): void {
-    const list = this.tablist()?.nativeElement;
-    const button = list?.querySelector<HTMLElement>(`#performance-tab-${this.tab()}`);
-    if (!list || !button || list.scrollWidth <= list.clientWidth) {
-      return;
-    }
-    const left = button.offsetLeft - list.offsetLeft;
-    if (left < list.scrollLeft || left + button.offsetWidth > list.scrollLeft + list.clientWidth) {
-      list.scrollLeft = Math.max(0, left - (list.clientWidth - button.offsetWidth) / 2);
     }
   }
 }
