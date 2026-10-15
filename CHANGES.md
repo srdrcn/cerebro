@@ -399,6 +399,7 @@ First cerebro release.
 - Add npm, staged-JAR and legacy-bundle security gates to CI.
 - Add a non-root Wolfi/OpenJDK 17 multiarch image and zero-finding container gates for amd64 and arm64.
 - Upgrade transitive `lz4-java` to 1.11.1 for CVE-2026-59949.
+- Upgrade Angular to 22.2.3 (CLI and build 22.2.2) and refresh the npm lockfile for the October 2026 advisories (`@angular/router`, `piscina`, `undici`, `fast-uri`, `source-map-js`); drop the npm `overrides`, which no longer matched the dependency tree.
 
 #### Compatibility
 
