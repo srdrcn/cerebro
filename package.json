@@ -37,7 +37,7 @@
     "@types/node": "24.3.0",
     "audit-ci": "7.1.0",
     "jsdom": "30.0.1",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "vitest": "4.1.11"
   },
   "license": "MIT"
