@@ -4,7 +4,7 @@ maintainer := "cerebro maintainers <https://github.com/srdrcn/cerebro>"
 
 version := "0.10.0"
 
-scalaVersion := "2.13.18"
+scalaVersion := "3.10.0"
 
 val playVersion = "3.0.11"
 val playSlickVersion = "6.2.0"
