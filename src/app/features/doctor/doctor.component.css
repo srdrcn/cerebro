@@ -439,6 +439,13 @@ button.indicator__head:hover {
   background: var(--surface-hover);
 }
 
+/* Static rows keep the chevron's room so every status badge lines up. */
+div.indicator__head::after {
+  width: 1em;
+  flex: none;
+  content: "";
+}
+
 .indicator__head > .dot {
   margin-top: 6px;
 }
@@ -461,6 +468,8 @@ button.indicator__head:hover {
 }
 
 .indicator__chevron {
+  width: 1em;
+  flex: none;
   margin-top: 3px;
   color: var(--text-3);
   transition: transform var(--duration-fast) ease;

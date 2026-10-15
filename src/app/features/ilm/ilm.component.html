@@ -663,7 +663,7 @@
                   <tr
                     [class.is-failed]="row.failed"
                     [class.is-retrying]="row.retrying"
-                    [class.is-muted]="!row.managed"
+                    [class.is-unmanaged]="!row.managed"
                     [class.has-reason]="row.info !== null"
                   >
                     <th scope="row" class="explain-index">
@@ -690,7 +690,13 @@
                         <span class="text-muted">–</span>
                       }
                     </td>
-                    <td class="mono text-sm">{{ row.action ?? '–' }}</td>
+                    <td>
+                      @if (row.action; as action) {
+                        <span class="mono text-sm">{{ action }}</span>
+                      } @else {
+                        <span class="text-muted">–</span>
+                      }
+                    </td>
                     <td class="explain-step">
                       @if (row.failed) {
                         <span class="badge badge-red"><i class="bi bi-x-octagon" aria-hidden="true"></i> Failed</span>
@@ -700,11 +706,19 @@
                           <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Retrying ({{ row.retryCount }})
                         </span>
                         <span class="mono text-sm">{{ row.step ?? '–' }}</span>
+                      } @else if (row.step; as step) {
+                        <span class="mono text-sm">{{ step }}</span>
                       } @else {
-                        <span class="mono text-sm">{{ row.step ?? '–' }}</span>
+                        <span class="text-muted">–</span>
                       }
                     </td>
-                    <td class="num tabular" [title]="row.age ?? ''">{{ formatAge(row) }}</td>
+                    <td class="num tabular" [title]="row.age ?? ''">
+                      @if (row.age === null) {
+                        <span class="text-muted">–</span>
+                      } @else {
+                        {{ formatAge(row) }}
+                      }
+                    </td>
                     <td class="actions">
                       <cerebro-menu [label]="'Actions for ' + row.index" align="end">
                         <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
@@ -730,7 +744,7 @@
                     </td>
                   </tr>
                   @if (row.info; as info) {
-                    <tr class="explain-reason" [class.is-failed]="row.failed" [class.is-retrying]="row.retrying" [class.is-muted]="!row.managed">
+                    <tr class="explain-reason" [class.is-failed]="row.failed" [class.is-retrying]="row.retrying">
                       <td colspan="8">
                         <p class="explain-reason__body">
                           <i

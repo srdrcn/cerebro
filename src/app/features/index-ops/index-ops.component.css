@@ -221,7 +221,9 @@
 }
 
 @media (max-width: 760px) {
+  /* Flex, not grid, so the current step can stretch to fill the row. */
   .ops-stepper__list {
+    display: flex;
     gap: 4px;
   }
 
@@ -241,12 +243,7 @@
     white-space: nowrap;
   }
 
-  .ops-stepper__list {
-    grid-template-columns: repeat(5, auto);
-    justify-content: start;
-  }
-
-  .is-current {
+  .ops-stepper__item.is-current {
     flex: 1;
   }
 

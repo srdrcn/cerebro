@@ -1012,6 +1012,12 @@
   opacity: 1;
 }
 
+/* Right-aligned (numeric) headers keep their label above the values: the
+   sort icon, hidden until hover, goes before the label. */
+.data-table th.num .sort-button {
+  flex-direction: row-reverse;
+}
+
 /* ------------------------------------------------------------------ */
 /* Badges, tags and indicators                                         */
 /* ------------------------------------------------------------------ */
@@ -1514,11 +1520,53 @@ kbd,
 /* Master/detail list card: the list column of the template, index template,
    lifecycle policy, pipeline and repository editors. Header recipe: icon +
    title (.card-title.spacer), right-aligned .count-label, then the
-   btn-sm btn-soft "New …" button. Sticky beside the editor on wide screens. */
+   btn-sm btn-soft "New …" button. Sticky beside the editor on wide screens.
+   The card is the container its header layout follows. */
 .list-card {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  container: list-card / inline-size;
+}
+
+/* The header's shape depends on the column width only: the count ("2 of 12
+   templates") and the refresh spinner change while the list is in use and
+   must never move the filter and the list below. The title is never
+   squeezed; an extreme count is cut with an ellipsis instead of running
+   into its neighbours. */
+.list-card > .card-header > .card-title {
+  flex: 1 0 auto;
+}
+
+.list-card > .card-header > .count-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A narrow column (beside the editor, or a phone) cannot hold title, count
+   and "New …" on one row ("Repositories", a filtered count), so it always
+   has two: title, spinner and count first, "New …" right-aligned below. */
+@container list-card (max-width: 480px) {
+  .list-card > .card-header {
+    display: grid;
+    grid-template-columns: minmax(min-content, 1fr) auto minmax(0, auto);
+    row-gap: var(--space-2);
+  }
+
+  .list-card > .card-header > .spinner {
+    grid-column: 2;
+  }
+
+  .list-card > .card-header > .count-label {
+    grid-column: 3;
+  }
+
+  .list-card > .card-header > .btn {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
 }
 
 .list-card__toolbar {
@@ -1614,6 +1662,14 @@ kbd,
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A word or name in place of a number ("8h ago", the elected master):
+   smaller text in the line box of a numeric value, so the meta lines stay
+   level across the row. */
+.stat__value--text {
+  font-size: var(--text-lg);
+  line-height: calc(var(--text-xl) * 1.15);
 }
 
 .stat__meta {

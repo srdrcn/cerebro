@@ -547,9 +547,11 @@ cerebro-overview .node-details .tag {
   height: 20px;
 }
 
+/* Two metrics a row while "OS CPU 100%" still fits on one line (76px); the
+   136px node column of the phone layout stacks them instead. */
 cerebro-overview .node-metrics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: 8px 14px;
   margin-top: 10px;
 }

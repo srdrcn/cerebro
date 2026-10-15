@@ -65,6 +65,13 @@
   margin-left: 3px;
 }
 
+/* Phones have no keyboard shortcut to advertise (same as .footer-keys). */
+@media (max-width: 760px) {
+  .saved-empty__tip {
+    display: none;
+  }
+}
+
 /* List: row border and selected state come from the shared .list-item. */
 
 .saved-item {

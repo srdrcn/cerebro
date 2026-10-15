@@ -48,7 +48,7 @@
 
 .ds-name,
 .ds-sub {
-  max-width: 250px;
+  max-width: 220px;
 }
 
 .ds-name {
@@ -106,7 +106,7 @@
 }
 
 .ds-lifecycle {
-  max-width: 200px;
+  max-width: 180px;
   display: inline-flex;
   align-items: center;
   gap: 7px;

@@ -40,6 +40,14 @@
   font-size: var(--text-sm);
 }
 
+/* ---- List card ---------------------------------------------------------- */
+
+.rec-card {
+  /* The rows adapt to the card, not the viewport: the sidebar may be open or
+     collapsed. */
+  container: rec-card / inline-size;
+}
+
 /* ---- Toolbar ------------------------------------------------------------ */
 
 .rec-toolbar {
@@ -309,7 +317,9 @@
 
 /* ---- Responsive --------------------------------------------------------- */
 
-@media (max-width: 1400px) {
+/* Five columns need 1144px of card (column minimums, gaps and padding),
+   four need 668px. */
+@container rec-card (max-width: 1143px) {
   .rec-row {
     grid-template-columns: minmax(150px, 1fr) minmax(180px, 1.2fr) minmax(160px, 1fr) minmax(90px, 0.5fr);
   }
@@ -320,13 +330,17 @@
   }
 }
 
+/* Side padding follows the shared card padding breakpoint (components.css),
+   so the rows line up with the card's toolbar and footer. */
 @media (max-width: 760px) {
   .rec-group__head,
   .rec-row {
     padding-right: var(--space-4);
     padding-left: var(--space-4);
   }
+}
 
+@container rec-card (max-width: 667px) {
   .rec-group__progress {
     flex-basis: 100%;
     min-width: 0;

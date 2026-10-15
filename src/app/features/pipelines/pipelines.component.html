@@ -537,7 +537,6 @@
                       @if (view.steps) {
                         <span class="text-xs text-muted">{{ view.ran }} of {{ view.steps.length }} processors ran</span>
                       }
-                      <span class="spacer"></span>
                       <button type="button" class="btn btn-sm btn-ghost btn-icon" (click)="showResultJson(view)" [attr.aria-label]="'View raw result of document ' + view.result.position" title="View JSON">
                         <i class="bi bi-braces" aria-hidden="true"></i>
                       </button>

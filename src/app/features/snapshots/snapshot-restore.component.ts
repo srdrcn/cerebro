@@ -100,6 +100,9 @@ export class SnapshotRestoreComponent {
     () => new Set(Array.isArray(this.snapshot().data_streams) ? this.snapshot().data_streams : []),
   );
 
+  /** "23 indices · 5 data streams": the data streams are listed with the indices. */
+  readonly contentsLabel = computed(() => this.countLabel(this.indexNames(), ' · '));
+
   readonly hasGlobalState = computed(() => this.snapshot().include_global_state !== false);
 
   private readonly renameErrors = computed(() =>
@@ -192,13 +195,12 @@ export class SnapshotRestoreComponent {
   });
 
   readonly submitLabel = computed(() => {
-    const count = this.selectedNames().length;
-    if (count === 0) {
+    const names = this.selectedNames();
+    if (names.length === 0) {
       return 'Restore';
     }
-    return count === this.indexNames().length && count > 1
-      ? `Restore all ${count} indices`
-      : `Restore ${pluralize(count, 'index', 'indices')}`;
+    const all = names.length === this.indexNames().length && names.length > 1;
+    return `Restore ${all ? 'all ' : ''}${this.countLabel(names)}`;
   });
 
   readonly pluralize = pluralize;
@@ -295,7 +297,7 @@ export class SnapshotRestoreComponent {
     try {
       const response = await this.api.post<unknown>('snapshots/restore', payload);
       this.alerts.success(
-        `Restore of ${pluralize(selected.length, 'index', 'indices')} from ${name} started`,
+        `Restore of ${this.countLabel(selected, ' and ')} from ${name} started`,
         response,
       );
       this.restoring.set(false);
@@ -307,6 +309,26 @@ export class SnapshotRestoreComponent {
     } finally {
       this.restoring.set(false);
     }
+  }
+
+  /**
+   * "3 indices", "2 data streams", or both joined by `separator`: data streams
+   * are picked with the indices but are not indices. Without a separator a mix
+   * counts as items, which keeps the restore button short enough for the
+   * footer on phones.
+   */
+  private countLabel(names: readonly string[], separator?: string): string {
+    const streams = names.filter((name) => this.dataStreams().has(name)).length;
+    const indices = pluralize(names.length - streams, 'index', 'indices');
+    if (streams === 0) {
+      return indices;
+    }
+    if (streams === names.length) {
+      return pluralize(streams, 'data stream');
+    }
+    return separator === undefined
+      ? pluralize(names.length, 'item')
+      : `${indices}${separator}${pluralize(streams, 'data stream')}`;
   }
 
   private focusFirstInvalid(): void {

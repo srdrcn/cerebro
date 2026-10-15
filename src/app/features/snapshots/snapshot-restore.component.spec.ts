@@ -144,6 +144,39 @@ describe('SnapshotRestoreComponent', () => {
     expect(alerts.success).toHaveBeenCalledWith('Restore of 2 indices from nightly started', expect.anything());
   });
 
+  it('counts data streams apart from the indices they are listed with', async () => {
+    api();
+    const withStreams: SnapshotRecord = {
+      ...snapshot,
+      indices: ['.ds-events-000001', '.ds-metrics-000001', 'orders'],
+      data_streams: ['events', 'metrics'],
+    };
+    const fixture = await render([], withStreams);
+    const component = fixture.componentInstance;
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(component.options().filter((option) => option.badge === 'data stream')).toHaveLength(2);
+    expect(element.querySelector('.restore-section')?.textContent).toContain(
+      '3 indices · 2 data streams in this snapshot',
+    );
+    // A mix keeps the button short: naming both would not fit the footer on phones.
+    expect(component.submitLabel()).toBe('Restore all 5 items');
+
+    component.selected.set(new Set(['events', 'metrics']));
+    expect(component.submitLabel()).toBe('Restore 2 data streams');
+    component.selected.set(new Set(['orders']));
+    expect(component.submitLabel()).toBe('Restore 1 index');
+
+    component.selected.set(new Set(['events', 'orders']));
+    expect(component.submitLabel()).toBe('Restore 2 items');
+    await component.restore();
+
+    expect(alerts.success).toHaveBeenCalledWith(
+      'Restore of 1 index and 1 data stream from nightly started',
+      expect.anything(),
+    );
+  });
+
   it('restores a renamed subset and flags conflicts with existing indices', async () => {
     api({ cat: [{ index: 'logs-a', status: 'open' }, { index: 'restored-orders', status: 'open' }] });
     const fixture = await render(['logs-a', 'restored-orders']);

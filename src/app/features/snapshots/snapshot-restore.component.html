@@ -41,7 +41,7 @@
       <section class="restore-section" aria-labelledby="restore-indices-title">
         <div class="restore-section__head">
           <h3 id="restore-indices-title" class="section-label">Indices</h3>
-          <span class="text-muted text-sm">{{ pluralize(indexNames().length, 'index', 'indices') }} in this snapshot</span>
+          <span class="text-muted text-sm">{{ contentsLabel() }} in this snapshot</span>
         </div>
         <cerebro-index-checklist
           [options]="options()"

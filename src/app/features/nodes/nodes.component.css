@@ -16,10 +16,6 @@
   flex-shrink: 0;
 }
 
-.stat__value--text {
-  font-size: var(--text-lg);
-}
-
 .stat__meter {
   margin-top: 10px;
 }
@@ -76,15 +72,26 @@
   font-weight: 620;
 }
 
+/* Wraps between its parts rather than truncating (below 1180px it also
+   carries the uptime, and touch screens show no title tooltip). Each part
+   keeps its leading separator, so no line ends on a "·". */
 .node-meta {
-  display: flex;
-  gap: 6px;
   color: var(--text-3);
   font-size: var(--text-sm);
 }
 
-/* Truncated lines do not widen the column (their full text would); the
-   text column takes the room left beside the avatar instead. */
+.node-meta > span {
+  white-space: nowrap;
+}
+
+.node-meta > .node-meta__host {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* The truncated name and the wrapping meta line do not widen the column
+   (their full text would); the text column takes the room left beside the
+   avatar instead. */
 .node-identity > .min-w-0 {
   flex: 1;
 }
@@ -148,7 +155,6 @@
 
 .node-meta__uptime {
   display: none;
-  white-space: nowrap;
 }
 
 /* Below 1180px uptime moves into the node's meta line, and the table may

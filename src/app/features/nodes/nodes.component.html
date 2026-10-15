@@ -156,18 +156,12 @@
                     </span>
                     <div class="min-w-0">
                       <div class="node-name truncate" [title]="node.name">{{ node.name }}</div>
-                      <div class="node-meta truncate">
-                        <span class="mono">{{ node.host || 'host unavailable' }}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>ES {{ node.version }}</span>
+                      <div class="node-meta">
+                        <span class="node-meta__host mono">{{ node.host || 'host unavailable' }}</span>&ngsp;<span><span aria-hidden="true">· </span>ES {{ node.version }}</span>&ngsp;
                         @if (node.jvm) {
-                          <span aria-hidden="true">·</span>
-                          <span>JVM {{ node.jvm }}</span>
+                          <span><span aria-hidden="true">· </span>JVM {{ node.jvm }}</span>&ngsp;
                         }
-                        <span class="node-meta__uptime">
-                          <span aria-hidden="true">·</span>
-                          up {{ node.uptime | duration }}
-                        </span>
+                        <span class="node-meta__uptime"><span aria-hidden="true">· </span>up {{ node.uptime | duration }}</span>
                       </div>
                     </div>
                   </div>

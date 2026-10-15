@@ -8,10 +8,6 @@
   margin-bottom: var(--space-5);
 }
 
-.stat__value--text {
-  font-size: var(--text-lg);
-}
-
 .stat__value.is-danger {
   color: var(--red-text);
 }

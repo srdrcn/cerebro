@@ -423,6 +423,11 @@
   font-weight: 650;
 }
 
+.sim-doc__head > .btn-icon {
+  /* Stays at the right edge on whichever line it wraps to. */
+  margin-left: auto;
+}
+
 .sim-doc__callout {
   margin: 12px 14px 0;
 }

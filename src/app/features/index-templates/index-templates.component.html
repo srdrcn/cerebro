@@ -376,7 +376,8 @@
                   </dd>
                 </div>
               }
-              <div class="it-fact">
+              <!-- A component's two wide cells fill the row above, so its Version takes a full row of its own. -->
+              <div class="it-fact" [class.it-fact--full]="kind() === 'component'">
                 <dt class="section-label">Version</dt>
                 <dd class="tabular">{{ facts.version ?? '–' }}</dd>
               </div>

@@ -148,10 +148,6 @@
   z-index: 2;
 }
 
-.cat-table th.num .sort-button {
-  flex-direction: row-reverse;
-}
-
 .cat-table td.num {
   font-family: var(--font-mono);
   font-size: var(--text-sm);

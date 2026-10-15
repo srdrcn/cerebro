@@ -461,6 +461,12 @@
   text-decoration: underline;
 }
 
+/* Unmanaged indices step back (dimmer name, muted placeholder dashes) without
+   fading their links and badges below readable contrast. */
+.is-unmanaged .explain-index a:not(:hover) {
+  color: var(--text-2);
+}
+
 .explain-table td {
   white-space: nowrap;
 }
