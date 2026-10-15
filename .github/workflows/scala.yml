@@ -226,6 +226,11 @@ jobs:
             type=sha,format=short,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+          # The generated labels would carry the tag ("latest") as the
+          # version and the repository's empty description.
+          labels: |
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.description=CVE-gated Elasticsearch administration console
 
       - name: Build and push linux/amd64 and linux/arm64
         uses: docker/build-push-action@v7

@@ -52,10 +52,13 @@ WORKDIR /opt/cerebro
 COPY --from=backend --chown=65532:65532 /workspace/target/universal/stage/conf ./conf
 COPY --from=backend --chown=65532:65532 /workspace/target/universal/stage/lib ./lib
 
+# Vendor and authors replace the base image's Chainguard values.
 LABEL org.opencontainers.image.title="Cerebro" \
       org.opencontainers.image.description="CVE-gated Elasticsearch administration console" \
       org.opencontainers.image.version="${APP_VERSION}" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="cerebro" \
+      org.opencontainers.image.authors="cerebro maintainers <https://github.com/srdrcn/cerebro>"
 
 ENV JAVA_HOME=/usr/lib/jvm/default-jvm \
     PATH=/usr/lib/jvm/default-jvm/bin:/usr/sbin:/usr/bin:/sbin:/bin \
