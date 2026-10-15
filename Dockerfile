@@ -2,7 +2,7 @@
 
 # Base images are pinned by digest on their FROM lines, where Dependabot
 # finds and updates them.
-FROM --platform=$BUILDPLATFORM node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d AS frontend
+FROM --platform=$BUILDPLATFORM node:26.11.1-bookworm-slim@sha256:86f07bc9c5dce4578cf37e5a418b7bfc7f817cda25cde66e2b66e95ed86c4567 AS frontend
 WORKDIR /workspace
 
 COPY package.json package-lock.json angular.json tsconfig.json tsconfig.app.json tsconfig.spec.json ./
