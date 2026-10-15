@@ -1,0 +1,225 @@
+<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{{ announcement() }}</p>
+
+@if (rows(); as list) {
+  @if (staleReason(); as reason) {
+    <div class="callout callout-warning pools-stale" role="alert">
+      <i class="bi bi-wifi-off" aria-hidden="true"></i>
+      <div class="min-w-0">
+        <strong>Could not refresh the thread pools.</strong>
+        Showing data from {{ loadedAt() | date: 'HH:mm:ss' }}. {{ reason }}
+      </div>
+      <button type="button" class="btn btn-sm pools-stale__retry" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+      </button>
+    </div>
+  }
+
+  <div class="stat-grid pools-stats">
+    <div class="stat">
+      <div class="stat__label"><i class="bi bi-cpu" aria-hidden="true"></i> Active threads</div>
+      <div class="stat__value">{{ summary().active | num }}</div>
+      <div class="stat__meta">Across {{ summary().nodes | num }} {{ summary().nodes | plural: 'node' }}</div>
+    </div>
+    <div class="stat" [class.stat--warn]="summary().queued > 0">
+      <div class="stat__label"><i class="bi bi-inboxes" aria-hidden="true"></i> Queued</div>
+      <div class="stat__value">{{ summary().queued | num }}</div>
+      <div class="stat__meta">
+        @if (summary().nearCapacity > 0) {
+          {{ pluralize(summary().nearCapacity, 'queue') }} at least half full
+        } @else {
+          Tasks waiting for a free thread
+        }
+      </div>
+    </div>
+    <div class="stat" [class.stat--danger]="sinceBaseline() > 0">
+      <div class="stat__label"><i class="bi bi-slash-circle" aria-hidden="true"></i> Rejected</div>
+      <div class="stat__value">{{ summary().rejected | num }}</div>
+      <div class="stat__meta">
+        @if (sinceBaseline() > 0) {
+          {{ sinceBaseline() | num }} new since {{ baselineAt() | date: 'HH:mm:ss' }}
+        } @else {
+          Since the nodes started · none since {{ baselineAt() | date: 'HH:mm' }}
+        }
+      </div>
+    </div>
+    <div class="stat" [class.stat--warn]="summary().saturatedQueueing > 0">
+      <div class="stat__label"><i class="bi bi-speedometer" aria-hidden="true"></i> Saturated pools</div>
+      <div class="stat__value">{{ summary().saturated | num }}</div>
+      <div class="stat__meta">
+        @if (summary().saturatedQueueing > 0) {
+          Every thread busy, {{ summary().saturatedQueueing | num }} with tasks queueing
+        } @else if (summary().saturated > 0) {
+          Every thread busy, nothing waiting yet
+        } @else {
+          Pools with every thread busy
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header pools-toolbar">
+      <div class="toolbar">
+        <cerebro-search [(value)]="query" placeholder="Filter by node or pool" ariaLabel="Filter thread pools by node or pool name" />
+        <label class="switch">
+          <input type="checkbox" role="switch" [checked]="showAll()" (change)="showAll.set(!showAll())" />
+          Show all pools
+          <span class="count">{{ hiddenCount() | num }}</span>
+        </label>
+      </div>
+      <div class="row pools-toolbar__end">
+        <span class="live-indicator text-sm text-muted" [attr.aria-busy]="loading()">
+          @if (loading()) {
+            <span class="spinner" aria-hidden="true"></span> Updating…
+          } @else if (staleReason()) {
+            <span class="dot dot-yellow" aria-hidden="true"></span> Last updated {{ loadedAt() | date: 'HH:mm:ss' }}
+          } @else {
+            <span class="dot dot-green dot-pulse" aria-hidden="true"></span> Updated {{ loadedAt() | date: 'HH:mm:ss' }}
+          }
+        </span>
+        <span class="count-label">
+          @if (filtered()) {
+            <strong>{{ visible().length | num }}</strong> of {{ list.length | num }} {{ list.length | plural: 'pool' }}
+          } @else {
+            <strong>{{ list.length | num }}</strong> {{ list.length | plural: 'pool' }}
+          }
+        </span>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table pools-table" [attr.aria-busy]="loading()">
+        <caption class="visually-hidden">Thread pools per node. Rejections that grew since the previous refresh are marked.</caption>
+        <thead>
+          <tr>
+            <th scope="col" [attr.aria-sort]="sort.ariaSort('pool')">
+              <button type="button" class="sort-button" [class.is-active]="sort.isActive('pool')" (click)="sort.sortBy('pool')">
+                Pool <i class="bi" [class]="'bi ' + sort.icon('pool')" aria-hidden="true"></i>
+              </button>
+            </th>
+            <th scope="col" class="col-wide" [attr.aria-sort]="sort.ariaSort('node')">
+              <button type="button" class="sort-button" [class.is-active]="sort.isActive('node')" (click)="sort.sortBy('node')">
+                Node <i class="bi" [class]="'bi ' + sort.icon('node')" aria-hidden="true"></i>
+              </button>
+            </th>
+            <th scope="col" class="num" [attr.aria-sort]="sort.ariaSort('active')">
+              <button type="button" class="sort-button" [class.is-active]="sort.isActive('active')" (click)="sort.sortBy('active')">
+                Active <i class="bi" [class]="'bi ' + sort.icon('active')" aria-hidden="true"></i>
+              </button>
+            </th>
+            <th scope="col" class="num" [attr.aria-sort]="sort.ariaSort('queue')">
+              <button type="button" class="sort-button" [class.is-active]="sort.isActive('queue')" (click)="sort.sortBy('queue')">
+                Queue <i class="bi" [class]="'bi ' + sort.icon('queue')" aria-hidden="true"></i>
+              </button>
+            </th>
+            <th scope="col" class="num" [attr.aria-sort]="sort.ariaSort('rejected')">
+              <button type="button" class="sort-button" [class.is-active]="sort.isActive('rejected')" (click)="sort.sortBy('rejected')">
+                Rejected <i class="bi" [class]="'bi ' + sort.icon('rejected')" aria-hidden="true"></i>
+              </button>
+            </th>
+            <th scope="col" class="num col-wide">Size</th>
+            <th scope="col" class="num col-wide">Queue size</th>
+            <th scope="col" class="num col-wide" [attr.aria-sort]="sort.ariaSort('completed')">
+              <button type="button" class="sort-button" [class.is-active]="sort.isActive('completed')" (click)="sort.sortBy('completed')">
+                Completed <i class="bi" [class]="'bi ' + sort.icon('completed')" aria-hidden="true"></i>
+              </button>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of visible(); track row.key) {
+            <tr [class.is-rejecting]="increase(row) > 0">
+              <th scope="row" class="pool-cell">
+                <span class="pool-name">{{ row.pool }}</span>
+                <span class="pool-cell__type text-xs text-muted">{{ row.type }}</span>
+                <span class="pool-cell__node text-xs text-muted"><i class="bi bi-hdd" aria-hidden="true"></i> {{ row.node }} · {{ row.type }}</span>
+              </th>
+              <td class="nowrap col-wide">
+                <span class="node-name"><i class="bi bi-hdd text-muted" aria-hidden="true"></i> {{ row.node }}</span>
+              </td>
+              <td class="num tabular">
+                <span [class.text-warning]="isSaturated(row)" [title]="isSaturated(row) ? 'Every thread of the pool is busy' : ''">
+                  {{ row.active | num }}
+                </span>
+                @if (isSaturated(row)) {
+                  <span class="visually-hidden">(every thread busy)</span>
+                }
+              </td>
+              <td class="num tabular queue-cell">
+                <span [class]="queueClass(row)">{{ row.queue | num }}</span>
+                @if (row.queueSize !== null) {
+                  <span class="queue-cell__capacity text-xs text-muted">of {{ row.queueSize | num }}</span>
+                }
+                @if (queuePercent(row); as percent) {
+                  @if (percent > 0) {
+                    <span class="queue-meter" [class]="'queue-meter is-' + queueLevel(row)" aria-hidden="true"><span [style.width.%]="percent"></span></span>
+                    <span class="visually-hidden">({{ percent.toFixed(0) }}% of the queue)</span>
+                  }
+                }
+              </td>
+              <td class="num tabular rejected-cell">
+                <span [class.text-danger]="row.rejected > 0">{{ row.rejected | num }}</span>
+                @if (increase(row) > 0) {
+                  <span class="badge badge-red tabular" [title]="'Rejections since the previous refresh'">
+                    +{{ increase(row) | num }}<span class="visually-hidden"> since the previous refresh</span>
+                  </span>
+                }
+              </td>
+              <td class="num tabular col-wide" [class.text-muted]="row.size === null">
+                @if (row.size === null) {
+                  <span title="Not reported by this Elasticsearch version">–</span>
+                } @else if (row.threads !== null && row.threads !== row.size) {
+                  <span [title]="(row.threads | num) + ' threads alive now, up to ' + (row.size | num)">{{ row.size | num }}</span>
+                } @else {
+                  {{ row.size | num }}
+                }
+              </td>
+              <td class="num tabular col-wide" [class.text-muted]="row.queueSize === null">
+                @if (row.queueSize === null) {
+                  <span title="Unbounded queue (-1)">unbounded</span>
+                } @else {
+                  {{ row.queueSize | num }}
+                }
+              </td>
+              <td class="num tabular text-secondary col-wide">{{ row.completed | num }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="8">
+                @if (list.length === 0) {
+                  <cerebro-empty icon="bi-cpu" heading="No thread pools" text="The cluster reported no thread pool." [compact]="true" />
+                } @else {
+                  <cerebro-empty icon="bi-funnel" heading="No matching thread pools" text="No pool matches the filter." [compact]="true">
+                    <button type="button" class="btn btn-sm" (click)="resetFilters()">Clear filter and show all pools</button>
+                  </cerebro-empty>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="card-footer pools-footer text-sm text-muted">
+      <i class="bi bi-info-circle" aria-hidden="true"></i>
+      <span>
+        Rejected and completed are counted since each node started. A rejection means every thread was busy and the queue was full, so
+        Elasticsearch refused the request (HTTP 429): clients must retry. Rejections that grew since the previous refresh are marked in red.
+      </span>
+    </p>
+  </div>
+} @else if (loadError(); as reason) {
+  <div class="card">
+    <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load thread pools" [text]="reason">
+      <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="retry()">
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+      </button>
+    </cerebro-empty>
+  </div>
+} @else {
+  <div class="stat-grid pools-stats" aria-hidden="true">
+    @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+      <div class="stat"><span class="skeleton" style="height: 62px"></span></div>
+    }
+  </div>
+  <div class="card loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Loading thread pools…</div>
+}

@@ -1,0 +1,689 @@
+<section class="page" aria-labelledby="aliases-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="aliases-title" class="page-title">Aliases</h1>
+      <p class="page-subtitle">
+        Stable names that point at one or more indices. Stage additions, updates and removals, then apply them together.
+      </p>
+    </div>
+  </header>
+
+  <p class="visually-hidden" aria-live="polite">{{ announcement() }}</p>
+
+  <div class="layout-sidebar-end">
+    <!-- Assignments ------------------------------------------------------ -->
+    <section #assignmentsCard class="card assignments-card" aria-labelledby="assignments-title">
+      <h2 id="assignments-title" class="visually-hidden">Alias assignments</h2>
+      <div class="card-header aliases-toolbar">
+        <div class="toolbar">
+          <cerebro-search
+            [value]="aliasQuery()"
+            (valueChange)="setAliasQuery($event)"
+            placeholder="Filter by alias"
+            ariaLabel="Filter by alias name"
+          />
+          <cerebro-search
+            [value]="indexQuery()"
+            (valueChange)="setIndexQuery($event)"
+            placeholder="Filter by index"
+            ariaLabel="Filter by index name"
+          />
+        </div>
+        @if (aliases()) {
+          <span class="count-label">
+            @if (filtering()) {
+              <strong>{{ visibleRows().length | num }}</strong> of {{ rows().length | num }} {{ rows().length | plural: 'assignment' }}
+            } @else {
+              <strong>{{ aliasCount() | num }}</strong> {{ aliasCount() | plural: 'alias' : 'aliases' }} ·
+              <strong>{{ rows().length | num }}</strong> {{ rows().length | plural: 'assignment' }}
+            }
+          </span>
+        }
+      </div>
+
+      @if (aliases(); as all) {
+        @if (rows().length === 0) {
+          <cerebro-empty
+            icon="bi-tags"
+            heading="No aliases yet"
+            text="An alias gives clients a stable name for one or more indices, so you can reindex or roll over without changing them."
+          >
+            <button type="button" class="btn btn-sm" (click)="aliasInput.focus()">
+              <i class="bi bi-plus-lg" aria-hidden="true"></i> Add an alias
+            </button>
+          </cerebro-empty>
+        } @else {
+          <div class="table-wrap">
+            <table class="data-table aliases-table">
+              <thead>
+                <tr>
+                  <th scope="col" class="col-alias" [attr.aria-sort]="sort.ariaSort('alias')">
+                    <button type="button" class="sort-button" [class.is-active]="sort.isActive('alias')" (click)="sort.sortBy('alias')">
+                      Alias <i [class]="'bi ' + sort.icon('alias')" aria-hidden="true"></i>
+                    </button>
+                  </th>
+                  <th scope="col" class="col-index" [attr.aria-sort]="sort.ariaSort('index')">
+                    <button type="button" class="sort-button" [class.is-active]="sort.isActive('index')" (click)="sort.sortBy('index')">
+                      Index <i [class]="'bi ' + sort.icon('index')" aria-hidden="true"></i>
+                    </button>
+                  </th>
+                  <th scope="col">Settings</th>
+                  <th scope="col" class="actions col-actions"><span class="visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of pageRows(); track row.key; let i = $index) {
+                  <tr [class]="'alias-row is-' + row.state" [class.is-selected]="row.key === draftKey()">
+                    <th scope="row" class="alias-cell">
+                      <div class="alias-identity">
+                        <span class="alias-avatar" aria-hidden="true">
+                          <i class="bi" [class.bi-tag]="row.state !== 'added'" [class.bi-tag-fill]="row.state === 'added'"></i>
+                        </span>
+                        <span class="alias-text">
+                          <span class="alias-name truncate" [title]="row.record.alias">{{ row.record.alias }}</span>
+                          @switch (row.state) {
+                            @case ('added') {
+                              <span class="badge badge-green" title="This assignment is staged and not applied yet">New</span>
+                            }
+                            @case ('updated') {
+                              <span class="badge badge-blue" title="An update of this assignment is staged">Updating</span>
+                            }
+                            @case ('removed') {
+                              <span class="badge badge-red" title="A removal of this assignment is staged">Removing</span>
+                            }
+                          }
+                        </span>
+                      </div>
+                    </th>
+                    <td class="index-cell">
+                      <div class="index-identity">
+                        <a
+                          class="index-link mono"
+                          routerLink="/index_settings"
+                          [queryParams]="indexLinkParams(row.record.index)"
+                          [title]="'Open the settings of ' + row.record.index"
+                        >{{ row.record.index }}</a>
+                        @if (row.record.is_write_index === true) {
+                          <span class="badge badge-purple" title="Write index: writes sent to the alias go to this index">
+                            <i class="bi bi-pencil-fill" aria-hidden="true"></i> write
+                          </span>
+                        }
+                      </div>
+                    </td>
+                    <td class="meta-cell">
+                      @let tags = routing(row.record);
+                      @if (tags.length > 0 || row.record.filter !== undefined || row.record.is_hidden) {
+                        <div class="meta-tags">
+                          @if (row.record.is_hidden) {
+                            <span class="tag" title="Hidden alias: left out of wildcard expressions">
+                              <i class="bi bi-eye-slash" aria-hidden="true"></i> hidden
+                            </span>
+                          }
+                          @for (tag of tags; track tag.label) {
+                            <span class="tag" [title]="tag.title">
+                              <span class="tag-key">{{ tag.label }}</span>
+                              <span class="mono">{{ tag.value }}</span>
+                            </span>
+                          }
+                          @if (row.record.filter !== undefined) {
+                            <button
+                              type="button"
+                              class="filter-toggle"
+                              [class.is-open]="isExpanded(row.key)"
+                              [attr.aria-expanded]="isExpanded(row.key)"
+                              [attr.aria-controls]="isExpanded(row.key) ? 'alias-filter-' + i : null"
+                              [attr.aria-label]="(isExpanded(row.key) ? 'Hide' : 'Show') + ' the filter of ' + row.record.alias + ' on ' + row.record.index"
+                              [title]="isExpanded(row.key) ? 'Hide filter' : 'Show filter'"
+                              (click)="toggleFilter(row.key)"
+                            >
+                              <i class="bi bi-funnel-fill" aria-hidden="true"></i>
+                              <span class="filter-toggle__key">filter</span>
+                              <span class="filter-toggle__value mono">{{ filterLabel(row.record.filter) }}</span>
+                              <i class="bi bi-chevron-down filter-toggle__chevron" aria-hidden="true"></i>
+                            </button>
+                          }
+                        </div>
+                      } @else {
+                        <span class="cell-empty" aria-hidden="true">–</span>
+                        <span class="visually-hidden">No routing, filter or flags</span>
+                      }
+                    </td>
+                    <td class="actions">
+                      <div class="row-actions">
+                        @if (row.state === 'removed') {
+                          <button
+                            type="button"
+                            class="btn btn-ghost btn-sm"
+                            title="Undo the staged removal"
+                            [attr.aria-label]="'Undo the removal of ' + row.record.alias + ' from ' + row.record.index"
+                            (click)="revert(row.key)"
+                          >
+                            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Undo
+                          </button>
+                        } @else {
+                          <button
+                            type="button"
+                            class="btn btn-ghost btn-icon btn-sm"
+                            [title]="row.state === 'current' ? 'Edit routing, filter and flags' : 'Edit the staged change'"
+                            [attr.aria-label]="'Edit ' + row.record.alias + ' on ' + row.record.index"
+                            (click)="edit(row.record)"
+                          >
+                            <i class="bi bi-pencil" aria-hidden="true"></i>
+                          </button>
+                          @if (row.state === 'current') {
+                            <button
+                              type="button"
+                              class="btn btn-ghost btn-icon btn-sm row-remove"
+                              title="Stage removal"
+                              [attr.aria-label]="'Remove ' + row.record.alias + ' from ' + row.record.index"
+                              (click)="stageRemove(row.record)"
+                            >
+                              <i class="bi bi-trash3" aria-hidden="true"></i>
+                            </button>
+                          } @else {
+                            <button
+                              type="button"
+                              class="btn btn-ghost btn-icon btn-sm"
+                              title="Undo the staged change"
+                              [attr.aria-label]="'Undo the staged change to ' + row.record.alias + ' on ' + row.record.index"
+                              (click)="revert(row.key)"
+                            >
+                              <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                            </button>
+                          }
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                  @if (row.record.filter !== undefined && isExpanded(row.key)) {
+                    <tr class="filter-row" [class.is-removed]="row.state === 'removed'">
+                      <td colspan="4" [id]="'alias-filter-' + i">
+                        <div class="filter-panel">
+                          <div class="filter-panel__header">
+                            <span class="filter-panel__title">
+                              Filter of <strong>{{ row.record.alias }}</strong> on <span class="mono">{{ row.record.index }}</span>
+                            </span>
+                            <button type="button" class="btn btn-ghost btn-sm" (click)="copyFilter(row.record)">
+                              <i class="bi bi-copy" aria-hidden="true"></i> Copy
+                            </button>
+                          </div>
+                          <cerebro-code-editor
+                            [flush]="true"
+                            [value]="pretty(row.record.filter)"
+                            [readOnly]="true"
+                            [minLines]="2"
+                            [maxLines]="16"
+                            [ariaLabel]="'Filter of ' + row.record.alias + ' on ' + row.record.index"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                } @empty {
+                  <tr class="empty-row">
+                    <td colspan="4">
+                      <cerebro-empty
+                        icon="bi-funnel"
+                        heading="No matching aliases"
+                        text="No alias assignment matches the current alias and index filters."
+                      >
+                        <button type="button" class="btn btn-sm" (click)="clearFilters()">Clear filters</button>
+                      </cerebro-empty>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          @if (visibleRows().length > pageSize) {
+            <div class="card-footer">
+              <cerebro-pager
+                [page]="currentPage()"
+                [pageSize]="pageSize"
+                [total]="visibleRows().length"
+                noun="assignments"
+                (pageChange)="goToPage($event, assignmentsCard)"
+              />
+            </div>
+          }
+        }
+      } @else if (failed()) {
+        <cerebro-empty
+          icon="bi-exclamation-triangle"
+          heading="Could not load aliases"
+          [text]="loadError() ?? 'The cluster did not answer the aliases request.'"
+        >
+          <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+          </button>
+        </cerebro-empty>
+      } @else {
+        <div class="loading-block" role="status">
+          <span class="spinner"></span> Loading aliases…
+        </div>
+      }
+    </section>
+
+    <!-- Side column ------------------------------------------------------ -->
+    <div class="aliases-side">
+      <form class="card" novalidate aria-labelledby="add-alias-title" (ngSubmit)="stage()">
+        <div class="card-header">
+          <span class="card-icon" aria-hidden="true">
+            <i class="bi" [class.bi-plus-lg]="!editing()" [class.bi-pencil]="editing()"></i>
+          </span>
+          <div class="min-w-0 spacer">
+            <h2 id="add-alias-title" class="card-title">
+              @switch (draftStatus()) {
+                @case ('new') { Add alias }
+                @case ('restage') { Edit staged change }
+                @default { Update alias }
+              }
+            </h2>
+            <p class="card-subtitle">
+              @switch (draftStatus()) {
+                @case ('new') { Point an alias at an index. }
+                @case ('restage') { Replace the change staged for this assignment. }
+                @default { Change the routing, filter or flags of an existing assignment. }
+              }
+            </p>
+          </div>
+          @if (draftDirty()) {
+            <button type="button" class="btn btn-ghost btn-sm" (click)="resetDraft()">Clear</button>
+          }
+        </div>
+
+        <div class="card-body stack">
+          <div class="field">
+            <label class="field-label" for="alias-name">Alias name</label>
+            <input
+              #aliasInput
+              id="alias-name"
+              name="alias"
+              class="input input-mono"
+              list="alias-name-options"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="e.g. logs-current"
+              [class.is-invalid]="showError('alias')"
+              [attr.aria-invalid]="showError('alias') ? true : null"
+              [attr.aria-describedby]="showError('alias') ? 'alias-name-error' : editing() ? null : 'alias-name-hint'"
+              [ngModel]="draftAlias()"
+              (ngModelChange)="draftAlias.set($event)"
+              (blur)="touch('alias')"
+            />
+            <datalist id="alias-name-options">
+              @for (name of aliasSuggestions(); track name) {
+                <option [value]="name"></option>
+              }
+            </datalist>
+            @if (showError('alias')) {
+              <p id="alias-name-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errors().alias }}</p>
+            } @else if (!editing()) {
+              <p id="alias-name-hint" class="field-hint">Reuse an existing name to add another index to it.</p>
+            }
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="alias-index">Index</label>
+            <select
+              #indexSelect
+              id="alias-index"
+              name="index"
+              class="select"
+              [class.is-invalid]="showError('index')"
+              [attr.aria-invalid]="showError('index') ? true : null"
+              [attr.aria-describedby]="showError('index') ? 'alias-index-error' : null"
+              [disabled]="!indices()"
+              [ngModel]="draftIndex()"
+              (ngModelChange)="draftIndex.set($event)"
+              (blur)="touch('index')"
+            >
+              <option value="">{{ indices() ? 'Select an index' : 'Loading indices…' }}</option>
+              @for (index of indices() ?? []; track index) {
+                <option [value]="index">{{ index }}</option>
+              }
+            </select>
+            @if (showError('index')) {
+              <p id="alias-index-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errors().index }}</p>
+            }
+          </div>
+
+          <fieldset class="flags">
+            <legend class="visually-hidden">Flags</legend>
+            <div class="flag-grid">
+              <label class="check flag-option" [class.is-checked]="draftWriteIndex() === true">
+                <input
+                  type="checkbox"
+                  name="writeIndex"
+                  aria-describedby="alias-write-description"
+                  [ngModel]="draftWriteIndex() === true"
+                  (ngModelChange)="setWriteIndex($event)"
+                />
+                <span class="flag-option__text">
+                  <span class="flag-option__title">Write index</span>
+                  <span id="alias-write-description" class="check-description">Takes the writes sent to the alias.</span>
+                </span>
+              </label>
+              <label class="check flag-option" [class.is-checked]="draftHidden()">
+                <input
+                  type="checkbox"
+                  name="hidden"
+                  [attr.aria-describedby]="hiddenNotice() ? 'alias-hidden-description alias-hidden-notice' : 'alias-hidden-description'"
+                  [ngModel]="draftHidden()"
+                  (ngModelChange)="draftHidden.set($event)"
+                />
+                <span class="flag-option__text">
+                  <span class="flag-option__title">Hidden</span>
+                  <span id="alias-hidden-description" class="check-description">Left out of wildcard expressions.</span>
+                </span>
+              </label>
+            </div>
+            @switch (hiddenNotice()) {
+              @case ('mismatch') {
+                <p id="alias-hidden-notice" class="field-hint flag-note is-warning">
+                  <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                  <span>
+                    <strong>{{ draftAlias().trim() }}</strong> is {{ draftHidden() ? 'not hidden' : 'hidden' }} on its other indices.
+                    Elasticsearch requires the same value on every index.
+                  </span>
+                </p>
+              }
+            }
+          </fieldset>
+
+          @if (displacedWriters().length > 0) {
+            <div class="callout callout-info draft-callout">
+              <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
+              <span>
+                <strong>{{ draftAlias().trim() }}</strong> writes to
+                @for (writer of displacedWriters(); track writer.index; let last = $last) {
+                  <strong class="mono">{{ writer.index }}</strong>{{ last ? '' : ', ' }}
+                }
+                today. Staging also moves the write index here.
+              </span>
+            </div>
+          }
+
+          @switch (draftStatus()) {
+            @case ('update') {
+              <div class="callout callout-info draft-callout">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <span>
+                  <strong>{{ draftExisting()?.alias }}</strong> already points at
+                  <strong>{{ draftExisting()?.index }}</strong>. Staging replaces its routing, filter and flags with the values here.
+                </span>
+              </div>
+            }
+            @case ('same') {
+              <div class="callout draft-callout">
+                <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                <span>
+                  <strong>{{ draftExisting()?.alias }}</strong> already points at
+                  <strong>{{ draftExisting()?.index }}</strong> with these settings. Change the routing, filter or flags to update it.
+                </span>
+              </div>
+            }
+            @case ('restage') {
+              <div class="callout callout-warning draft-callout">
+                <i class="bi bi-layers" aria-hidden="true"></i>
+                <span>A change is already staged for this assignment. Staging again replaces it.</span>
+              </div>
+            }
+          }
+
+          <div class="advanced" [class.is-open]="advancedOpen()">
+            <button
+              type="button"
+              class="advanced__toggle"
+              [attr.aria-controls]="advancedOpen() ? 'alias-advanced' : null"
+              [attr.aria-expanded]="advancedOpen()"
+              (click)="advancedOpen.set(!advancedOpen())"
+            >
+              <i class="bi bi-chevron-right advanced__chevron" aria-hidden="true"></i>
+              Routing and filter
+              @if (advancedCount() > 0) {
+                <span class="badge badge-accent">{{ advancedCount() }} set</span>
+              }
+              @if (submitted() && (errors().filter || errors().indexRouting)) {
+                <span class="badge badge-red">Needs attention</span>
+              }
+            </button>
+
+            @if (advancedOpen()) {
+              <div id="alias-advanced" class="advanced__body stack">
+                <div class="routing-grid">
+                  <div class="field">
+                    <label class="field-label" for="alias-index-routing">
+                      Index routing <span class="optional">optional</span>
+                    </label>
+                    <input
+                      #indexRoutingInput
+                      id="alias-index-routing"
+                      name="indexRouting"
+                      class="input input-mono"
+                      autocomplete="off"
+                      spellcheck="false"
+                      [class.is-invalid]="showError('indexRouting')"
+                      [attr.aria-invalid]="showError('indexRouting') ? true : null"
+                      [attr.aria-describedby]="showError('indexRouting') ? 'alias-index-routing-error' : 'alias-index-routing-hint'"
+                      [ngModel]="draftIndexRouting()"
+                      (ngModelChange)="draftIndexRouting.set($event)"
+                      (blur)="touch('indexRouting')"
+                    />
+                    @if (showError('indexRouting')) {
+                      <p id="alias-index-routing-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errors().indexRouting }}</p>
+                    } @else {
+                      <p id="alias-index-routing-hint" class="field-hint">Single value, used for writes.</p>
+                    }
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="alias-search-routing">
+                      Search routing <span class="optional">optional</span>
+                    </label>
+                    <input
+                      id="alias-search-routing"
+                      name="searchRouting"
+                      class="input input-mono"
+                      autocomplete="off"
+                      spellcheck="false"
+                      aria-describedby="alias-search-routing-hint"
+                      [ngModel]="draftSearchRouting()"
+                      (ngModelChange)="draftSearchRouting.set($event)"
+                    />
+                    <p id="alias-search-routing-hint" class="field-hint">Comma separated, for searches.</p>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <div class="field-label-row">
+                    <span id="alias-filter-label" class="field-label">
+                      Filter <span class="optional">optional</span>
+                    </span>
+                    @if (draftFilter().trim()) {
+                      <button type="button" class="link-button text-sm" (click)="filterEditor.format()">
+                        <i class="bi bi-braces" aria-hidden="true"></i> Format
+                      </button>
+                    }
+                  </div>
+                  <cerebro-code-editor
+                    #filterEditor
+                    ariaLabel="Alias filter (JSON query)"
+                    [invalid]="showError('filter')"
+                    [describedBy]="showError('filter') ? 'alias-filter-error' : 'alias-filter-hint'"
+                    placeholder='{ "term": { "status": "active" } }'
+                    [minLines]="6"
+                    [maxLines]="18"
+                    [value]="draftFilter()"
+                    (valueChange)="draftFilter.set($event)"
+                    (focusout)="touch('filter')"
+                    (submit)="stage()"
+                  />
+                  @if (showError('filter')) {
+                    <p id="alias-filter-error" class="field-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ errors().filter }}</p>
+                  } @else {
+                    <p id="alias-filter-hint" class="field-hint">A query that limits the documents visible through the alias.</p>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="card-footer">
+          <button type="submit" class="btn btn-soft">
+            <i class="bi" [class.bi-plus-lg]="!editing()" [class.bi-pencil]="editing()" aria-hidden="true"></i>
+            Stage change
+          </button>
+        </div>
+      </form>
+
+      <section #pendingCard class="card pending-card" aria-labelledby="pending-title">
+        <div class="card-header">
+          <span class="card-icon" aria-hidden="true"><i class="bi bi-layers"></i></span>
+          <div class="min-w-0 spacer">
+            <h2 #pendingHeading id="pending-title" class="card-title" tabindex="-1">Pending changes</h2>
+            @if (pending().length > 0) {
+              <p class="card-subtitle">
+                @if (pendingCounts().add) { {{ pendingCounts().add }} to add }
+                @if (pendingCounts().add && (pendingCounts().update || pendingCounts().remove)) { · }
+                @if (pendingCounts().update) { {{ pendingCounts().update }} to update }
+                @if (pendingCounts().update && pendingCounts().remove) { · }
+                @if (pendingCounts().remove) { {{ pendingCounts().remove }} to remove }
+              </p>
+            }
+          </div>
+          @if (pending().length > 0) {
+            <span class="badge badge-accent badge-lg tabular" aria-hidden="true">{{ pending().length }}</span>
+          }
+        </div>
+
+        @if (pending().length === 0) {
+          <cerebro-empty
+            [compact]="true"
+            icon="bi-layers"
+            heading="Nothing staged"
+            text="Removals from the table and additions from the form wait here, then apply together in one atomic request."
+          />
+        } @else {
+          <ul class="list pending-list">
+            @for (item of pending(); track item.key) {
+              <li class="list-item pending-item" [class.has-problem]="item.problem">
+                <span [class]="'list-item__icon pending-icon is-' + item.kind" aria-hidden="true">
+                  <i [class]="'bi ' + kindIcon(item)"></i>
+                </span>
+                <div class="list-item__body">
+                  <div class="pending-alias truncate" [title]="item.record.alias">{{ item.record.alias }}</div>
+                  <div class="pending-target">
+                    <span [class]="'section-label pending-kind is-' + item.kind">{{ kindLabel(item) }}</span>
+                    <span class="pending-preposition">{{ item.kind === 'add' ? 'to' : item.kind === 'update' ? 'on' : 'from' }}</span>
+                    <span class="pending-index mono truncate" [title]="item.record.index">{{ item.record.index }}</span>
+                  </div>
+                  @if (item.kind !== 'remove') {
+                    @let itemTags = routing(item.record);
+                    @if (item.record.is_write_index === true || item.writeCleared || item.record.is_hidden || itemTags.length > 0 || item.record.filter !== undefined) {
+                      <div class="pending-meta">
+                        @if (item.record.is_write_index === true) {
+                          <span class="badge badge-purple" title="Write index">
+                            <i class="bi bi-pencil-fill" aria-hidden="true"></i> write
+                          </span>
+                        } @else if (item.writeCleared) {
+                          <span class="tag write-cleared" title="The write index moves away from this index">
+                            <i class="bi bi-pencil" aria-hidden="true"></i> no longer write
+                          </span>
+                        }
+                        @if (item.record.is_hidden) {
+                          <span class="tag" title="Hidden alias">
+                            <i class="bi bi-eye-slash" aria-hidden="true"></i> hidden
+                          </span>
+                        }
+                        @for (tag of itemTags; track tag.label) {
+                          <span class="tag" [title]="tag.title">
+                            <span class="tag-key">{{ tag.label }}</span>
+                            <span class="mono">{{ tag.value }}</span>
+                          </span>
+                        }
+                        @if (item.record.filter !== undefined) {
+                          <span class="tag" title="Filtered alias">
+                            <span class="tag-key">filter</span>
+                            <span class="mono">{{ filterLabel(item.record.filter) }}</span>
+                          </span>
+                        }
+                      </div>
+                    }
+                  }
+                  @if (item.problem) {
+                    <p class="pending-problem">
+                      <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                      <span>{{ item.problem }}</span>
+                    </p>
+                  }
+                </div>
+                <div class="list-item__actions">
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-icon btn-sm"
+                    title="Revert"
+                    [disabled]="saving()"
+                    [attr.aria-label]="'Revert: ' + kindLabel(item) + ' ' + item.record.alias + ' on ' + item.record.index"
+                    (click)="revert(item.key)"
+                  >
+                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                  </button>
+                </div>
+              </li>
+            }
+          </ul>
+
+          <div class="pending-note">
+            @if (problemCount() > 0) {
+              <div #problemNote class="callout callout-warning" tabindex="-1">
+                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                <span>
+                  {{ pluralize(problemCount(), 'change') }} cannot be applied as staged.
+                  Revert or edit {{ problemCount() | plural: 'it' : 'them' }} to continue.
+                </span>
+              </div>
+            } @else {
+              <div class="callout callout-info">
+                <i class="bi bi-shield-check" aria-hidden="true"></i>
+                <span>Changes apply atomically: if one of them fails, none is applied.</span>
+              </div>
+            }
+          </div>
+
+          <div class="card-footer card-footer--between">
+            <button type="button" class="btn btn-ghost btn-sm" [disabled]="saving()" (click)="discardAll()">
+              Discard all
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              [class.is-loading]="saving()"
+              [disabled]="saving()"
+              (click)="apply()"
+            >
+              <i class="bi bi-check2" aria-hidden="true"></i>
+              Apply
+              <span class="btn-count">{{ pending().length }}</span>
+            </button>
+          </div>
+        }
+      </section>
+    </div>
+  </div>
+
+  @if (pending().length > 0 && !pendingCardVisible()) {
+    <div class="pending-bar" role="region" aria-label="Pending alias changes">
+      <span class="pending-bar__icon" aria-hidden="true"><i class="bi bi-layers"></i></span>
+      <span class="pending-bar__text">
+        <strong>{{ pluralize(pending().length, 'change') }}</strong> pending
+        @if (problemCount() > 0) {
+          <span class="pending-bar__problem">· {{ problemCount() }} {{ problemCount() | plural: 'needs' : 'need' }} attention</span>
+        }
+      </span>
+      <button type="button" class="btn btn-primary btn-sm" (click)="reviewPending()">
+        Review <i class="bi bi-arrow-down-short" aria-hidden="true"></i>
+      </button>
+    </div>
+  }
+</section>

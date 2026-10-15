@@ -1,93 +1,94 @@
-import { convertToParamMap, ActivatedRoute, Router } from '@angular/router';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
+import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, Router, UrlTree, convertToParamMap } from '@angular/router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertService } from '../../core/alert.service';
 import { ConnectionService } from '../../core/connection.service';
 import { ConnectApiService } from './connect-api.service';
 import { ConnectComponent } from './connect.component';
 
+const SECURED = 'http://localhost:9201';
+
 describe('ConnectComponent', () => {
-  let fixture: ComponentFixture<ConnectComponent>;
-  let component: ConnectComponent;
-  const connect = vi.fn();
-  const navigate = vi.fn().mockResolvedValue(true);
-  const alertError = vi.fn();
-  const getHosts = vi.fn().mockResolvedValue(['production', 'local']);
   const testConnection = vi.fn();
+  const connect = vi.fn();
+  const navigate = vi.fn(async (..._args: unknown[]) => true);
+  const navigateByUrl = vi.fn(async (..._args: unknown[]) => true);
+  const alertError = vi.fn();
 
-  beforeEach(async () => {
-    connect.mockClear();
-    navigate.mockClear();
-    alertError.mockClear();
-    getHosts.mockClear();
-    testConnection.mockReset();
-
-    await TestBed.configureTestingModule({
-      imports: [ConnectComponent],
+  function component(params: Record<string, string>): ConnectComponent {
+    TestBed.configureTestingModule({
       providers: [
-        {
-          provide: ConnectApiService,
-          useValue: { getHosts, testConnection },
-        },
-        {
-          provide: ConnectionService,
-          useValue: { host: () => undefined, connect },
-        },
+        { provide: ConnectApiService, useValue: { testConnection, getHosts: async () => [] } },
+        { provide: ConnectionService, useValue: { connect, host: () => undefined } },
         { provide: AlertService, useValue: { error: alertError } },
-        { provide: Router, useValue: { navigate } },
-        {
-          provide: ActivatedRoute,
-          useValue: {
-            snapshot: { queryParamMap: convertToParamMap({}) },
-          },
-        },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(params) } } },
       ],
-    }).compileComponents();
-
-    fixture = TestBed.createComponent(ConnectComponent);
-    component = fixture.componentInstance;
-    fixture.detectChanges();
-    await fixture.whenStable();
-  });
-
-  it('loads and sorts known hosts', () => {
-    expect(component.hosts()).toEqual(['local', 'production']);
-  });
-
-  it('stores a successful connection and navigates to overview', async () => {
-    testConnection.mockResolvedValue({ status: 200, body: {} });
-
-    await component.connectTo('http://localhost:9200');
-
-    expect(connect).toHaveBeenCalledWith('http://localhost:9200');
-    expect(navigate).toHaveBeenCalledWith(['/overview'], {
-      queryParams: { host: 'http://localhost:9200' },
     });
+    const router = TestBed.inject(Router);
+    vi.spyOn(router, 'navigate').mockImplementation(navigate);
+    vi.spyOn(router, 'navigateByUrl').mockImplementation(navigateByUrl);
+    const target = TestBed.runInInjectionContext(() => new ConnectComponent());
+    target.ngOnInit();
+    return target;
+  }
+
+  async function signIn(params: Record<string, string>): Promise<void> {
+    const target = component({ host: SECURED, unauthorized: 'true', ...params });
+    target.username.set('elastic');
+    target.password.set('changeme');
+    await target.authorize();
+    expect(connect).toHaveBeenCalledWith(SECURED, 'elastic', 'changeme');
+  }
+
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+    testConnection.mockReset().mockResolvedValue({ status: 200, body: {} });
+    connect.mockReset();
+    navigate.mockClear();
+    navigateByUrl.mockClear();
+    alertError.mockClear();
   });
 
-  it('switches to credentials while preserving the host on ES 401', async () => {
-    testConnection.mockResolvedValue({ status: 401, body: {} });
+  it('goes back to the page that asked for credentials, with the connected host', async () => {
+    await signIn({ returnUrl: '/cat?api=nodes&host=http%3A%2F%2Fold&unauthorized=true' });
 
-    await component.connectTo('http://secure:9200');
-
-    expect(component.unauthorized()).toBe(true);
-    expect(navigate).toHaveBeenCalledWith([], {
-      queryParams: {
-        host: 'http://secure:9200',
-        unauthorized: true,
-      },
-      replaceUrl: true,
-    });
-    expect(connect).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    const url = TestBed.inject(Router).serializeUrl(navigateByUrl.mock.calls[0]?.[0] as UrlTree);
+    expect(url).toBe('/cat?api=nodes&host=http:%2F%2Flocalhost:9201');
   });
 
-  it('keeps the legacy invalid-credentials feedback', async () => {
-    testConnection.mockResolvedValue({ status: 401, body: {} });
-    component.host = 'http://secure:9200';
-    component.username = 'elastic';
-    component.password = 'wrong';
+  it.each(['//evil.example/x', 'https://evil.example/', '/connect?host=x', 'cat', '/'])(
+    'falls back to the overview for returnUrl %s',
+    async (returnUrl) => {
+      await signIn({ returnUrl });
 
-    await component.authorize();
+      expect(navigateByUrl).not.toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith(['/overview'], { queryParams: { host: SECURED } });
+    },
+  );
 
-    expect(component.feedback()).toBe('Invalid username or password');
+  it('forgets the page when the user picks another cluster', async () => {
+    const target = component({ host: SECURED, unauthorized: 'true', returnUrl: '/nodes' });
+    target.cancelAuthorization();
+    await target.connectTo('http://localhost:9200');
+
+    expect(navigateByUrl).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenLastCalledWith(['/overview'], { queryParams: { host: 'http://localhost:9200' } });
+  });
+
+  it('reports an unreachable cluster once, in the callout beside the form', async () => {
+    testConnection.mockRejectedValue(
+      new HttpErrorResponse({ status: 500, error: { error: 'Connection refused: localhost/127.0.0.1:9299' } }),
+    );
+    const target = component({});
+    await target.connectTo('http://localhost:9299');
+
+    expect(target.feedback()).toBe('Could not reach http://localhost:9299. Connection refused: localhost/127.0.0.1:9299');
+    expect(alertError).not.toHaveBeenCalled();
+
+    testConnection.mockRejectedValue(new HttpErrorResponse({ status: 500, error: '<html>Execution exception</html>' }));
+    await target.connectTo('http://localhost:9299');
+    expect(target.feedback()).toBe('Could not reach http://localhost:9299.');
   });
 });

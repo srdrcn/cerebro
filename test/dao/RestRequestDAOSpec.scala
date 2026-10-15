@@ -1,5 +1,6 @@
 package dao
 
+import java.nio.file.Files
 import java.sql.Date
 
 import org.specs2.Specification
@@ -12,9 +13,16 @@ import scala.concurrent.duration.FiniteDuration
 
 class RestRequestDAOSpec(implicit ee: ExecutionEnv) extends Specification {
 
+  // A database of its own, so every run starts from an empty history.
+  private val database = Files.createTempFile("cerebro-rest-history", ".db")
+  database.toFile.deleteOnExit()
+
   val app = new GuiceApplicationBuilder()
     .configure(
-      Map("rest.history.size" -> 3)
+      Map(
+        "rest.history.size" -> 3,
+        "slick.dbs.default.db.url" -> s"jdbc:sqlite:$database"
+      )
     )
     .build()
 
@@ -24,7 +32,6 @@ class RestRequestDAOSpec(implicit ee: ExecutionEnv) extends Specification {
         create a new entry                  $save
         update an existing entry            $update
         ensures history has max size        $maxSize
-        clear all entries for given user    $clear
                                             ${step(stop(app))}
       """
 
@@ -72,11 +79,6 @@ class RestRequestDAOSpec(implicit ee: ExecutionEnv) extends Specification {
       RestRequest("request1", "GET", "{}", "admin", new Date(time))
     )
     all must beEqualTo(expected).awaitFor(FiniteDuration(3, "s"))
-  }
-
-  def clear = {
-    val dao: RestHistoryDAO = app.injector.instanceOf(classOf[RestHistoryDAO])
-    dao.clear("admin") must beEqualTo(3).await
   }
 
 }

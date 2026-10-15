@@ -18,6 +18,8 @@ object OverviewControllerSpec extends MockedServices {
 
       should correctly refresh index                     $refreshIndex
       should validate existence of index parameter       $missingIndicesToRefresh
+      should refresh long index lists in batches         $refreshInBatches
+      should reject an empty index list                  $emptyIndicesToRefresh
 
       should correctly flush index                       $flushIndex
       should validate existence of index parameter       $missingIndicesToFlush
@@ -39,10 +41,33 @@ object OverviewControllerSpec extends MockedServices {
       should validate existence of shard parameter       $missingShardToFetchShardStats
       should validate existence of node parameter        $missingNodeToFetchShardStats
 
-      should correctly clear index cache                 $enableShardAllocation
-      should correctly clear index cache                 $disableShardAllocation
+      should enable shard allocation                     $enableShardAllocation
+      should disable shard allocation                    $disableShardAllocation
+      should reject an unknown allocation kind           $invalidAllocationKind
                                                          ${step(play.api.Play.stop(application))}
       """
+
+  // Hundreds of names do not fit in one request line (4 KB by default).
+  def refreshInBatches = {
+    val indices = (1 to 400).map(n => f"logs-2026.10.$n%03d")
+    val batches = IndexBatches.batches(indices)
+    val refreshed = Json.obj("_shards" -> Json.obj("total" -> 2, "successful" -> 2, "failed" -> 0))
+    batches.foreach { batch =>
+      client.refreshIndex(batch, ElasticServer(Host("somehost", None))) returns Future.successful(Success(200, refreshed))
+    }
+    val body = Json.obj("host" -> "somehost", "indices" -> indices.mkString(","))
+    val result = route(application, FakeRequest(POST, "/overview/refresh_indices").withBody(body)).get
+    (batches.size must beGreaterThan(1)) and
+      ensure(result, 200, refreshed) and
+      (there was one(client).refreshIndex(batches.head, ElasticServer(Host("somehost", None)))) and
+      (there was one(client).refreshIndex(batches.last, ElasticServer(Host("somehost", None))))
+  }
+
+  def emptyIndicesToRefresh = {
+    val body = Json.obj("host" -> "somehost", "indices" -> " , ")
+    val result = route(application, FakeRequest(POST, "/overview/refresh_indices").withBody(body)).get
+    ensure(result, 400, Json.obj("error" -> "Missing required parameter indices"))
+  }
 
   def deleteIndex = {
     val expectedResponse = Json.parse(
@@ -273,6 +298,13 @@ object OverviewControllerSpec extends MockedServices {
     client.disableShardAllocation(ElasticServer(Host("somehost", None)), "none") returns Future.successful(Success(200, expectedResponse))
     val result = route(application, FakeRequest(POST, "/overview/disable_shard_allocation").withBody(body)).get
     ensure(result, 200, expectedResponse)
+  }
+
+  def invalidAllocationKind = {
+    val body = Json.obj("host" -> "somehost", "kind" -> "none\"}},\"persistent\":{")
+    val result = route(application, FakeRequest(POST, "/overview/disable_shard_allocation").withBody(body)).get
+    ensure(result, 400, Json.obj("error" -> "Invalid value for parameter kind, expected one of all, primaries, new_primaries, none")) and
+      (there was no(client).disableShardAllocation(any[ElasticServer], any[String]))
   }
 
   val expectedShardStats = Json.parse(

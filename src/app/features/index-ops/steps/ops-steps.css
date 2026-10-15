@@ -1,0 +1,168 @@
+/* Layout shared by the steps of the index operations wizard. */
+
+:host {
+  display: block;
+}
+
+.ops-sections {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.ops-section {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ops-section + .ops-section {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ops-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+}
+
+.ops-section__head .section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ops-section__head .section-title:focus {
+  outline: none;
+}
+
+.ops-section__head .section-title:focus-visible {
+  border-radius: var(--radius-xs);
+  box-shadow: var(--focus-ring);
+}
+
+.ops-section__head .count-label,
+.ops-section__aside {
+  margin-left: auto;
+}
+
+.ops-section__hint {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+/* Facts of an index (label above value). */
+.ops-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--border-subtle);
+}
+
+.ops-facts > div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+
+.ops-facts dt {
+  color: var(--text-3);
+  font-size: var(--text-xs);
+}
+
+.ops-facts dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Index name heading of a source panel. */
+.ops-subject {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.ops-subject__name {
+  min-width: 0;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Choice chips (shard counts). */
+.ops-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ops-choices .chip-toggle {
+  min-width: 44px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ops-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-5);
+  align-items: start;
+}
+
+.ops-fields .col-span-all {
+  grid-column: 1 / -1;
+}
+
+.ops-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.ops-inline > .input {
+  width: auto;
+  max-width: 160px;
+}
+
+.ops-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.ops-progress__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.ops-mini-table td,
+.ops-mini-table th {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .ops-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ops-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

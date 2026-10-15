@@ -1,235 +1,442 @@
-<section class="nodes-page" aria-labelledby="nodes-title">
-  <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
-    <div>
-      <h1 id="nodes-title" class="h4 mb-1">Nodes</h1>
-      <p class="text-secondary mb-0">Runtime and resource usage for cluster nodes</p>
+<section class="page" aria-labelledby="nodes-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="nodes-title" class="page-title">Nodes</h1>
+      <p class="page-subtitle">Roles, versions and resource usage of every node in the cluster.</p>
     </div>
-    <button
-      type="button"
-      class="btn btn-sm btn-outline-light"
-      (click)="requestRefresh()"
-      [disabled]="loading()"
-    >
-      <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-      Refresh
-    </button>
-  </div>
+  </header>
 
-  <div class="node-filters row g-3 align-items-end mb-3">
-    <div class="col-12 col-md-5 col-lg-4">
-      <label for="node-name-filter" class="form-label">Node name</label>
-      <input
-        id="node-name-filter"
-        type="search"
-        class="form-control form-control-sm"
-        placeholder="Filter nodes by name"
-        [ngModel]="name()"
-        (ngModelChange)="name.set($event)"
-      />
+  @if (nodes(); as all) {
+    @if (failed()) {
+      <div class="callout callout-warning nodes-stale" role="alert">
+        <i class="bi bi-wifi-off" aria-hidden="true"></i>
+        <div class="min-w-0">
+          <strong>Could not refresh the nodes.</strong>
+          Showing data from {{ loadedAt() | date: 'HH:mm:ss' }}. {{ loadError() ?? 'The cluster did not answer the nodes request.' }}
+        </div>
+        <button
+          type="button"
+          class="btn btn-sm nodes-stale__retry"
+          [class.is-loading]="loading()"
+          [disabled]="loading()"
+          (click)="load()"
+        >
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </div>
+    }
+    <div class="stat-grid nodes-stats">
+      <div class="stat">
+        <div class="stat__label"><i class="bi bi-hdd-stack" aria-hidden="true"></i> Nodes</div>
+        <div class="stat__value">{{ summary().total }}</div>
+        <div class="stat__meta">
+          {{ roleCounts().master }} master-eligible · {{ roleCounts().data }} data
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat__label"><i class="bi bi-star" aria-hidden="true"></i> Elected master</div>
+        <div class="stat__value stat__value--text" [title]="summary().master ?? ''">
+          {{ summary().master ?? '–' }}
+        </div>
+        <div class="stat__meta">
+          Elasticsearch {{ summary().versions.join(', ') || '–' }}
+          @if (summary().versions.length > 1) {
+            <span class="badge badge-yellow">mixed</span>
+          }
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat__label"><i class="bi bi-memory" aria-hidden="true"></i> Avg. heap</div>
+        <div class="stat__value">
+          {{ summary().averageHeap === null ? '–' : (summary().averageHeap ?? 0).toFixed(0) + '%' }}
+        </div>
+        <cerebro-meter class="stat__meter" [value]="summary().averageHeap" label="Average heap usage" />
+      </div>
+      <div class="stat">
+        <div class="stat__label"><i class="bi bi-device-hdd" aria-hidden="true"></i> Disk used</div>
+        <div class="stat__value">{{ summary().diskUsed | bytes }}</div>
+        <div class="stat__meta">of {{ summary().diskTotal | bytes }} across all nodes</div>
+      </div>
     </div>
-    <div class="col-12 col-md">
-      <fieldset>
-        <legend class="form-label">Roles</legend>
-        <div class="role-filters">
-          <div class="form-check form-check-inline">
-            <input
-              id="filter-master"
-              type="checkbox"
-              class="form-check-input"
-              [ngModel]="master()"
-              (ngModelChange)="master.set($event)"
-            />
-            <label for="filter-master" class="form-check-label">
-              <i class="bi bi-star" aria-hidden="true"></i> master
-            </label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input
-              id="filter-data"
-              type="checkbox"
-              class="form-check-input"
-              [ngModel]="data()"
-              (ngModelChange)="data.set($event)"
-            />
-            <label for="filter-data" class="form-check-label">
-              <i class="bi bi-device-hdd" aria-hidden="true"></i> data
-            </label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input
-              id="filter-ingest"
-              type="checkbox"
-              class="form-check-input"
-              [ngModel]="ingest()"
-              (ngModelChange)="ingest.set($event)"
-            />
-            <label for="filter-ingest" class="form-check-label">
-              <i class="bi bi-funnel" aria-hidden="true"></i> ingest
-            </label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input
-              id="filter-coordinating"
-              type="checkbox"
-              class="form-check-input"
-              [ngModel]="coordinating()"
-              (ngModelChange)="coordinating.set($event)"
-            />
-            <label for="filter-coordinating" class="form-check-label">
-              <i class="bi bi-diagram-3" aria-hidden="true"></i> coordinating
-            </label>
+
+    <div class="card nodes-card">
+      <div class="card-header nodes-toolbar">
+        <div class="toolbar">
+          <cerebro-search
+            [(value)]="name"
+            placeholder="Filter by node name"
+            ariaLabel="Filter nodes by name"
+          />
+          <div class="row-wrap" role="group" aria-label="Filter by role">
+            @for (role of roleFilters; track role.key) {
+              <button
+                type="button"
+                class="chip-toggle"
+                [attr.aria-pressed]="roles()[role.key]"
+                (click)="toggleRole(role.key)"
+              >
+                {{ role.label }}
+                <span class="count">{{ roleCounts()[role.key] }}</span>
+              </button>
+            }
           </div>
         </div>
-      </fieldset>
-    </div>
-    <div class="col-12 col-lg-auto text-secondary small">
-      {{ visibleNodes().length }} of {{ nodes()?.length ?? 0 }} nodes
-    </div>
-  </div>
+        <div class="row">
+          <span class="count-label">
+            @if (filtered()) {
+              <strong>{{ visibleNodes().length | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'node' }}
+            } @else {
+              <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'node' }}
+            }
+          </span>
+          <cerebro-menu label="Table options" align="end">
+            <i trigger class="bi bi-sliders2" aria-hidden="true"></i>
+            <button
+              type="button"
+              class="menu-item"
+              role="menuitemcheckbox"
+              [attr.aria-checked]="showInternalAttributes()"
+              (click)="showInternalAttributes.set(!showInternalAttributes())"
+            >
+              <i class="bi" [class.bi-check2]="showInternalAttributes()" aria-hidden="true"></i>
+              Show built-in node attributes
+            </button>
+          </cerebro-menu>
+        </div>
+      </div>
 
-  <div class="table-responsive nodes-table-wrap">
-    <table class="table table-dark table-bordered table-hover align-middle mb-0">
-      <thead>
-        <tr>
-          <th scope="col" [attr.aria-sort]="ariaSort('name')">
-            <button type="button" class="sort-button" (click)="setSortBy('name')">
-              name
-              @if (sortField() === 'name') {
-                <i class="bi" [class.bi-caret-up-fill]="!reverse()" [class.bi-caret-down-fill]="reverse()"></i>
-              }
-            </button>
-          </th>
-          <th scope="col" [attr.aria-sort]="ariaSort('cpu.load')">
-            <button type="button" class="sort-button" (click)="setSortBy('cpu.load')">
-              load
-              @if (sortField() === 'cpu.load') {
-                <i class="bi" [class.bi-caret-up-fill]="!reverse()" [class.bi-caret-down-fill]="reverse()"></i>
-              }
-            </button>
-          </th>
-          <th scope="col" [attr.aria-sort]="ariaSort('cpu.process')">
-            <button type="button" class="sort-button" (click)="setSortBy('cpu.process')">
-              process cpu %
-              @if (sortField() === 'cpu.process') {
-                <i class="bi" [class.bi-caret-up-fill]="!reverse()" [class.bi-caret-down-fill]="reverse()"></i>
-              }
-            </button>
-          </th>
-          <th scope="col" [attr.aria-sort]="ariaSort('heap.percent')">
-            <button type="button" class="sort-button" (click)="setSortBy('heap.percent')">
-              heap usage %
-              @if (sortField() === 'heap.percent') {
-                <i class="bi" [class.bi-caret-up-fill]="!reverse()" [class.bi-caret-down-fill]="reverse()"></i>
-              }
-            </button>
-          </th>
-          <th scope="col" [attr.aria-sort]="ariaSort('disk.percent')">
-            <button type="button" class="sort-button" (click)="setSortBy('disk.percent')">
-              disk usage %
-              @if (sortField() === 'disk.percent') {
-                <i class="bi" [class.bi-caret-up-fill]="!reverse()" [class.bi-caret-down-fill]="reverse()"></i>
-              }
-            </button>
-          </th>
-          <th scope="col" [attr.aria-sort]="ariaSort('uptime')">
-            <button type="button" class="sort-button" (click)="setSortBy('uptime')">
-              uptime
-              @if (sortField() === 'uptime') {
-                <i class="bi" [class.bi-caret-up-fill]="!reverse()" [class.bi-caret-down-fill]="reverse()"></i>
-              }
-            </button>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (node of visibleNodes(); track node.id) {
-          <tr>
-            <th scope="row" class="node-identity">
-              <div class="d-flex align-items-start gap-2">
-                <div class="node-badges" aria-label="Node roles">
-                  @if (node.master) {
-                    <i
-                      class="bi"
-                      [class.bi-star-fill]="node.current_master"
-                      [class.bi-star]="!node.current_master"
-                      [title]="node.current_master ? 'Current master' : 'Master eligible'"
-                    ></i>
-                  }
-                  @if (node.data) {
-                    <i class="bi bi-device-hdd" title="Data node"></i>
-                  }
-                  @if (node.coordinating) {
-                    <i class="bi bi-diagram-3" title="Coordinating node"></i>
-                  }
-                  @if (node.ingest) {
-                    <i class="bi bi-funnel" title="Ingest node"></i>
-                  }
-                </div>
-                <div class="min-width-0">
-                  <div class="node-name text-truncate" [title]="node.name">{{ node.name }}</div>
-                  <div class="node-host text-truncate" [title]="node.host ?? ''">
-                    {{ node.host || 'host unavailable' }}
+      <div class="table-wrap">
+        <table class="data-table nodes-table">
+          <thead>
+            <tr>
+              <th scope="col" [attr.aria-sort]="sort.ariaSort('name')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('name')" (click)="sort.sortBy('name')">
+                  Node <i class="bi" [class]="'bi ' + sort.icon('name')" aria-hidden="true"></i>
+                </button>
+              </th>
+              <th scope="col" class="metric-col" [attr.aria-sort]="sort.ariaSort('cpu.process')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('cpu.process')" (click)="sort.sortBy('cpu.process')">
+                  Process CPU <i class="bi" [class]="'bi ' + sort.icon('cpu.process')" aria-hidden="true"></i>
+                </button>
+              </th>
+              <th scope="col" class="metric-col" [attr.aria-sort]="sort.ariaSort('heap.percent')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('heap.percent')" (click)="sort.sortBy('heap.percent')">
+                  Heap <i class="bi" [class]="'bi ' + sort.icon('heap.percent')" aria-hidden="true"></i>
+                </button>
+              </th>
+              <th scope="col" class="metric-col" [attr.aria-sort]="sort.ariaSort('disk.percent')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('disk.percent')" (click)="sort.sortBy('disk.percent')">
+                  Disk <i class="bi" [class]="'bi ' + sort.icon('disk.percent')" aria-hidden="true"></i>
+                </button>
+              </th>
+              <th scope="col" class="activity-col">
+                <span class="activity-head" title="Indexing and search rates, sampled on every refresh">Activity</span>
+              </th>
+              <th scope="col" class="uptime-col" [attr.aria-sort]="sort.ariaSort('uptime')">
+                <button type="button" class="sort-button" [class.is-active]="sort.isActive('uptime')" (click)="sort.sortBy('uptime')">
+                  Uptime <i class="bi" [class]="'bi ' + sort.icon('uptime')" aria-hidden="true"></i>
+                </button>
+              </th>
+              <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (node of visibleNodes(); track node.id) {
+              @let open = isExpanded(node);
+              <tr [id]="'node-row-' + node.id" class="node-row" [class.is-selected]="open" [class.is-open]="open">
+                <th scope="row" class="node-cell">
+                  <div class="node-identity">
+                    <span
+                      class="node-avatar"
+                      [class.is-master]="node.current_master"
+                      [title]="node.current_master ? 'Elected master' : node.name"
+                      aria-hidden="true"
+                    >
+                      <i class="bi" [class.bi-star-fill]="node.current_master" [class.bi-hdd]="!node.current_master"></i>
+                    </span>
+                    <div class="min-w-0">
+                      <div class="node-name truncate" [title]="node.name">{{ node.name }}</div>
+                      <div class="node-meta">
+                        <span class="node-meta__host mono">{{ node.host || 'host unavailable' }}</span>&ngsp;<span><span aria-hidden="true">· </span>ES {{ node.version }}</span>&ngsp;
+                        @if (node.jvm) {
+                          <span><span aria-hidden="true">· </span>JVM {{ node.jvm }}</span>&ngsp;
+                        }
+                        <span class="node-meta__uptime"><span aria-hidden="true">· </span>up {{ node.uptime | duration }}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-              @if (attributeEntries(node.attributes).length > 0) {
-                <div class="node-labels mt-2">
-                  @for (attribute of attributeEntries(node.attributes); track attribute[0]) {
-                    <span class="badge text-bg-success" [title]="attribute[0]">{{ attribute[1] }}</span>
+                  <div class="node-tags">
+                    @for (role of roleBadges(node); track role.key) {
+                      <span class="badge" [class.badge-accent]="role.key === 'master'" [title]="role.title">{{ role.label }}</span>
+                    }
+                    @for (attribute of attributes(node); track attribute[0]) {
+                      <span class="tag" [title]="attribute[0] + ': ' + attribute[1]">
+                        <span class="tag-key">{{ attribute[0] }}</span>
+                        <span>{{ attribute[1] }}</span>
+                      </span>
+                    }
+                  </div>
+                </th>
+                <td class="metric-col">
+                  <div class="metric">
+                    <div class="metric__head">
+                      <span class="metric__value">{{ node.cpu.process === null ? '–' : node.cpu.process + '%' }}</span>
+                      <cerebro-sparkline
+                        class="metric__trend"
+                        [points]="live(node)?.series?.processCpu ?? []"
+                        [label]="'Process CPU of ' + node.name"
+                        [format]="format('processCpu')"
+                        [tone]="tone(node, 'processCpu')"
+                        [domainMax]="100"
+                        [height]="20"
+                      />
+                    </div>
+                    <cerebro-meter [value]="node.cpu.process" [small]="true" label="Process CPU" />
+                    <span class="metric__detail">
+                      <span title="OS CPU: CPU usage of the whole machine">OS {{ node.cpu.os === null ? '–' : node.cpu.os + '%' }}</span>&ngsp;<span title="1 minute load average"><span aria-hidden="true">· </span>load {{ node.cpu.load === null ? '–' : node.cpu.load.toFixed(2) }}</span>
+                    </span>
+                  </div>
+                </td>
+                <td class="metric-col">
+                  <div class="metric">
+                    <div class="metric__head">
+                      <span class="metric__value">{{ node.heap.percent }}%</span>
+                      <cerebro-sparkline
+                        class="metric__trend"
+                        [points]="live(node)?.series?.heap ?? []"
+                        [label]="'Heap usage of ' + node.name"
+                        [format]="format('heap')"
+                        [tone]="tone(node, 'heap')"
+                        [domainMax]="100"
+                        [height]="20"
+                      />
+                    </div>
+                    <cerebro-meter [value]="node.heap.percent" [small]="true" label="Heap usage" />
+                    <span class="metric__detail"><span>{{ bytesString(node.heap.used) }}</span>&ngsp;<span>of {{ bytesString(node.heap.max) }}</span></span>
+                  </div>
+                </td>
+                <td class="metric-col">
+                  @if (node.disk; as disk) {
+                    <div class="metric">
+                      <span class="metric__value">{{ disk.percent }}%</span>
+                      <cerebro-meter [value]="disk.percent" [warn]="85" [danger]="90" [small]="true" label="Disk usage" />
+                      <span class="metric__detail"><span>{{ disk.available | bytes }} free</span>&ngsp;<span>of {{ disk.total | bytes }}</span></span>
+                    </div>
+                  } @else {
+                    <span class="text-muted">–</span>
                   }
-                </div>
+                </td>
+                <td class="activity-col">
+                  <div class="activity">
+                    @for (rate of activityRates; track rate.key) {
+                      @let value = reading(node, rate.key);
+                      <div class="activity__line">
+                        <div class="activity__reading" [title]="rate.title">
+                          <span class="activity__label">{{ rate.label }}</span>
+                          <span class="activity__value">
+                            {{ value.value }}<span class="activity__unit">{{ value.value === '–' ? '' : '/s' }}</span>
+                          </span>
+                        </div>
+                        <cerebro-sparkline
+                          class="activity__trend"
+                          [points]="live(node)?.series?.[rate.key] ?? []"
+                          [label]="rate.chart + ' of ' + node.name"
+                          [format]="format(rate.key)"
+                          [minDomain]="1"
+                          [dot]="false"
+                          [height]="22"
+                        />
+                      </div>
+                    }
+                  </div>
+                </td>
+                <td class="uptime-col">
+                  <span class="uptime">{{ node.uptime | duration }}</span>
+                </td>
+                <td class="actions">
+                  <div class="row-actions">
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-icon btn-sm expand-button"
+                    [attr.aria-expanded]="open"
+                    [attr.aria-controls]="open ? 'node-detail-' + node.id : null"
+                    [attr.aria-label]="(open ? 'Hide live activity of ' : 'Show live activity of ') + node.name"
+                    [title]="open ? 'Hide live activity' : 'Show live activity'"
+                    (click)="toggleExpanded(node)"
+                  >
+                    <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                  </button>
+                  <cerebro-menu [label]="'Actions for ' + node.name" align="end">
+                    <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+                    <div class="menu-label">{{ node.name }}</div>
+                    <button type="button" class="menu-item" (click)="showStats(node)">
+                      <i class="bi bi-braces" aria-hidden="true"></i> View node stats
+                    </button>
+                    <button type="button" class="menu-item" (click)="toggleExpanded(node)">
+                      <i class="bi bi-activity" aria-hidden="true"></i> {{ open ? 'Hide live activity' : 'Show live activity' }}
+                    </button>
+                  </cerebro-menu>
+                  </div>
+                </td>
+              </tr>
+              @if (open) {
+                <tr class="node-detail-row is-selected">
+                  <td colspan="7" [id]="'node-detail-' + node.id">
+                    <section class="node-detail" [attr.aria-labelledby]="'node-detail-title-' + node.id">
+                      <div class="node-detail__header">
+                        <h2 class="section-title node-detail__title" [id]="'node-detail-title-' + node.id">
+                          Live activity <span class="text-muted">of</span> {{ node.name }}
+                        </h2>
+                        <div class="node-detail__status">
+                          @if (metricsFailed()) {
+                            @if (hasSamples()) {
+                              <span class="node-detail__warning" role="status">
+                                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                                Could not sample the nodes{{ metricsError() ? ': ' + metricsError() : '' }}
+                              </span>
+                              <button
+                                type="button"
+                                class="btn btn-sm"
+                                [class.is-loading]="metricsSampling()"
+                                [disabled]="metricsSampling()"
+                                (click)="retryMetrics()"
+                              >
+                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                              </button>
+                            }
+                          } @else if (metricsLate()) {
+                            <span class="node-detail__warning" role="status">
+                              <span class="spinner" aria-hidden="true"></span> Waiting for the nodes…
+                            </span>
+                            <span class="text-muted">last sample {{ metricsSampledAt() | date: 'HH:mm:ss' }}</span>
+                          } @else if (!metricsReady() && !metricsPaused()) {
+                            <span class="node-detail__collecting" role="status">
+                              <span class="spinner" aria-hidden="true"></span> Collecting samples…
+                            </span>
+                          } @else {
+                            <span role="status">{{ samplingLabel() }}</span>
+                            @if (windowLabel()) {
+                              <span aria-hidden="true">·</span>
+                              <span class="text-muted">{{ windowLabel() }}</span>
+                            }
+                          }
+                          @if (partialLabel(); as partial) {
+                            <span class="badge badge-yellow" title="Cluster totals leave out samples that some nodes did not answer">{{ partial }}</span>
+                          }
+                          @if (metricsPaused()) {
+                            <button type="button" class="link-button text-sm" (click)="resumeRefresh()">Resume auto refresh</button>
+                          }
+                        </div>
+                      </div>
+                      @if (metricsFailed() && !hasSamples()) {
+                        <cerebro-empty
+                          icon="bi-exclamation-triangle"
+                          heading="Could not sample the nodes"
+                          [text]="metricsError() ?? 'The cluster did not answer the node statistics request.'"
+                          [compact]="true"
+                        >
+                          <button
+                            type="button"
+                            class="btn btn-sm"
+                            [class.is-loading]="metricsSampling()"
+                            [disabled]="metricsSampling()"
+                            (click)="retryMetrics()"
+                          >
+                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                          </button>
+                        </cerebro-empty>
+                      } @else {
+                      <div class="node-detail__charts">
+                        @for (chart of charts(node); track chart.key) {
+                          <div class="node-chart">
+                            <div class="node-chart__label" [title]="chart.description">{{ chart.label }}</div>
+                            <div class="node-chart__reading">
+                              <span class="node-chart__value">{{ chart.value }}</span>
+                              @if (chart.unit) {
+                                <span class="node-chart__unit">{{ chart.unit }}</span>
+                              }
+                            </div>
+                            <cerebro-sparkline
+                              [points]="chart.points"
+                              [label]="chart.label + ' of ' + node.name"
+                              [format]="format(chart.key)"
+                              [tone]="chart.tone"
+                              [domainMax]="chart.domainMax"
+                              [minDomain]="chart.minDomain"
+                              [height]="40"
+                              [focusable]="true"
+                            />
+                            <div class="node-chart__range">{{ chart.range || '&nbsp;' }}</div>
+                          </div>
+                        }
+                      </div>
+                      <div class="table-wrap node-pools">
+                        <table class="data-table data-table--compact">
+                          <caption class="visually-hidden">Thread pools of {{ node.name }}</caption>
+                          <thead>
+                            <tr>
+                              <th scope="col">Thread pool</th>
+                              <th scope="col" class="num">Active</th>
+                              <th scope="col" class="num">Queue</th>
+                              <th scope="col" class="num">Peak queue</th>
+                              <th scope="col" class="num">Rejected in window</th>
+                              <th scope="col" class="num">Rejected since start</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (pool of threadPools(node); track pool.name) {
+                              <tr>
+                                <th scope="row">{{ pool.name }}</th>
+                                <td class="num">
+                                  @if (pool.threads === null && pool.active === null) {
+                                    –
+                                  } @else {
+                                    {{ pool.active ?? '–' }}<span class="text-muted"> of {{ pool.threads ?? '–' }}</span>
+                                  }
+                                </td>
+                                <td class="num" [class.text-warning]="(pool.queue ?? 0) > 0">{{ pool.queue ?? '–' }}</td>
+                                <td class="num">{{ pool.peakQueue ?? '–' }}</td>
+                                <td class="num" [class.text-danger]="(pool.rejectedInWindow ?? 0) > 0">{{ pool.rejectedInWindow ?? '–' }}</td>
+                                <td class="num">{{ pool.rejectedTotal | num }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                      }
+                    </section>
+                  </td>
+                </tr>
               }
-              <div class="node-labels mt-2">
-                @if (node.jvm) {
-                  <span class="badge text-bg-primary">JVM: {{ node.jvm }}</span>
-                }
-                <span class="badge text-bg-primary">ES: {{ node.version }}</span>
-              </div>
-            </th>
-            <td>
-              <span class="main-stat">
-                @if (node.cpu.load === null) { – } @else { {{ node.cpu.load | number: '1.0-2' }} }
-              </span>
-            </td>
-            <td>
-              <span class="main-stat">
-                @if (node.cpu.process === null) { – } @else { {{ node.cpu.process }}% }
-              </span>
-              <span class="detail-stat">
-                @if (node.cpu.os === null) { OS CPU unavailable } @else { OS CPU: {{ node.cpu.os }}% }
-              </span>
-            </td>
-            <td>
-              <span class="main-stat">{{ node.heap.percent }}%</span>
-              <span class="detail-stat">used: {{ node.heap.used }}</span>
-              <span class="detail-stat">max: {{ node.heap.max }}</span>
-            </td>
-            <td>
-              @if (node.disk; as disk) {
-                <span class="main-stat">{{ disk.percent }}%</span>
-                <span class="detail-stat">available: {{ bytes(disk.available) }}</span>
-                <span class="detail-stat">total: {{ bytes(disk.total) }}</span>
-              } @else {
-                <span class="empty-stat">–</span>
-              }
-            </td>
-            <td><span class="main-stat">{{ uptime(node.uptime) }}</span></td>
-          </tr>
-        } @empty {
-          <tr>
-            <td colspan="6" class="empty-state" role="status">
-              @if (loading()) {
-                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
-                Loading nodes…
-              } @else if (nodes()) {
-                No nodes match the current filters.
-              } @else {
-                No node data is available.
-              }
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </div>
+            } @empty {
+              <tr>
+                <td colspan="7">
+                  <cerebro-empty icon="bi-funnel" heading="No matching nodes" text="No node matches the current name and role filters.">
+                    <button type="button" class="btn btn-sm" (click)="resetFilters()">Clear filters</button>
+                  </cerebro-empty>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  } @else if (failed()) {
+    <div class="card">
+      <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load nodes" [text]="loadError() ?? 'The cluster did not answer the nodes request.'">
+        <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
+    </div>
+  } @else {
+    <div class="stat-grid nodes-stats" aria-hidden="true">
+      @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+        <div class="stat"><span class="skeleton" style="height: 62px"></span></div>
+      }
+    </div>
+    <div class="card loading-block" role="status">
+      <span class="spinner"></span> Loading nodes…
+    </div>
+  }
 </section>

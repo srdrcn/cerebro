@@ -1,0 +1,35 @@
+:host {
+  display: block;
+}
+
+.transient-callout {
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+.transient-callout > .bi {
+  align-self: flex-start;
+}
+
+.transient-callout__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.transient-callout__action {
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .transient-callout {
+    flex-wrap: wrap;
+  }
+
+  .transient-callout__text {
+    flex-basis: calc(100% - 32px);
+  }
+
+  .transient-callout__action {
+    margin-left: 27px;
+  }
+}

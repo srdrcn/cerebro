@@ -7,37 +7,18 @@ object OpenIndicesSpec extends Specification {
 
   def is =
     s2"""
-    IndexAnalyzers should
-        should return all analyzers                  $analyzers
+    OpenIndices should
+      keep the names of open indices                 $openOnly
 
       """
 
-  def analyzers = {
+  // The rows `_cat/indices?format=json&h=index,status` returns.
+  def openOnly = {
     val data = Json.parse(
       """
         |[
-        |  {
-        |    "health": "yellow",
-        |    "status": "open",
-        |    "index": "some_index",
-        |    "pri": "5",
-        |    "rep": "1",
-        |    "docs.count": "0",
-        |    "docs.deleted": "0",
-        |    "store.size": "795b",
-        |    "pri.store.size": "795b"
-        |  },
-        |  {
-        |    "health": null,
-        |    "status": "close",
-        |    "index": "some_other_index",
-        |    "pri": null,
-        |    "rep": null,
-        |    "docs.count": null,
-        |    "docs.deleted": null,
-        |    "store.size": null,
-        |    "pri.store.size": null
-        |  }
+        |  {"index": "some_index", "status": "open"},
+        |  {"index": "some_other_index", "status": "close"}
         |]
       """.stripMargin
     )

@@ -1,0 +1,765 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
+import { skip } from 'rxjs';
+import { AlertService } from '../../core/alert.service';
+import { ClusterApiService } from '../../core/cluster-api.service';
+import { ConnectionService } from '../../core/connection.service';
+import { DialogService } from '../../core/dialog.service';
+import { failureMessage, readableReason } from '../../core/errors';
+import { formatDate, formatDuration, pluralize } from '../../core/format';
+import { revealWhenStacked } from '../../core/layout';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
+import { readPreference, writePreference } from '../../core/preferences';
+import { RefreshService } from '../../core/refresh.service';
+import { saveLabel, saveMode } from '../../core/save-mode';
+import { CodeEditorComponent } from '../../shared/code-editor.component';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
+import { MenuComponent } from '../../shared/menu.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { createSort } from '../../shared/sort-state';
+import {
+  ExplainFilter,
+  ExplainRow,
+  ExplainSortField,
+  IlmExplainResponse,
+  IlmPoliciesResponse,
+  IlmPolicySummary,
+} from './ilm.models';
+import {
+  NEW_POLICY_BODY,
+  analyzePolicyBody,
+  canRetryStep,
+  filterExplain,
+  filterPolicies,
+  needsAttention,
+  normalizeExplain,
+  normalizePolicies,
+  phaseViews,
+  policySource,
+  policyWarnings,
+  sortExplain,
+  summarizeExplain,
+  usageExplainTarget,
+  usageLabel,
+  validatePolicyName,
+} from './ilm.utils';
+
+type IlmTab = 'policies' | 'status';
+
+interface EditorBaseline {
+  readonly name: string;
+  readonly body: string;
+}
+
+const NEW_BASELINE: EditorBaseline = { name: '', body: NEW_POLICY_BODY };
+const SHOW_MANAGED_PREFERENCE = 'cerebro.ilm.showManaged';
+const USAGE_PREVIEW = 8;
+
+@Component({
+  selector: 'cerebro-ilm',
+  imports: [
+    CodeEditorComponent,
+    EmptyStateComponent,
+    FormsModule,
+    MenuComponent,
+    NumberPipe,
+    PluralPipe,
+    RouterLink,
+    SearchInputComponent,
+  ],
+  host: { '(window:beforeunload)': 'onBeforeUnload($event)' },
+  templateUrl: './ilm.component.html',
+  styleUrl: './ilm.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class IlmComponent implements PendingChangesAware {
+  private readonly api = inject(ClusterApiService);
+  private readonly alerts = inject(AlertService);
+  private readonly dialogs = inject(DialogService);
+  private readonly refreshService = inject(RefreshService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  readonly connection = inject(ConnectionService);
+
+  private readonly editor = viewChild(CodeEditorComponent);
+  private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
+  private readonly detailColumn = viewChild<ElementRef<HTMLElement>>('detailColumn');
+  private readonly explainInput = viewChild<ElementRef<HTMLInputElement>>('explainInput');
+
+  readonly usagePreview = USAGE_PREVIEW;
+  readonly tab = signal<IlmTab>('policies');
+
+  // ---- Policies ----
+  readonly policies = signal<readonly IlmPolicySummary[] | undefined>(undefined);
+  readonly loading = signal(false);
+  readonly failed = signal(false);
+  /** Readable reason of the last failed load, for the error state. */
+  readonly loadError = signal<string | undefined>(undefined);
+  readonly query = signal('');
+  readonly showManaged = signal(readPreference(SHOW_MANAGED_PREFERENCE) === 'true');
+
+  /** Name of the stored policy being edited; null while writing a new one. */
+  readonly selected = signal<string | null>(null);
+  readonly name = signal('');
+  readonly body = signal(NEW_POLICY_BODY);
+  readonly baseline = signal<EditorBaseline>(NEW_BASELINE);
+  /** Set by the first save attempt: field errors show from then on. */
+  readonly submitted = signal(false);
+  readonly saving = signal(false);
+  readonly deleting = signal(false);
+  readonly expandedUsage = signal<ReadonlySet<string>>(new Set());
+
+  readonly managedCount = computed(() => (this.policies() ?? []).filter((policy) => policy.managed).length);
+  readonly visiblePolicies = computed(() =>
+    filterPolicies(this.policies() ?? [], this.query(), this.showManaged(), this.selected()),
+  );
+  /** Policies listed before the text filter (the selected managed one stays listed). */
+  readonly listTotal = computed(
+    () => filterPolicies(this.policies() ?? [], '', this.showManaged(), this.selected()).length,
+  );
+  readonly names = computed(() => (this.policies() ?? []).map((policy) => policy.name));
+
+  readonly selectedPolicy = computed(() => {
+    const selected = this.selected();
+    return (this.policies() ?? []).find((policy) => policy.name === selected);
+  });
+
+  /** The edited policy was deleted on the cluster since it was opened. */
+  readonly selectedMissing = computed(
+    () => this.selected() !== null && this.policies() !== undefined && !this.selectedPolicy(),
+  );
+
+  readonly nameValidation = computed(() => validatePolicyName(this.name()));
+  readonly nameError = computed(() => (this.name() !== '' || this.submitted() ? this.nameValidation() : null));
+
+  readonly bodyState = computed(() => analyzePolicyBody(this.body()));
+  readonly bodyError = computed(() => {
+    const state = this.bodyState();
+    return state.ok ? null : state.message;
+  });
+  readonly bodyWarnings = computed(() => {
+    const state = this.bodyState();
+    return state.ok ? policyWarnings(state.value) : [];
+  });
+
+  /** Announced to screen readers: changes on transitions only, not per keystroke. */
+  readonly bodyStatus = computed(() =>
+    this.bodyError() ? 'Invalid policy' : this.bodyWarnings().length > 0 ? 'Valid JSON, check the warnings' : 'Valid JSON',
+  );
+
+  readonly dirty = computed(() => {
+    const baseline = this.baseline();
+    return this.name() !== baseline.name || this.body() !== baseline.body;
+  });
+
+  /** Timeline of the policy in the editor (reflects unsaved edits while the JSON is valid). */
+  readonly previewPhases = computed(() => {
+    const state = this.bodyState();
+    if (state.ok) {
+      return phaseViews(state.value);
+    }
+    return this.selectedPolicy()?.phases ?? [];
+  });
+  readonly previewStale = computed(() => !this.bodyState().ok);
+
+  readonly mode = computed(() => saveMode(this.name(), this.selected(), this.names()));
+  readonly saveLabel = computed(() => saveLabel(this.mode(), 'policy'));
+
+  // ---- Lifecycle status ----
+  readonly explainTarget = signal('');
+  readonly explainSubmitted = signal(false);
+  readonly explainTargetError = computed(() =>
+    this.explainSubmitted() && !this.explainTarget().trim() ? 'Enter an index, data stream or pattern' : null,
+  );
+  readonly explainedTarget = signal<string | null>(null);
+  readonly explainRows = signal<readonly ExplainRow[] | undefined>(undefined);
+  readonly explainLoading = signal(false);
+  readonly explainError = signal<string | null>(null);
+  readonly explainFilter = signal<ExplainFilter>('all');
+  readonly explainQuery = signal('');
+  /** Age starts with the oldest index first. */
+  readonly explainSort = createSort<ExplainSortField>('index', { descendingFirst: (field) => field === 'age' });
+
+  readonly explainSummary = computed(() => summarizeExplain(this.explainRows() ?? []));
+  readonly visibleExplainRows = computed(() =>
+    sortExplain(
+      filterExplain(this.explainRows() ?? [], this.explainFilter(), this.explainQuery()),
+      this.explainSort.field(),
+      this.explainSort.reverse(),
+    ),
+  );
+  /** Failed steps among the listed rows that a manual retry can restart. */
+  readonly retryableRows = computed(() => this.visibleExplainRows().filter(canRetryStep));
+  readonly retryingSteps = signal(false);
+
+  /** Policy requested through ?policy=, opened once the list has loaded. */
+  private pendingSelection: string | null = null;
+  private loadSequence = 0;
+  private explainSequence = 0;
+  private destroyed = false;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => (this.destroyed = true));
+
+    const params = this.route.snapshot.queryParamMap;
+    const requestedTab = params.get('tab');
+    const requestedIndex = params.get('index');
+    this.pendingSelection = params.get('policy') ?? params.get('name');
+    if (requestedIndex) {
+      this.explainTarget.set(requestedIndex);
+    }
+    if (requestedTab === 'status' || (requestedIndex && !this.pendingSelection)) {
+      this.tab.set('status');
+    }
+
+    effect(() => {
+      this.refreshService.tick();
+      if (!this.connection.connected()) {
+        return;
+      }
+      untracked(() => {
+        void this.load();
+        const target = this.explainedTarget();
+        if (target !== null) {
+          void this.explain(target, true);
+        } else if (this.tab() === 'status' && this.explainTarget().trim()) {
+          void this.explain(this.explainTarget());
+        }
+      });
+    });
+
+    // Later links and history entries (the constructor read the first one).
+    this.route.queryParamMap.pipe(skip(1), takeUntilDestroyed()).subscribe((next) => this.applyParams(next));
+  }
+
+  /**
+   * Follows a link or history entry that names a policy (?policy=). A link
+   * without one (the sidebar, the palette) keeps the open policy and writes it
+   * back, so the URL always describes the page.
+   */
+  private applyParams(params: ParamMap): void {
+    if (this.destroyed) {
+      return;
+    }
+    const requested = params.get('policy') ?? params.get('name');
+    if (requested !== null && requested !== this.selected()) {
+      const policies = this.policies();
+      if (!policies) {
+        this.pendingSelection = requested;
+        return;
+      }
+      const policy = policies.find((item) => item.name === requested);
+      if (!policy) {
+        this.alerts.warn(`Lifecycle policy ${requested} does not exist`);
+        this.updateUrl();
+        return;
+      }
+      this.tab.set('policies');
+      // A declined discard keeps the open policy: put it back in the URL.
+      void this.select(policy).then(() => this.updateUrl());
+      return;
+    }
+    const expected = this.urlParams();
+    if (Object.entries(expected).some(([key, value]) => params.get(key) !== value)) {
+      this.updateUrl();
+    }
+  }
+
+  async load(): Promise<void> {
+    const sequence = ++this.loadSequence;
+    this.loading.set(true);
+    try {
+      const response = await this.api.post<IlmPoliciesResponse>('ilm/policies');
+      if (sequence !== this.loadSequence) {
+        return;
+      }
+      const policies = normalizePolicies(response);
+      this.policies.set(policies);
+      this.failed.set(false);
+      this.loadError.set(undefined);
+      this.syncEditorWithCluster(policies);
+      this.applyPendingSelection(policies);
+    } catch (error: unknown) {
+      if (sequence === this.loadSequence) {
+        this.failed.set(true);
+        this.loadError.set(readableReason(error));
+        this.alerts.error(failureMessage('Could not load lifecycle policies', error), error);
+      }
+    } finally {
+      if (sequence === this.loadSequence) {
+        this.loading.set(false);
+      }
+    }
+  }
+
+  /** Keeps an untouched editor in sync when the policy changes on the cluster. */
+  private syncEditorWithCluster(policies: readonly IlmPolicySummary[]): void {
+    const selected = this.selected();
+    if (selected === null || this.dirty() || this.saving()) {
+      return;
+    }
+    const stored = policies.find((policy) => policy.name === selected);
+    if (stored) {
+      const source = policySource(stored.policy);
+      if (source !== this.baseline().body) {
+        this.body.set(source);
+        this.baseline.set({ name: selected, body: source });
+      }
+    }
+  }
+
+  private applyPendingSelection(policies: readonly IlmPolicySummary[]): void {
+    const name = this.pendingSelection;
+    if (name === null) {
+      return;
+    }
+    this.pendingSelection = null;
+    if (this.destroyed) {
+      return;
+    }
+    const policy = policies.find((item) => item.name === name);
+    if (policy) {
+      this.openPolicy(policy);
+    } else {
+      this.alerts.warn(`Lifecycle policy ${name} does not exist`);
+      this.updateUrl();
+    }
+  }
+
+  onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.dirty()) {
+      event.preventDefault();
+    }
+  }
+
+  setTab(tab: IlmTab): void {
+    if (this.tab() === tab) {
+      return;
+    }
+    this.tab.set(tab);
+    this.updateUrl();
+    if (tab === 'status' && this.explainRows() === undefined && !this.explainLoading()) {
+      if (this.explainTarget().trim()) {
+        void this.explain(this.explainTarget());
+      } else {
+        queueMicrotask(() => this.explainInput()?.nativeElement.focus());
+      }
+    }
+  }
+
+  onTabKeydown(event: KeyboardEvent): void {
+    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+      event.preventDefault();
+      const next: IlmTab = this.tab() === 'policies' ? 'status' : 'policies';
+      this.setTab(next);
+      queueMicrotask(() => document.getElementById(`ilm-tab-${next}`)?.focus());
+    }
+  }
+
+  setShowManaged(value: boolean): void {
+    this.showManaged.set(value);
+    writePreference(SHOW_MANAGED_PREFERENCE, String(value));
+  }
+
+  // ---- Selection & editor ----
+
+  async select(policy: IlmPolicySummary): Promise<void> {
+    if (this.saving()) {
+      return;
+    }
+    if (this.selected() === policy.name && !this.selectedMissing()) {
+      this.revealDetail();
+      return;
+    }
+    if (!(await this.confirmDiscard()) || this.saving()) {
+      return;
+    }
+    this.openPolicy(policy);
+    this.revealDetail();
+  }
+
+  private openPolicy(policy: IlmPolicySummary): void {
+    const source = policySource(policy.policy);
+    this.selected.set(policy.name);
+    this.name.set(policy.name);
+    this.body.set(source);
+    this.baseline.set({ name: policy.name, body: source });
+    this.submitted.set(false);
+    this.expandedUsage.set(new Set());
+    this.updateUrl();
+  }
+
+  async newPolicy(): Promise<void> {
+    if (this.saving()) {
+      return;
+    }
+    if (this.tab() !== 'policies') {
+      this.setTab('policies');
+    }
+    if (this.selected() === null && !this.dirty()) {
+      this.nameInput()?.nativeElement.focus();
+      return;
+    }
+    if (!(await this.confirmDiscard()) || this.saving()) {
+      return;
+    }
+    this.resetEditor();
+    this.revealDetail();
+    queueMicrotask(() => this.nameInput()?.nativeElement.focus());
+  }
+
+  discardChanges(): void {
+    const baseline = this.baseline();
+    this.name.set(baseline.name);
+    this.body.set(baseline.body);
+    this.submitted.set(false);
+  }
+
+  format(): void {
+    const editor = this.editor();
+    if (!editor) {
+      return;
+    }
+    if (editor.format()) {
+      editor.focus();
+    } else {
+      this.alerts.warn('Fix the JSON syntax before formatting', this.bodyError() ?? undefined);
+    }
+  }
+
+  viewJson(): void {
+    const policy = this.selectedPolicy();
+    if (policy) {
+      this.dialogs.showJson(`Policy ${policy.name}`, policy.entry, policy.version !== null ? `Version ${policy.version}` : undefined);
+    }
+  }
+
+  /** Validates on submit: the first invalid field gets the focus. */
+  async save(): Promise<void> {
+    if (this.saving() || this.deleting()) {
+      return;
+    }
+    this.submitted.set(true);
+    if (this.nameValidation()) {
+      this.nameInput()?.nativeElement.focus();
+      return;
+    }
+    const state = this.bodyState();
+    if (!state.ok) {
+      this.editor()?.focus();
+      return;
+    }
+    if (this.mode() === 'update' && !this.dirty() && !this.selectedMissing()) {
+      this.alerts.info(`Policy ${this.name()} has no unsaved changes`);
+      return;
+    }
+    const name = this.name();
+    const body = this.body();
+    const mode = this.mode();
+
+    if (mode === 'overwrite') {
+      const confirmed = await this.dialogs.confirm({
+        title: `Overwrite policy ${name}?`,
+        message: `A lifecycle policy named ${name} already exists. Its phases will be replaced by this policy, and every index using it follows the new phases.`,
+        confirmLabel: 'Overwrite policy',
+        tone: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    const created = mode === 'create' || mode === 'copy' || this.selectedMissing();
+    const startSelected = this.selected();
+    this.saving.set(true);
+    let tracked = false;
+    try {
+      const response = await this.api.post<unknown>('ilm/policies/save', { name, policy: state.value });
+      this.alerts.success(created ? `Policy ${name} created` : `Policy ${name} updated`, response);
+      tracked = this.selected() === startSelected;
+      if (tracked) {
+        this.selected.set(name);
+        this.baseline.set({ name, body });
+        this.submitted.set(false);
+        this.updateUrl();
+      }
+    } catch (error: unknown) {
+      this.alerts.error(failureMessage(`Could not save policy ${name}`, error), error);
+      return;
+    } finally {
+      this.saving.set(false);
+    }
+
+    await this.load();
+    // Show what Elasticsearch stored unless the user kept typing meanwhile.
+    const stored = this.policies()?.find((policy) => policy.name === name);
+    if (tracked && stored && this.selected() === name && this.name() === name && this.body() === body) {
+      const source = policySource(stored.policy);
+      this.body.set(source);
+      this.baseline.set({ name, body: source });
+    }
+  }
+
+  async remove(): Promise<void> {
+    const policy = this.selectedPolicy();
+    if (!policy || this.deleting() || this.saving()) {
+      return;
+    }
+    const usage = policy.usage;
+    const confirmed = await this.dialogs.confirm({
+      title: `Delete policy ${policy.name}?`,
+      message:
+        usage.total > 0
+          ? `This policy is in use (${usageLabel(usage)}). Elasticsearch refuses to delete policies that indices still use; detach it from them first.`
+          : 'Indices created later can no longer use this policy. This cannot be undone.',
+      items: [...usage.indices, ...usage.dataStreams.map((name) => `${name} (data stream)`), ...usage.templates.map((name) => `${name} (template)`)],
+      confirmLabel: 'Delete policy',
+      tone: 'danger',
+    });
+    if (!confirmed) {
+      return;
+    }
+    this.deleting.set(true);
+    try {
+      const response = await this.api.post<unknown>('ilm/policies/delete', { name: policy.name });
+      this.alerts.success(`Policy ${policy.name} deleted`, response);
+      if (this.selected() === policy.name) {
+        this.resetEditor();
+      }
+      await this.load();
+    } catch (error: unknown) {
+      this.alerts.error(failureMessage(`Could not delete policy ${policy.name}`, error), error);
+    } finally {
+      this.deleting.set(false);
+    }
+  }
+
+  isUsageExpanded(group: string): boolean {
+    return this.expandedUsage().has(group);
+  }
+
+  toggleUsage(group: string): void {
+    this.expandedUsage.update((current) => {
+      const next = new Set(current);
+      if (next.has(group)) {
+        next.delete(group);
+      } else {
+        next.add(group);
+      }
+      return next;
+    });
+  }
+
+  usageSlice(group: string, items: readonly string[]): readonly string[] {
+    return this.isUsageExpanded(group) ? items : items.slice(0, USAGE_PREVIEW);
+  }
+
+  checkStatus(policy: IlmPolicySummary): void {
+    const explain = usageExplainTarget(policy.usage, policy.name);
+    if (!explain) {
+      return;
+    }
+    this.explainTarget.set(explain.target);
+    this.explainFilter.set('all');
+    this.explainQuery.set(explain.query);
+    this.tab.set('status');
+    this.updateUrl();
+    void this.explain(explain.target);
+  }
+
+  readonly usageLabel = usageLabel;
+  readonly needsAttention = needsAttention;
+  readonly canRetryStep = canRetryStep;
+  readonly pluralize = pluralize;
+  readonly formatDate = formatDate;
+
+  private resetEditor(): void {
+    this.selected.set(null);
+    this.name.set(NEW_BASELINE.name);
+    this.body.set(NEW_BASELINE.body);
+    this.baseline.set(NEW_BASELINE);
+    this.submitted.set(false);
+    this.updateUrl();
+  }
+
+  /**
+   * Resolves `true` when the editor holds nothing unsaved or the user agreed
+   * to drop it. Used when switching policies and by the route guard.
+   */
+  async confirmDiscard(): Promise<boolean> {
+    if (!this.dirty()) {
+      return true;
+    }
+    const subject = this.selected() ?? (this.name() || 'the new policy');
+    return this.dialogs.confirm({
+      title: 'Discard unsaved changes?',
+      message: `Your changes to ${subject} have not been saved and will be lost.`,
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+      tone: 'danger',
+    });
+  }
+
+  private revealDetail(): void {
+    revealWhenStacked(this.detailColumn()?.nativeElement);
+  }
+
+  /** The query parameters that describe the current tab, policy and explain target. */
+  private urlParams(): Readonly<Record<'tab' | 'policy' | 'index' | 'name', string | null>> {
+    const status = this.tab() === 'status';
+    return {
+      tab: status ? 'status' : null,
+      policy: !status ? this.selected() : null,
+      index: status ? this.explainedTarget() ?? (this.explainTarget().trim() || null) : null,
+      name: null,
+    };
+  }
+
+  /** Keeps the selected policy, tab and explain target bookmarkable. */
+  private updateUrl(): void {
+    if (this.destroyed) {
+      return;
+    }
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: this.urlParams(),
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  // ---- Lifecycle status ----
+
+  submitExplain(): void {
+    const target = this.explainTarget().trim();
+    this.explainSubmitted.set(true);
+    if (!target) {
+      this.explainInput()?.nativeElement.focus();
+      return;
+    }
+    void this.explain(target).then(() => this.updateUrl());
+  }
+
+  explainPreset(target: string): void {
+    this.explainTarget.set(target);
+    this.submitExplain();
+  }
+
+  async explain(target: string, silent = false): Promise<void> {
+    const trimmed = target.trim();
+    if (!trimmed) {
+      return;
+    }
+    const sequence = ++this.explainSequence;
+    this.explainLoading.set(true);
+    if (!silent) {
+      this.explainError.set(null);
+      if (this.explainedTarget() !== trimmed) {
+        this.explainRows.set(undefined);
+      }
+    }
+    try {
+      const response = await this.api.post<IlmExplainResponse>('ilm/explain', { index: trimmed });
+      if (sequence === this.explainSequence) {
+        this.explainRows.set(normalizeExplain(response));
+        this.explainedTarget.set(trimmed);
+        this.explainError.set(null);
+      }
+    } catch (error: unknown) {
+      if (sequence === this.explainSequence) {
+        this.explainError.set(readableReason(error) ?? 'The cluster did not answer the explain request.');
+        if (!silent) {
+          this.explainRows.set(undefined);
+          this.explainedTarget.set(null);
+        }
+      }
+    } finally {
+      if (sequence === this.explainSequence) {
+        this.explainLoading.set(false);
+      }
+    }
+  }
+
+  retryExplain(): void {
+    void this.explain(this.explainedTarget() ?? this.explainTarget());
+  }
+
+  retryStep(row: ExplainRow): void {
+    void this.retrySteps([row]);
+  }
+
+  retryListedSteps(): void {
+    void this.retrySteps(this.retryableRows());
+  }
+
+  /**
+   * Moves indices in the ERROR step back to the step that failed
+   * (`POST <indices>/_ilm/retry`), then explains the target again.
+   */
+  private async retrySteps(rows: readonly ExplainRow[]): Promise<void> {
+    const indices = rows.filter(canRetryStep).map((row) => row.index);
+    if (indices.length === 0 || this.retryingSteps()) {
+      return;
+    }
+    const single = indices.length === 1 ? indices[0] : null;
+    const confirmed = await this.dialogs.confirm({
+      title: single ? `Retry the failed step of ${single}?` : `Retry the failed steps of ${pluralize(indices.length, 'index', 'indices')}?`,
+      message: `ILM moves ${single ? 'the index' : 'each index'} back to the step that failed and runs it again. Fix the cause first (for example a missing setting or alias), or the step fails again.`,
+      items: single ? [] : indices,
+      confirmLabel: single ? 'Retry step' : `Retry ${pluralize(indices.length, 'step')}`,
+    });
+    if (!confirmed) {
+      return;
+    }
+    this.retryingSteps.set(true);
+    try {
+      // The backend sends long lists in batches that fit Elasticsearch's request line.
+      await this.api.post<unknown>('ilm/retry', { indices });
+      this.alerts.success(single ? `Retrying the failed step of ${single}` : `Retrying the failed steps of ${pluralize(indices.length, 'index', 'indices')}`);
+    } catch (error: unknown) {
+      const action = single ? `Could not retry the failed step of ${single}` : 'Could not retry the failed steps';
+      this.alerts.error(failureMessage(action, error), error);
+    } finally {
+      this.retryingSteps.set(false);
+    }
+    const target = this.explainedTarget();
+    if (target !== null && !this.destroyed) {
+      await this.explain(target, true);
+    }
+  }
+
+  showExplainJson(row: ExplainRow): void {
+    this.dialogs.showJson(`Lifecycle of ${row.index}`, row.raw, row.policy ? `Policy ${row.policy}` : 'Not managed by ILM');
+  }
+
+  openPolicyByName(name: string): void {
+    const policy = (this.policies() ?? []).find((item) => item.name === name);
+    if (!policy) {
+      this.alerts.warn(`Lifecycle policy ${name} was not found`);
+      return;
+    }
+    if (policy.managed && !this.showManaged()) {
+      this.setShowManaged(true);
+    }
+    this.tab.set('policies');
+    void this.select(policy).then(() => this.updateUrl());
+  }
+
+  formatAge(row: ExplainRow): string {
+    return row.ageMillis === null ? row.age ?? '–' : formatDuration(row.ageMillis);
+  }
+}

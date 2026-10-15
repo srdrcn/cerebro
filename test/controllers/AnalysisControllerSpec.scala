@@ -1,6 +1,6 @@
 package controllers
 
-import elastic.{ElasticResponse, Success}
+import elastic.{Error, Success}
 import models.{ElasticServer, Host}
 import play.api.libs.json.Json
 import play.api.test.FakeRequest
@@ -14,6 +14,7 @@ object AnalysisControllerSpec extends MockedServices {
     s2"""
     AnalysisController should                            ${step(play.api.Play.start(application))}
       return open indices                                $indices
+      pass index list errors through                     $indicesError
       return index analyzers                             $analyzers
       return index fields                                $fields
       analyze by field                                   $analyzeByField
@@ -21,18 +22,27 @@ object AnalysisControllerSpec extends MockedServices {
                                                          ${step(play.api.Play.stop(application))}
       """
 
+  // getIndexStatuses asks _cat/indices for the index and status columns only.
   def indices = {
     val expectedResponse = Json.parse(
       """
         |[
-        |  {"health":"green","status":"open","index":"index1","pri":"10","rep":"0","docs.count":"4330","docs.deleted":"10","store.size":"4.1mb","pri.store.size":"4.1mb"},
-        |  {"health":"green","status":"open","index":"index2","pri":"10","rep":"0","docs.count":"1497203","docs.deleted":"5048","store.size":"860.9mb","pri.store.size":"860.9mb"}
+        |  {"index":"index1","status":"open"},
+        |  {"index":"index2","status":"close"},
+        |  {"index":"index3","status":"open"}
         |]
       """.stripMargin
     )
-    client.getIndices(ElasticServer(Host("somehost"))) returns Future.successful(Success(200, expectedResponse))
+    client.getIndexStatuses(ElasticServer(Host("somehost"))) returns Future.successful(Success(200, expectedResponse))
     val response = route(application, FakeRequest(POST, "/analysis/indices").withBody(Json.obj("host" -> "somehost"))).get
-    ensure(response, 200, Json.arr("index1", "index2"))
+    ensure(response, 200, Json.arr("index1", "index3"))
+  }
+
+  def indicesError = {
+    val error = Json.obj("error" -> Json.obj("type" -> "security_exception", "reason" -> "unable to authenticate"))
+    client.getIndexStatuses(ElasticServer(Host("somehost"))) returns Future.successful(Error(401, error))
+    val response = route(application, FakeRequest(POST, "/analysis/indices").withBody(Json.obj("host" -> "somehost"))).get
+    ensure(response, 401, error)
   }
 
   def analyzers = {

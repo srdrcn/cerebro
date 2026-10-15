@@ -1,0 +1,836 @@
+:host {
+  display: block;
+}
+
+/* ------------------------------------------------------------------ */
+/* Assignments table                                                   */
+/* ------------------------------------------------------------------ */
+
+.assignments-card {
+  container: assignments / inline-size;
+}
+
+.aliases-toolbar {
+  flex-wrap: wrap;
+}
+
+/* Both filters stay side by side and shrink before the count wraps. */
+.aliases-toolbar > .toolbar {
+  display: grid;
+  flex: 1 1 320px;
+  grid-template-columns: repeat(2, minmax(0, 232px));
+}
+
+.aliases-toolbar .toolbar .input-group {
+  width: 100%;
+}
+
+/* Fixed layout: long names truncate inside their column instead of pushing
+   the row actions out of view. */
+.aliases-table {
+  min-width: 520px;
+  table-layout: fixed;
+}
+
+.col-alias {
+  width: 31%;
+}
+
+.col-index {
+  width: 27%;
+}
+
+.col-actions {
+  width: 92px;
+}
+
+.aliases-table .actions {
+  padding-right: 12px;
+  padding-left: 8px;
+}
+
+.alias-cell {
+  font-weight: 400;
+}
+
+.alias-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.alias-avatar {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 13px;
+  transition:
+    background var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+
+/* Name and state badge; the badge wraps under a long name. */
+.alias-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.alias-name {
+  flex: 0 1 auto;
+  max-width: 100%;
+  color: var(--text);
+  font-weight: 620;
+}
+
+.index-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.index-link {
+  min-width: 0;
+  max-width: 100%;
+  display: block;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--text-2);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.write-cleared {
+  border-style: dashed;
+  color: var(--text-3);
+}
+
+.meta-tags .tag .bi,
+.pending-meta .tag .bi {
+  font-size: 11px;
+}
+
+.index-link:hover {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.cell-empty {
+  color: var(--text-3);
+}
+
+.filter-toggle {
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  font-weight: 560;
+  white-space: nowrap;
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+
+.filter-toggle .bi-funnel-fill {
+  color: var(--accent-text);
+  font-size: 10px;
+}
+
+.filter-toggle {
+  max-width: 100%;
+}
+
+.filter-toggle__key {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.filter-toggle__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filter-toggle.is-open .filter-toggle__key {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.filter-toggle:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.filter-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.filter-toggle.is-open {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.filter-toggle__chevron {
+  font-size: 9px;
+  transition: transform var(--duration) var(--ease-out);
+}
+
+.filter-toggle.is-open .filter-toggle__chevron {
+  transform: rotate(180deg);
+}
+
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.btn-ghost.row-remove:hover:not(:disabled) {
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+
+/* The assignment currently loaded in the form. */
+.aliases-table tbody tr.alias-row.is-selected {
+  background: var(--accent-soft);
+}
+
+.alias-row.is-selected > :first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Staged states: the table previews the cluster after "Apply". */
+.alias-row.is-added {
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent);
+}
+
+.alias-row.is-added > :first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.alias-row.is-added .alias-avatar {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.alias-row.is-updated > :first-child {
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+
+.alias-row.is-updated .alias-avatar {
+  border-color: color-mix(in srgb, var(--blue) 35%, transparent);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+
+.alias-row.is-removed > :first-child {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.alias-row.is-removed .alias-avatar,
+.alias-row.is-removed .alias-name,
+.alias-row.is-removed .index-link,
+.alias-row.is-removed .meta-cell {
+  opacity: 0.5;
+}
+
+.alias-row.is-removed .alias-name,
+.alias-row.is-removed .index-link {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--red) 75%, transparent);
+  text-decoration-thickness: 1.5px;
+}
+
+/* Expanded filter */
+.alias-row:has(+ .filter-row) > * {
+  border-bottom-color: transparent;
+}
+
+.aliases-table tbody tr.filter-row:hover {
+  background: transparent;
+}
+
+.aliases-table .filter-row > td {
+  height: auto;
+  padding: 0 14px 14px 52px;
+}
+
+.filter-row.is-removed .filter-panel {
+  opacity: 0.6;
+}
+
+.filter-panel {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  animation: fade-in var(--duration) ease;
+}
+
+.filter-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 4px 4px 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.filter-panel__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-panel__title strong {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/* Side column                                                         */
+/* ------------------------------------------------------------------ */
+
+.aliases-side {
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  min-width: 0;
+}
+
+.draft-callout {
+  font-size: var(--text-sm);
+  padding: 10px 12px;
+}
+
+.draft-callout > .bi {
+  font-size: 15px;
+}
+
+.advanced {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.advanced__toggle {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: calc(var(--radius) - 1px);
+  background: none;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 580;
+  text-align: left;
+  transition: background var(--duration-fast) ease;
+}
+
+.advanced__toggle:hover {
+  background: var(--surface-hover);
+}
+
+.advanced__toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.advanced__chevron {
+  color: var(--text-3);
+  font-size: 11px;
+  transition: transform var(--duration) var(--ease-out);
+}
+
+.advanced.is-open .advanced__chevron {
+  transform: rotate(90deg);
+}
+
+.advanced.is-open .advanced__toggle {
+  border-bottom: 1px solid var(--border);
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.advanced__body {
+  padding: 14px 12px 12px;
+  animation: fade-in var(--duration) ease;
+}
+
+.flags {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.flag-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.check.flag-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+
+.check.flag-option:hover {
+  border-color: var(--border-strong);
+}
+
+.check.flag-option.is-checked {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+}
+
+.check.flag-option:has(input:focus-visible) {
+  border-color: var(--accent);
+}
+
+.check.flag-option input {
+  margin-top: 2px;
+}
+
+.flag-option__text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.flag-option__title {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.flag-option .check-description {
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.flag-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.flag-note > .bi {
+  margin-top: 1px;
+  flex: none;
+}
+
+.flag-note.is-warning {
+  color: var(--yellow-text);
+}
+
+.routing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.routing-grid > .field {
+  align-content: start;
+}
+
+/* The datalist arrow does not follow the design system; suggestions still
+   appear while typing. */
+#alias-name::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 18px;
+}
+
+/* Pending changes */
+.pending-card .card-header .badge {
+  min-width: 26px;
+  justify-content: center;
+}
+
+.pending-list {
+  max-height: 440px;
+  overflow: auto;
+}
+
+.pending-item {
+  align-items: flex-start;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.pending-item.has-problem {
+  background: color-mix(in srgb, var(--yellow-soft) 70%, transparent);
+}
+
+.pending-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.pending-icon.is-add {
+  background: var(--green-soft);
+  color: var(--green-text);
+}
+
+.pending-icon.is-update {
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+
+.pending-icon.is-remove {
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+
+.pending-alias {
+  padding-top: 3px;
+  color: var(--text);
+  font-weight: 620;
+  line-height: 20px;
+}
+
+.pending-target {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  line-height: 18px;
+}
+
+.pending-preposition {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+.pending-index {
+  min-width: 0;
+  flex: 0 1 auto;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.pending-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.pending-kind {
+  flex: none;
+}
+
+.pending-kind.is-add {
+  color: var(--green-text);
+}
+
+.pending-kind.is-update {
+  color: var(--blue-text);
+}
+
+.pending-kind.is-remove {
+  color: var(--red-text);
+}
+
+.pending-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--yellow-text);
+  font-size: var(--text-sm);
+  font-weight: 560;
+}
+
+.pending-problem > .bi {
+  margin-top: 2px;
+  flex: none;
+}
+
+.pending-card .card-title:focus-visible {
+  outline: none;
+  border-radius: var(--radius-xs);
+  box-shadow: var(--focus-ring);
+}
+
+.pending-note {
+  padding: 12px var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pending-note .callout {
+  padding: 9px 12px;
+  font-size: var(--text-sm);
+}
+
+.pending-note .callout > .bi {
+  font-size: 15px;
+}
+
+.btn-count {
+  min-width: 20px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--on-accent) 20%, transparent);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* Shortcut to the pending changes while they are out of view (one column
+   layouts only). */
+.pending-bar {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive                                                          */
+/* ------------------------------------------------------------------ */
+
+/* A narrow table (two column layout on a laptop): the funnel icon alone
+   says "filter". */
+@container assignments (max-width: 640px) {
+  .filter-toggle__key {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .pending-bar {
+    position: sticky;
+    bottom: var(--space-4);
+    z-index: 5;
+    max-width: 520px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin: var(--space-5) auto 0;
+    padding: 8px 8px 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    animation: fade-in var(--duration) ease;
+  }
+
+  .pending-bar__icon {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    flex: none;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: 13px;
+  }
+
+  .pending-bar__text {
+    min-width: 0;
+    flex: 1;
+    color: var(--text-2);
+    font-size: var(--text-sm);
+  }
+
+  .pending-bar__text strong {
+    color: var(--text);
+  }
+
+  .pending-bar__problem {
+    color: var(--yellow-text);
+    font-weight: 560;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  /* The side column drops below the table: use the width for two cards. */
+  .aliases-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .aliases-toolbar > .toolbar {
+    flex: 1 1 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .flag-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  /* Rows become stacked cards so nothing needs horizontal scrolling. */
+  .aliases-table {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .aliases-table,
+  .aliases-table tbody {
+    display: block;
+  }
+
+  .aliases-table thead {
+    display: none;
+  }
+
+  .aliases-table tr.alias-row {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "alias alias actions"
+      ". index actions"
+      ". meta actions";
+    align-items: center;
+    row-gap: 4px;
+    padding: 12px 12px 12px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .aliases-table tr.alias-row:last-child {
+    border-bottom: 0;
+  }
+
+  .aliases-table tr.alias-row > * {
+    height: auto;
+    max-width: none;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .aliases-table tr.alias-row > :first-child {
+    box-shadow: none;
+  }
+
+  .alias-row.is-added {
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  .alias-row.is-updated {
+    box-shadow: inset 3px 0 0 var(--blue);
+  }
+
+  .alias-row.is-removed {
+    box-shadow: inset 3px 0 0 var(--red);
+  }
+
+  .alias-row.is-selected {
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  .alias-row:has(+ .filter-row) {
+    border-bottom: 0;
+  }
+
+  .alias-cell {
+    grid-area: alias;
+    min-width: 0;
+  }
+
+  .index-cell {
+    grid-area: index;
+    min-width: 0;
+    font-size: var(--text-sm);
+  }
+
+  .meta-cell {
+    grid-area: meta;
+    min-width: 0;
+    margin-top: 4px;
+  }
+
+  .meta-cell:has(> .cell-empty) {
+    display: none;
+  }
+
+  .aliases-table .actions {
+    grid-area: actions;
+    align-self: start;
+    width: auto;
+  }
+
+  .aliases-table tr.filter-row,
+  .aliases-table tr.filter-row > td,
+  .aliases-table tr.empty-row,
+  .aliases-table tr.empty-row > td {
+    display: block;
+  }
+
+  .aliases-table .filter-row > td {
+    padding: 0 12px 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .routing-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

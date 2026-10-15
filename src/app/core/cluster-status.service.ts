@@ -1,0 +1,120 @@
+import { DOCUMENT } from '@angular/common';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { ClusterApiService } from './cluster-api.service';
+import { ConnectionService } from './connection.service';
+import { HealthTone, healthTone } from './health';
+import { RefreshService } from './refresh.service';
+
+export type ClusterHealth = Exclude<HealthTone, 'gray'>;
+
+interface NavbarResponse {
+  readonly status: string;
+  readonly cluster_name: string;
+  readonly username?: string;
+  readonly number_of_nodes?: number;
+}
+
+/** The health colour of a response, `undefined` when it is not a known one. */
+function clusterHealth(value: unknown): ClusterHealth | undefined {
+  const tone = healthTone(value);
+  return tone === 'gray' ? undefined : tone;
+}
+
+/**
+ * Lightweight cluster health polled on every refresh tick. It powers the
+ * sidebar cluster card, the document title and the coloured favicon.
+ */
+@Injectable({ providedIn: 'root' })
+export class ClusterStatusService {
+  private readonly api = inject(ClusterApiService);
+  private readonly connection = inject(ConnectionService);
+  private readonly refresh = inject(RefreshService);
+  private readonly document = inject(DOCUMENT);
+  private sequence = 0;
+  /** The host the status, name and user belong to. */
+  private statusHost: string | undefined;
+
+  readonly status = signal<ClusterHealth | undefined>(undefined);
+  readonly clusterName = signal<string | undefined>(undefined);
+  readonly username = signal<string | undefined>(undefined);
+  readonly loading = signal(false);
+  readonly reachable = signal(true);
+  /** Title of the current page, published by the shell. */
+  readonly pageTitle = signal<string | undefined>(undefined);
+  /**
+   * Whether the application shell is shown. Screens without it (connect)
+   * keep the plain "cerebro" title and favicon even while a host is set.
+   */
+  readonly shellActive = signal(false);
+
+  readonly displayName = computed(
+    () => this.clusterName() ?? this.connection.host() ?? 'No cluster',
+  );
+
+  constructor() {
+    effect(() => {
+      const host = this.connection.host();
+      this.refresh.tick();
+      // Another cluster: never show the previous one's name or health while
+      // the new one has not answered (or does not answer at all).
+      if (host !== this.statusHost) {
+        this.reset();
+        this.statusHost = host;
+      }
+      if (host) {
+        void this.load(host);
+      }
+    });
+
+    effect(() => this.updateDocument());
+  }
+
+  private async load(expectedHost: string): Promise<void> {
+    const sequence = ++this.sequence;
+    this.loading.set(true);
+    try {
+      const data = await this.api.post<NavbarResponse>('navbar');
+      if (sequence !== this.sequence || expectedHost !== this.connection.host()) {
+        return;
+      }
+      this.status.set(clusterHealth(data.status));
+      this.clusterName.set(data.cluster_name);
+      this.username.set(data.username);
+      this.reachable.set(true);
+    } catch {
+      if (sequence === this.sequence) {
+        this.status.set(undefined);
+        this.reachable.set(false);
+      }
+    } finally {
+      if (sequence === this.sequence) {
+        this.loading.set(false);
+      }
+    }
+  }
+
+  private reset(): void {
+    this.sequence++;
+    this.status.set(undefined);
+    this.clusterName.set(undefined);
+    this.username.set(undefined);
+    this.loading.set(false);
+    this.reachable.set(true);
+  }
+
+  private updateDocument(): void {
+    const inShell = this.shellActive();
+    const status = inShell ? this.status() : undefined;
+    const name = inShell ? this.clusterName() : undefined;
+    const page = inShell ? this.pageTitle() : undefined;
+    const parts = [page, name ? `${name}${status ? ` [${status}]` : ''}` : undefined, 'cerebro'];
+    this.document.title = parts.filter(Boolean).join(' · ');
+
+    const icon = this.document.querySelector?.<HTMLLinkElement>('link[rel~="icon"]');
+    if (icon) {
+      const color = status ?? (inShell && this.connection.connected() ? 'black' : undefined);
+      icon.type = 'image/png';
+      icon.href = color ? `img/${color}-favicon.png` : 'img/favicon.png';
+    }
+  }
+}

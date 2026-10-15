@@ -1,0 +1,298 @@
+<section class="page" aria-labelledby="recovery-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="recovery-title" class="page-title">Recoveries</h1>
+      <p class="page-subtitle">Live progress of shards being copied between nodes, restored from snapshots or recovered after a restart.</p>
+    </div>
+    <div class="page-header__actions">
+      @if (live()) {
+        <span class="rec-live" role="status">
+          <span class="dot dot-green dot-pulse" aria-hidden="true"></span>
+          Live · every {{ livePollSeconds }}s
+        </span>
+      }
+      <div class="segmented" role="group" aria-label="Recoveries to show">
+        <button type="button" [attr.aria-pressed]="mode() === 'active'" (click)="setMode('active')">
+          <i class="bi bi-activity" aria-hidden="true"></i> In progress
+        </button>
+        <button type="button" [attr.aria-pressed]="mode() === 'all'" (click)="setMode('all')">
+          <i class="bi bi-clock-history" aria-hidden="true"></i> All
+        </button>
+      </div>
+      <button
+        type="button"
+        class="btn"
+        [disabled]="raw() === undefined || !recoveries()?.length"
+        [attr.title]="recoveries()?.length === 0 ? 'No recoveries to show' : null"
+        (click)="viewJson()"
+      >
+        <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+      </button>
+    </div>
+  </header>
+
+  @if (recoveries(); as all) {
+    @if (failed()) {
+      <div class="callout callout-warning rec-stale" role="alert">
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        <div class="min-w-0">
+          <strong>Showing data from {{ updatedAt() | date: 'HH:mm:ss' }}.</strong>
+          The last update failed: {{ failure() }}
+        </div>
+        <button type="button" class="btn btn-sm rec-stale__retry" (click)="load()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Retry
+        </button>
+      </div>
+    }
+    <div class="stat-grid rec-stats">
+      <div class="stat">
+        <div class="stat__label"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> In progress</div>
+        <div class="stat__value" [class.text-accent]="summary().active > 0">{{ summary().active | num }}</div>
+        <div class="stat__meta">
+          @if (summary().active > 0) {
+            {{ pluralize(summary().indices, 'index', 'indices') }}
+          } @else if (mode() === 'all') {
+            {{ pluralize(summary().total, 'recovery', 'recoveries') }} recorded
+          } @else {
+            Nothing is recovering
+          }
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat__label"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Remaining</div>
+        <div class="stat__value">{{ summary().bytesRemaining | bytes }}</div>
+        @if (summary().percent !== null) {
+          <cerebro-meter class="rec-stat-meter" [value]="summary().percent" [warn]="101" [danger]="101" label="Overall recovery progress" />
+          <div class="stat__meta">{{ summary().percent }}% of {{ summary().bytesToRecover | bytes }} copied</div>
+        } @else {
+          <div class="stat__meta">No data left to copy</div>
+        }
+      </div>
+      <div class="stat">
+        <div class="stat__label"><i class="bi bi-speedometer2" aria-hidden="true"></i> Throughput</div>
+        @if (summary().active === 0) {
+          <div class="stat__value text-muted">–</div>
+          <div class="stat__meta">Shown while recoveries run</div>
+        } @else if (throughput() === null) {
+          <div class="stat__value text-muted">…</div>
+          <div class="stat__meta">Measuring</div>
+        } @else {
+          <div class="stat__value">{{ throughput() | bytes }}/s</div>
+          <div class="stat__meta">
+            @if (eta(); as eta) {
+              About {{ eta | duration }} left
+            } @else if (throughput() === 0) {
+              No bytes copied since the last update
+            } @else {
+              {{ pluralize(summary().filesRemaining, 'file') }} left
+            }
+          </div>
+        }
+      </div>
+      <div class="stat">
+        <div class="stat__label"><i class="bi bi-diagram-3" aria-hidden="true"></i> By type</div>
+        @if (summary().byType.length === 0) {
+          <div class="stat__value text-muted">–</div>
+          <div class="stat__meta">No recoveries</div>
+        } @else {
+          <div class="rec-type-list">
+            @for (entry of summary().byType; track entry.type) {
+              <span class="rec-type-line" [title]="typeMeta(entry.type).description">
+                <span class="badge" [class]="'badge ' + typeMeta(entry.type).badge">
+                  <i class="bi" [class]="'bi ' + typeMeta(entry.type).icon" aria-hidden="true"></i>
+                  {{ typeMeta(entry.type).label }}
+                </span>
+                <strong class="tabular">{{ entry.count | num }}</strong>
+              </span>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (all.length === 0) {
+      <div class="card">
+        @if (mode() === 'active') {
+          <cerebro-empty
+            icon="bi-check2-circle"
+            heading="No recoveries in progress"
+            text="Every shard is in place. Recoveries show up here when replicas are added, shards relocate, nodes restart or snapshots are restored."
+          >
+            <button type="button" class="btn btn-sm" (click)="setMode('all')">
+              <i class="bi bi-clock-history" aria-hidden="true"></i> Show completed recoveries
+            </button>
+          </cerebro-empty>
+        } @else {
+          <cerebro-empty icon="bi-inbox" heading="No recoveries recorded" text="Elasticsearch has no recovery information for any shard." />
+        }
+      </div>
+    } @else {
+      <div class="card rec-card">
+        <div class="card-header rec-toolbar">
+          <div class="toolbar">
+            <cerebro-search
+              [value]="query()"
+              (valueChange)="setQuery($event)"
+              placeholder="Filter by index"
+              ariaLabel="Filter recoveries by index name (regular expressions work)"
+            />
+            <div class="row-wrap" role="group" aria-label="Filter by recovery type">
+              @for (filter of typeFilters(); track filter.type) {
+                <button
+                  type="button"
+                  class="chip-toggle"
+                  [attr.aria-pressed]="!hiddenTypes().has(filter.type)"
+                  [title]="filter.meta.description"
+                  (click)="toggleType(filter.type)"
+                >
+                  {{ filter.meta.label }}
+                  <span class="count">{{ filter.count }}</span>
+                </button>
+              }
+            </div>
+          </div>
+          <div class="row rec-sort">
+            <label class="rec-sort__label" for="rec-sort">Sort</label>
+            <select id="rec-sort" class="select select-sm" [ngModel]="sortField()" (ngModelChange)="setSort($event)">
+              @for (option of sortOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        @if (groups().length === 0) {
+          <cerebro-empty icon="bi-funnel" heading="No matching recoveries" text="No recovery matches the index filter and the selected types.">
+            <button type="button" class="btn btn-sm" (click)="resetFilters()">Clear filters</button>
+          </cerebro-empty>
+        } @else {
+          <div>
+            @for (group of visibleGroups(); track group.index) {
+              <section class="rec-group" [class.is-done]="group.active === 0" [attr.aria-label]="'Recoveries of ' + group.index">
+                <header class="rec-group__head">
+                  <div class="rec-group__title min-w-0">
+                    <a
+                      class="rec-group__index truncate"
+                      routerLink="/index_detail"
+                      [queryParams]="indexQuery(group.index)"
+                      [title]="'Open ' + group.index"
+                    >{{ group.index }}</a>
+                    <span class="badge" [class.badge-accent]="group.active > 0">
+                      @if (group.active > 0) {
+                        <span class="dot dot-green dot-sm dot-pulse" aria-hidden="true"></span>
+                      } @else {
+                        <i class="bi bi-check2" aria-hidden="true"></i>
+                      }
+                      {{ groupLabel(group) }}
+                    </span>
+                  </div>
+                  <div class="rec-group__progress">
+                    <cerebro-meter [value]="group.percent" [warn]="101" [danger]="101" [label]="'Progress of ' + group.index" />
+                    <span class="rec-group__numbers tabular">
+                      <strong>{{ group.percent }}%</strong>
+                      <span class="text-muted" aria-hidden="true">·</span>
+                      <span class="text-muted">{{ groupBytesLabel(group) }}</span>
+                    </span>
+                  </div>
+                </header>
+
+                <ul class="rec-list">
+                  @for (recovery of group.recoveries; track recovery.key) {
+                    <li class="rec-row" [class.is-done]="recovery.done">
+                      <div class="rec-row__shard">
+                        <span class="rec-chip" [class.is-done]="recovery.done" aria-hidden="true">{{ recovery.shard }}</span>
+                        <div class="min-w-0">
+                          <div class="rec-row__name">Shard {{ recovery.shard }}</div>
+                          <span class="badge" [class]="'badge ' + typeMeta(recovery.type).badge" [title]="typeMeta(recovery.type).description">
+                            <i class="bi" [class]="'bi ' + typeMeta(recovery.type).icon" aria-hidden="true"></i>
+                            {{ typeMeta(recovery.type).label }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="rec-row__route">
+                        <span class="section-label rec-label">Route</span>
+                        <div class="rec-route">
+                          <span class="rec-route__node truncate" [title]="source(recovery)">{{ source(recovery) }}</span>
+                          <i class="bi bi-arrow-right rec-route__arrow" aria-hidden="true"></i>
+                          <span class="visually-hidden">to</span>
+                          <span class="rec-route__node rec-route__target truncate" [title]="recovery.targetNode ?? ''">{{ recovery.targetNode ?? recovery.targetHost ?? '–' }}</span>
+                        </div>
+                      </div>
+
+                      <div class="rec-row__stage">
+                        <span class="section-label rec-label">Stage</span>
+                        <div class="rec-stage">
+                          <ol class="rec-steps" [attr.aria-label]="'Stage: ' + stageLabel(recovery.stage)">
+                            @for (step of stages; track step; let i = $index) {
+                              <li class="rec-step" [class]="'rec-step is-' + stageState(recovery, i)" [title]="stageLabel(step)"></li>
+                            }
+                          </ol>
+                          <span class="rec-stage__label" [class.text-muted]="recovery.done">{{ stageLabel(recovery.stage) }}</span>
+                        </div>
+                      </div>
+
+                      <div class="rec-row__metrics">
+                        @for (metric of metricKinds; track metric.kind) {
+                          @let view = metricView(recovery, metric.kind);
+                          <div class="rec-metric">
+                            <div class="rec-metric__head">
+                              <span class="section-label rec-label">{{ metric.label }}</span>
+                              <span class="rec-metric__value tabular">{{ view.label }}</span>
+                            </div>
+                            <cerebro-meter [value]="view.value" [small]="true" [warn]="101" [danger]="101" [label]="metric.label + ' progress of shard ' + recovery.shard" />
+                            <span class="rec-metric__detail tabular" [title]="metric.kind === 'files' && recovery.filesTotal > recovery.files.total ? (recovery.filesTotal - recovery.files.total) + ' of ' + recovery.filesTotal + ' files were reused from the target node' : view.detail">{{ view.detail }}</span>
+                          </div>
+                        }
+                      </div>
+
+                      <div class="rec-row__time">
+                        <span class="section-label rec-label">{{ recovery.done ? 'Took' : 'Elapsed' }}</span>
+                        <span class="rec-time tabular">{{ recovery.timeMs | duration }}</span>
+                        @if (rate(recovery); as rate) {
+                          <span class="rec-time__rate tabular">{{ rate | bytes }}/s</span>
+                        }
+                        @if (remainingTime(recovery); as left) {
+                          <span class="rec-time__rate tabular">~{{ left | duration }} left</span>
+                        }
+                      </div>
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+          </div>
+          <div class="card-footer card-footer--between">
+            <span class="count-label">
+              @if (loading()) {
+                <span class="spinner rec-inline-spinner" aria-hidden="true"></span> Updating…
+              } @else if (filtersActive()) {
+                <strong>{{ filtered().length | num }}</strong> of {{ all.length | num }} {{ all.length | plural: 'recovery' : 'recoveries' }}
+              } @else {
+                <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'recovery' : 'recoveries' }}
+              }
+            </span>
+            <cerebro-pager [page]="currentPage()" [pageSize]="pageSize" [total]="groups().length" noun="indices" (pageChange)="page.set($event)" />
+          </div>
+        }
+      </div>
+    }
+  } @else if (failed()) {
+    <div class="card">
+      <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load recoveries" [text]="failure() || 'The cluster did not answer the recovery request.'">
+        <button type="button" class="btn btn-sm" (click)="load()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
+    </div>
+  } @else {
+    <div class="stat-grid rec-stats" aria-hidden="true">
+      @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+        <div class="stat"><span class="skeleton" style="height: 62px"></span></div>
+      }
+    </div>
+    <div class="card loading-block" role="status">
+      <span class="spinner"></span> Loading recoveries…
+    </div>
+  }
+</section>

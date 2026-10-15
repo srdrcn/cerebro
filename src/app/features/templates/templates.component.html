@@ -1,0 +1,330 @@
+<section class="page" aria-labelledby="templates-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="templates-title" class="page-title">Legacy templates</h1>
+      <p class="page-subtitle">
+        Legacy templates (<span class="mono">_template</span>) apply settings, mappings and aliases to new indices whose name matches their patterns.
+      </p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn" routerLink="/index_templates" [queryParams]="connection.hostQuery()">
+        <i class="bi bi-layers" aria-hidden="true"></i> Index templates
+      </a>
+    </div>
+  </header>
+
+  <div class="layout-sidebar-start">
+    <div class="card list-card">
+      <div class="card-header">
+        <h2 class="card-title spacer"><i class="bi bi-files" aria-hidden="true"></i> Templates</h2>
+        @if (templates() !== undefined) {
+          <span class="count-label">
+            @if (query().trim() && totalCount() > 0) {
+              <strong>{{ rows().length | num }}</strong> of {{ totalCount() | num }} {{ totalCount() | plural: 'template' }}
+            } @else {
+              <strong>{{ totalCount() | num }}</strong> {{ totalCount() | plural: 'template' }}
+            }
+          </span>
+        }
+        <button
+          type="button"
+          class="btn btn-sm btn-soft"
+          [disabled]="saving()"
+          [attr.title]="saving() ? 'Wait for the template to be saved' : null"
+          (click)="newTemplate()"
+        >
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> New template
+        </button>
+      </div>
+
+      @if (templates(); as all) {
+        @if (all.length > 0) {
+          <div class="list-card__toolbar">
+            <cerebro-search
+              [(value)]="query"
+              [small]="true"
+              placeholder="Filter by name or pattern"
+              ariaLabel="Filter templates by name or index pattern"
+            />
+            @if (managedCount() > 0) {
+              <label class="switch list-card__switch">
+                <input type="checkbox" [ngModel]="showManaged()" (ngModelChange)="showManaged.set($event)" />
+                Show managed templates
+                <span class="count">{{ managedCount() }}</span>
+              </label>
+            }
+          </div>
+          <ul class="list list-card__list" aria-label="Legacy templates" [attr.aria-busy]="loading() || saving() ? true : null">
+            @for (row of rows(); track row.name) {
+              <li>
+                <button
+                  type="button"
+                  class="list-item list-item--interactive template-item"
+                  [class.is-selected]="selected() === row.name"
+                  [attr.aria-current]="selected() === row.name ? 'true' : null"
+                  [disabled]="saving()"
+                  (click)="select(row.template)"
+                >
+                  <span class="list-item__icon" aria-hidden="true">
+                    <i class="bi" [class.bi-file-earmark-code]="!row.name.startsWith('.')" [class.bi-gear-wide-connected]="row.name.startsWith('.')"></i>
+                  </span>
+                  <span class="list-item__body">
+                    <span class="list-item__title template-item__name">
+                      <span class="truncate min-w-0">{{ row.name }}</span>
+                      @if (selected() === row.name && dirty()) {
+                        <span class="dot dot-yellow dot-sm" title="Unsaved changes"></span>
+                        <span class="visually-hidden">(unsaved changes)</span>
+                      }
+                    </span>
+                    <span class="list-item__meta template-item__patterns" [class.is-empty]="!row.patterns" [title]="row.patterns">
+                      {{ row.patterns || 'No index patterns' }}
+                    </span>
+                  </span>
+                  @if (row.order !== null) {
+                    <span class="badge template-item__order" title="Order in which matching templates are applied">
+                      order {{ row.order }}
+                    </span>
+                  }
+                </button>
+              </li>
+            } @empty {
+              <li>
+                @if (query().trim()) {
+                  <cerebro-empty
+                    icon="bi-funnel"
+                    heading="No matching templates"
+                    [text]="showManaged() || managedCount() === 0 ? 'No template name or index pattern matches this filter.' : 'No template name or index pattern matches this filter. Managed templates are hidden.'"
+                    [compact]="true"
+                  >
+                    <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+                    @if (!showManaged() && managedCount() > 0) {
+                      <button type="button" class="btn btn-sm btn-ghost" (click)="showManaged.set(true)">Show managed</button>
+                    }
+                  </cerebro-empty>
+                } @else {
+                  <cerebro-empty
+                    icon="bi-file-earmark-code"
+                    heading="No custom legacy templates"
+                    text="Only managed templates exist, and they are hidden. Create one to give new indices predefined settings, mappings and aliases."
+                    [compact]="true"
+                  >
+                    <button type="button" class="btn btn-sm" (click)="showManaged.set(true)">Show managed</button>
+                  </cerebro-empty>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          <cerebro-empty
+            icon="bi-file-earmark-code"
+            heading="No legacy templates"
+            text="Create one to give new indices predefined settings, mappings and aliases."
+          />
+        }
+      } @else if (failed()) {
+        <cerebro-empty
+          icon="bi-exclamation-triangle"
+          heading="Could not load templates"
+          [text]="loadError() ?? 'The cluster did not answer the templates request.'"
+        >
+          <button type="button" class="btn btn-sm" (click)="load()">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+          </button>
+        </cerebro-empty>
+      } @else {
+        <div class="list-skeleton" role="status" aria-label="Loading templates">
+          @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+            <div class="list-skeleton__row" aria-hidden="true">
+              <span class="skeleton list-skeleton__icon"></span>
+              <span class="list-skeleton__lines">
+                <span class="skeleton" style="height: 12px; width: 62%"></span>
+                <span class="skeleton" style="height: 10px; width: 40%"></span>
+              </span>
+            </div>
+          }
+        </div>
+      }
+
+      <p class="list-card__note">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        <span>
+          Composable templates (<span class="mono">_index_template</span>) are managed on the
+          <a routerLink="/index_templates" [queryParams]="connection.hostQuery()">Index templates</a> page.
+        </span>
+      </p>
+    </div>
+
+    <div #editorCard class="card card--sticky-footer editor-card" role="region" aria-labelledby="template-editor-title">
+      <div class="card-header editor-card__header">
+        <span class="card-icon" aria-hidden="true">
+          <i class="bi" [class.bi-plus-lg]="selected() === null" [class.bi-pencil]="selected() !== null"></i>
+        </span>
+        <div class="min-w-0 spacer">
+          <h2 id="template-editor-title" class="card-title">
+            @if (selected(); as current) {
+              <span class="truncate">{{ current }}</span>
+            } @else {
+              New template
+            }
+          </h2>
+          <p class="card-subtitle truncate">
+            @if (selected() === null) {
+              Not saved yet
+            } @else if (selectedPatterns()) {
+              Matches <span class="mono">{{ selectedPatterns() }}</span>
+              @if (selectedVersion() !== null) {
+                · version {{ selectedVersion() }}
+              }
+            } @else {
+              No index patterns
+            }
+          </p>
+        </div>
+        <div class="row editor-card__actions">
+          @if (dirty()) {
+            <span class="badge badge-yellow" role="status">
+              <span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Unsaved changes
+            </span>
+          }
+          @if (selected() !== null) {
+            <button type="button" class="btn btn-sm" (click)="viewJson()" [disabled]="!selectedTemplate()">
+              <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+            </button>
+            <button
+              type="button"
+              class="btn btn-sm btn-danger-soft"
+              [class.is-loading]="deleting()"
+              [disabled]="deleting() || saving() || selectedMissing()"
+              (click)="remove()"
+            >
+              <i class="bi bi-trash" aria-hidden="true"></i> Delete
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="card-body stack">
+        @if (selectedMissing()) {
+          <div class="callout callout-warning">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+            <p>
+              <strong>{{ selected() }}</strong> no longer exists on the cluster. Saving creates it again.
+            </p>
+          </div>
+        }
+
+        <div class="field name-field">
+          <label class="field-label" for="template-name">Name</label>
+          <input
+            #nameInput
+            id="template-name"
+            class="input input-mono"
+            [class.is-invalid]="nameError()"
+            [ngModel]="name()"
+            (ngModelChange)="name.set($event)"
+            (keydown.enter)="save()"
+            placeholder="e.g. logs-template"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            required
+            aria-required="true"
+            [attr.aria-invalid]="nameError() ? true : null"
+            [attr.aria-describedby]="nameError() ? 'template-name-error' : 'template-name-help'"
+          />
+          <div id="template-name-help" aria-live="polite">
+            @if (nameError(); as error) {
+              <p id="template-name-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+            } @else {
+              @switch (mode()) {
+                @case ('overwrite') {
+                  <p class="field-hint text-warning">
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                    A template named <span class="mono">{{ name() }}</span> already exists. Saving overwrites it.
+                  </p>
+                }
+                @case ('copy') {
+                  <p class="field-hint">
+                    <i class="bi bi-copy" aria-hidden="true"></i>
+                    Saving creates <span class="mono">{{ name() }}</span>; <span class="mono">{{ selected() }}</span> stays unchanged.
+                  </p>
+                }
+                @case ('update') {
+                  <p class="field-hint">Rename to save a copy under a new name.</p>
+                }
+                @default {
+                  <p class="field-hint">Lowercase, without spaces, and not starting with an underscore.</p>
+                }
+              }
+            }
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="body-label">
+            <span class="field-label" id="template-body-label">Body</span>
+            <span class="text-muted text-sm">index_patterns, order, settings, mappings and aliases</span>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-sm btn-ghost" (click)="format()" title="Format JSON (Ctrl+Shift+F)">
+              <i class="bi bi-text-indent-left" aria-hidden="true"></i> Format
+            </button>
+          </div>
+          <cerebro-code-editor
+            [value]="body()"
+            (valueChange)="body.set($event)"
+            [minLines]="24"
+            [maxLines]="70"
+            ariaLabel="Template body JSON"
+            [invalid]="!!bodyError()"
+            [describedBy]="bodyError() ? 'template-body-error' : null"
+            (submit)="save()"
+          />
+          <!-- Only the coarse state is live: the details change on every keystroke. -->
+          <span class="visually-hidden" role="status">{{ bodyStatus() }}</span>
+          <div class="editor-status">
+            @if (bodyError(); as error) {
+              <span class="badge badge-red">
+                <i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid JSON
+              </span>
+              <span id="template-body-error" class="editor-status__message text-danger">{{ error }}</span>
+            } @else if (bodyWarning(); as warning) {
+              <span class="badge badge-yellow">
+                <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check
+              </span>
+              <span class="editor-status__message">{{ warning }}</span>
+            } @else {
+              <span class="badge badge-green">
+                <i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON
+              </span>
+              <span class="editor-status__message text-muted">{{ bodyLinesLabel() }}</span>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="card-footer card-footer--between">
+        <span class="footer-keys">
+          <kbd>Ctrl</kbd><kbd>Enter</kbd> to save
+        </span>
+        <div class="row footer-buttons">
+          @if (dirty()) {
+            <button type="button" class="btn btn-ghost" (click)="discardChanges()" [disabled]="saving()">
+              Discard changes
+            </button>
+          }
+          <button
+            type="button"
+            class="btn btn-primary"
+            [class.is-loading]="saving()"
+            [disabled]="saving()"
+            [attr.aria-busy]="saving() ? true : null"
+            (click)="save()"
+          >
+            <i class="bi" [class.bi-floppy]="mode() === 'update' || mode() === 'overwrite'" [class.bi-plus-lg]="mode() === 'create' || mode() === 'copy'" aria-hidden="true"></i>
+            {{ saveLabel() }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

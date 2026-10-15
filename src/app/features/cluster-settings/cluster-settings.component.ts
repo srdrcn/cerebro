@@ -1,215 +1,217 @@
-import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { AlertService } from '../../core/alert.service';
 import { ClusterApiService } from '../../core/cluster-api.service';
-import { ConnectionService } from '../../core/connection.service';
-import { ModalService } from '../../core/modal.service';
+import { DialogService } from '../../core/dialog.service';
+import { failureMessage, readableReason } from '../../core/errors';
+import { pluralize } from '../../core/format';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { NumberPipe, PluralPipe } from '../../shared/format.pipes';
 import {
-  ClusterSettingChanges,
   ClusterSettingsResponse,
-  SettingGroup,
-  SettingValues,
-  buildClusterSettingsPayload,
-  groupSettings,
-  isDynamicClusterSetting,
-  mergeClusterSettings,
+  buildClusterSavePayload,
+  buildClusterSettingRows,
+  summarizeOverrides,
 } from './cluster-settings.models';
+import { SettingsEditorComponent } from '../../shared/settings-editor/settings-editor.component';
+import { SettingsSkeletonComponent } from '../../shared/settings-editor/settings-skeleton.component';
+import {
+  GroupingOptions,
+  PendingChange,
+  SettingDrafts,
+  SettingErrors,
+  SettingRow,
+  pendingChanges,
+  pruneDrafts,
+  settingErrorsFor,
+  withoutSavedDrafts,
+} from '../../shared/settings-editor/settings-editor.models';
+
+const GROUPING: GroupingOptions = {
+  generalTitle: 'Other settings',
+  generalFirst: false,
+  featured: [
+    'cluster.routing.allocation.enable',
+    'cluster.routing.rebalance.enable',
+    'cluster.routing.allocation.cluster_concurrent_rebalance',
+    'cluster.routing.allocation.node_concurrent_recoveries',
+    'indices.recovery.max_bytes_per_sec',
+    'cluster.routing.allocation.disk.watermark.low',
+    'cluster.routing.allocation.disk.watermark.high',
+    'cluster.routing.allocation.disk.watermark.flood_stage',
+    'cluster.routing.allocation.awareness.attributes',
+    'cluster.max_shards_per_node',
+    'action.destructive_requires_name',
+    'cluster.blocks.read_only',
+  ],
+};
+
+/** Settings Elasticsearch does not list until they are set, offered by "Add setting". */
+const ADD_SUGGESTIONS: readonly string[] = [
+  'cluster.routing.allocation.exclude._name',
+  'cluster.routing.allocation.exclude._ip',
+  'cluster.routing.allocation.exclude._host',
+  'cluster.routing.allocation.include._name',
+  'cluster.routing.allocation.require._name',
+  'cluster.routing.allocation.awareness.force.zone.values',
+  'logger._root',
+  'logger.org.elasticsearch.cluster',
+  'logger.org.elasticsearch.discovery',
+  'logger.org.elasticsearch.indices.recovery',
+  'logger.org.elasticsearch.transport',
+];
 
 @Component({
   selector: 'cerebro-cluster-settings',
-  standalone: true,
-  imports: [FormsModule],
-  template: `
-    <section aria-labelledby="cluster-settings-title">
-      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
-        <div>
-          <h2 id="cluster-settings-title" class="h4 mb-1">Cluster settings</h2>
-          <p class="text-body-secondary mb-0">Effective settings for {{ connection.host() || 'the connected cluster' }}.</p>
-        </div>
-        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="load()" [disabled]="loading">
-          <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
-        </button>
-      </div>
-
-      <div class="row g-3 align-items-center mb-4">
-        <div class="col-lg-5 col-md-7">
-          <label class="visually-hidden" for="cluster-setting-filter">Filter settings by name</label>
-          <input id="cluster-setting-filter" class="form-control" [(ngModel)]="nameFilter"
-                 placeholder="Filter settings by name" />
-        </div>
-        <div class="col-auto">
-          <div class="form-check">
-            <input id="show-static-cluster-settings" class="form-check-input" type="checkbox" [(ngModel)]="showStatic" />
-            <label class="form-check-label" for="show-static-cluster-settings">
-              Show static settings <i class="bi bi-lock-fill text-warning" aria-hidden="true"></i>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      @if (loading) {
-        <p class="text-body-secondary" role="status">Loading cluster settings…</p>
-      } @else {
-        @for (group of visibleGroups; track group.name) {
-          <section class="mb-4" [attr.aria-labelledby]="'cluster-setting-group-' + group.name">
-            <h3 class="h6 text-uppercase border-bottom pb-2 mb-3" [id]="'cluster-setting-group-' + group.name">{{ group.name }}</h3>
-            <div class="row g-3">
-              @for (setting of group.settings; track setting.name) {
-                <div class="col-xl-4 col-md-6">
-                  <label class="form-label small text-break" [for]="settingId(setting.name)">
-                    {{ setting.name }}
-                    @if (setting.static) { <i class="bi bi-lock-fill text-warning ms-1" title="Static setting" aria-hidden="true"></i> }
-                  </label>
-                  <input class="form-control" [id]="settingId(setting.name)" [disabled]="setting.static"
-                         [ngModel]="form[setting.name]" (ngModelChange)="set(setting.name, $event)" />
-                </div>
-              }
-            </div>
-          </section>
-        } @empty {
-          <p class="text-body-secondary py-4">No settings match the current filter.</p>
-        }
-      }
-
-      @if (changeEntries.length) {
-        <aside class="position-sticky bottom-0 bg-body border-top shadow-sm py-3 mt-4" aria-label="Pending cluster setting changes">
-          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-2">
-            <strong>{{ changeEntries.length }} pending changes</strong>
-            <div class="d-flex gap-2">
-              <button type="button" class="btn btn-outline-secondary btn-sm" (click)="preview()">Preview</button>
-              <button type="button" class="btn btn-success btn-sm" (click)="save()" [disabled]="saving">
-                {{ saving ? 'Saving…' : 'Save' }}
-              </button>
-            </div>
-          </div>
-          <div class="table-responsive" style="max-height: 14rem">
-            <table class="table table-sm align-middle mb-0">
-              <tbody>
-                @for (entry of changeEntries; track entry.name) {
-                  <tr>
-                    <td class="text-break"><i class="bi bi-gear me-1" aria-hidden="true"></i>{{ entry.name }}</td>
-                    <td>{{ entry.change.value || '(delete override)' }}</td>
-                    <td>
-                      <button type="button" class="btn btn-link btn-sm p-0" (click)="togglePersistence(entry.name)">
-                        {{ entry.change.transient ? 'transient' : 'persistent' }}
-                      </button>
-                    </td>
-                    <td class="text-end">
-                      <button type="button" class="btn btn-link btn-sm text-body-secondary" (click)="revert(entry.name)"
-                              aria-label="Revert setting"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </aside>
-      }
-    </section>
-  `,
+  imports: [EmptyStateComponent, NumberPipe, PluralPipe, SettingsEditorComponent, SettingsSkeletonComponent],
+  templateUrl: './cluster-settings.component.html',
+  styleUrl: './cluster-settings.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ClusterSettingsComponent implements OnInit {
+export class ClusterSettingsComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
-  private readonly modal = inject(ModalService);
-  private readonly cdr = inject(ChangeDetectorRef);
-  readonly connection = inject(ConnectionService);
+  private readonly dialogs = inject(DialogService);
 
-  settings: SettingValues = {};
-  form: SettingValues = {};
-  changes: ClusterSettingChanges = {};
-  groups: SettingGroup[] = [];
-  nameFilter = '';
-  showStatic = false;
-  loading = false;
-  saving = false;
+  readonly grouping = GROUPING;
+  readonly pluralize = pluralize;
+  readonly addSuggestions = ADD_SUGGESTIONS;
+  readonly rows = signal<readonly SettingRow[] | undefined>(undefined);
+  readonly drafts = signal<SettingDrafts>({});
+  readonly errors = signal<SettingErrors>({});
+  readonly failed = signal(false);
+  /** Why the settings could not be loaded, as Elasticsearch put it. */
+  readonly loadError = signal<string | undefined>(undefined);
+  readonly saving = signal(false);
+  readonly reloading = signal(false);
 
-  ngOnInit(): void {
+  readonly overrides = computed(() => summarizeOverrides(this.rows() ?? []));
+  readonly transientSettings = computed(() =>
+    (this.rows() ?? []).filter((row) => row.transient !== undefined).map((row) => row.name),
+  );
+  /** Transient settings not yet staged to move to the persistent layer. */
+  readonly unstagedTransient = computed(() => {
+    const drafts = this.drafts();
+    return (this.rows() ?? []).filter((row) => row.transient !== undefined && drafts[row.name] === undefined);
+  });
+  readonly pending = computed(() => pendingChanges(this.rows() ?? [], this.drafts()));
+
+  private loadSequence = 0;
+  private lastResponse = '';
+
+  constructor() {
+    // Settings only change when someone edits them: they load when the page
+    // opens (another cluster creates it again), after a save and on Reload,
+    // not on refresh ticks.
     void this.load();
   }
 
-  get visibleGroups(): SettingGroup[] {
-    return this.groups
-      .map((group) => ({
-        ...group,
-        settings: group.settings.filter((setting) =>
-          setting.name.includes(this.nameFilter) && (!setting.static || this.showStatic)),
-      }))
-      .filter((group) => group.settings.length > 0);
-  }
-
-  get changeEntries(): Array<{ name: string; change: ClusterSettingChanges[string] }> {
-    return Object.entries(this.changes).map(([name, change]) => ({ name, change }));
-  }
-
   async load(): Promise<void> {
-    this.loading = true;
+    const sequence = ++this.loadSequence;
     try {
       const response = await this.api.post<ClusterSettingsResponse>('cluster_settings');
-      this.settings = mergeClusterSettings(response);
-      this.form = { ...this.settings };
-      this.changes = {};
-      this.groups = groupSettings(Object.keys(this.form).map((name) => ({
-        name,
-        static: !isDynamicClusterSetting(name),
-      })));
-    } catch (error) {
-      this.alerts.error('Error loading cluster settings', error);
-    } finally {
-      this.loading = false;
-      this.cdr.markForCheck();
+      if (sequence !== this.loadSequence) {
+        return;
+      }
+      this.failed.set(false);
+      const serialized = JSON.stringify(response);
+      if (serialized === this.lastResponse && this.rows()) {
+        return;
+      }
+      this.lastResponse = serialized;
+      const rows = buildClusterSettingRows(response);
+      this.rows.set(rows);
+      this.drafts.update((drafts) => pruneDrafts(rows, drafts));
+    } catch (error: unknown) {
+      if (sequence === this.loadSequence) {
+        this.loadError.set(readableReason(error));
+        this.failed.set(true);
+        this.alerts.error(failureMessage('Could not load cluster settings', error), error);
+      }
     }
   }
 
-  set(name: string, value: string): void {
-    this.form[name] = value;
-    if (value !== this.settings[name]) {
-      this.changes = {
-        ...this.changes,
-        [name]: { value, transient: this.changes[name]?.transient ?? true },
-      };
-    } else {
-      this.removeChange(name);
+  /** Reads the settings again, keeping the table and the staged changes on screen. */
+  async reload(): Promise<void> {
+    if (this.reloading()) {
+      return;
     }
-  }
-
-  togglePersistence(name: string): void {
-    const change = this.changes[name];
-    if (!change) return;
-    this.changes = { ...this.changes, [name]: { ...change, transient: !change.transient } };
-  }
-
-  revert(name: string): void {
-    this.form[name] = this.settings[name] ?? '';
-    this.removeChange(name);
-  }
-
-  preview(): void {
-    this.modal.showJson('Pending cluster settings', buildClusterSettingsPayload(this.changes));
-  }
-
-  async save(): Promise<void> {
-    if (!this.changeEntries.length) return;
-    this.saving = true;
+    this.reloading.set(true);
     try {
-      const settings = buildClusterSettingsPayload(this.changes);
-      const response = await this.api.post<unknown>('cluster_settings/save', { settings });
-      this.alerts.info('Settings successfully saved', response);
       await this.load();
-    } catch (error) {
-      this.alerts.error('Error while saving settings', error);
     } finally {
-      this.saving = false;
-      this.cdr.markForCheck();
+      this.reloading.set(false);
     }
   }
 
-  settingId(name: string): string {
-    return `cluster-setting-${name.replaceAll('.', '-')}`;
+  retry(): void {
+    this.failed.set(false);
+    this.rows.set(undefined);
+    void this.load();
   }
 
-  private removeChange(name: string): void {
-    const { [name]: _removed, ...remaining } = this.changes;
-    this.changes = remaining;
+  /** Stages every transient setting to be saved as persistent with its current value. */
+  moveAllToPersistent(): void {
+    const rows = this.unstagedTransient();
+    this.drafts.update((drafts) => {
+      const next = { ...drafts };
+      for (const row of rows) {
+        next[row.name] = { value: row.value, scope: 'persistent' };
+      }
+      return next;
+    });
+  }
+
+  async confirmDiscard(): Promise<boolean> {
+    const changes = this.pending();
+    if (changes.length === 0) {
+      return true;
+    }
+    return this.dialogs.confirm({
+      title: 'Discard unsaved changes?',
+      message: `${pluralize(changes.length, 'unsaved change')} to the cluster settings will be lost if you leave this page.`,
+      items: changes.map((change) => change.name),
+      confirmLabel: 'Discard changes',
+      cancelLabel: 'Keep editing',
+      tone: 'danger',
+    });
+  }
+
+  review(changes: readonly PendingChange[]): void {
+    this.dialogs.showJson(
+      'Review pending changes',
+      buildClusterSavePayload(changes, this.rows() ?? []),
+      'PUT /_cluster/settings',
+    );
+  }
+
+  async save(changes: readonly PendingChange[]): Promise<void> {
+    if (this.saving() || changes.length === 0) {
+      return;
+    }
+    this.saving.set(true);
+    this.errors.set({});
+    try {
+      const settings = buildClusterSavePayload(changes, this.rows() ?? []);
+      const response = await this.api.post<unknown>('cluster_settings/save', { settings });
+      this.alerts.success(
+        changes.length === 1 ? `Saved ${changes[0]?.name}` : `Saved ${pluralize(changes.length, 'cluster setting')}`,
+        response,
+      );
+      this.lastResponse = '';
+      await this.load();
+      this.drafts.update((drafts) => withoutSavedDrafts(drafts, changes));
+    } catch (error: unknown) {
+      this.errors.set(settingErrorsFor(error, changes));
+      this.alerts.error(failureMessage('Could not save cluster settings', error), error);
+    } finally {
+      this.saving.set(false);
+    }
   }
 }

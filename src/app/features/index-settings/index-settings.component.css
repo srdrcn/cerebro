@@ -1,0 +1,46 @@
+:host {
+  display: block;
+}
+
+.index-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+
+.index-title .badge {
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
+.index-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.index-meta .tag {
+  max-width: min(100%, 360px);
+}
+
+.quick-picks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  max-width: 560px;
+}
+
+.closed-callout {
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 760px) {
+  .index-title {
+    font-size: var(--text-lg);
+  }
+}

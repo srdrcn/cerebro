@@ -1,0 +1,130 @@
+:host {
+  display: block;
+}
+
+/* ---- Template list ---- */
+
+.template-item {
+  gap: 11px;
+  padding: 10px var(--space-4);
+}
+
+.template-item__name,
+.template-item__patterns {
+  display: block;
+}
+
+.template-item__name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* The list is locked while a template is being saved. */
+.template-item:disabled {
+  cursor: default;
+}
+
+.template-item:disabled:not(.is-selected) {
+  opacity: 0.6;
+}
+
+.template-item:disabled:not(.is-selected):hover {
+  background: none;
+}
+
+.template-item__patterns {
+  margin-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.template-item__patterns.is-empty {
+  font-family: var(--font-sans);
+  font-style: italic;
+}
+
+.template-item__order {
+  font-variant-numeric: tabular-nums;
+}
+
+.list-skeleton {
+  display: grid;
+}
+
+.list-skeleton__row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.list-skeleton__icon {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: var(--radius);
+}
+
+.list-skeleton__lines {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+}
+
+/* ---- Editor ---- */
+
+.editor-card__header {
+  flex-wrap: wrap;
+}
+
+.editor-card__actions {
+  flex-wrap: wrap;
+}
+
+.name-field {
+  max-width: 520px;
+}
+
+.body-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: var(--control-height-sm);
+}
+
+.editor-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 22px;
+  margin-top: 4px;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.editor-status__message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.footer-buttons {
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .footer-buttons {
+    width: 100%;
+  }
+
+  .footer-buttons > .btn {
+    flex: 1;
+  }
+
+  .editor-card__actions {
+    width: 100%;
+  }
+}

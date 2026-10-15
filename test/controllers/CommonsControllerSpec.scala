@@ -14,6 +14,7 @@ class CommonsControllerSpec extends MockedServices {
     s2"""
     CommonsController should                            ${step(play.api.Play.start(application))}
       return indices                                    $indices
+      look up indices by expression                     $lookupIndices
 
       return index mapping                              $getIndexMapping
       validate index parameter for get mapping          $missingIndexGetIndexMapping
@@ -27,12 +28,13 @@ class CommonsControllerSpec extends MockedServices {
                                                         ${step(play.api.Play.stop(application))}
       """
 
+  // getIndices asks _cat/indices for the index column only.
   def indices = {
     val expectedResponse = Json.parse(
       """
         |[
-        |  {"health":"green","status":"open","index":"index1","pri":"10","rep":"0","docs.count":"4330","docs.deleted":"10","store.size":"4.1mb","pri.store.size":"4.1mb"},
-        |  {"health":"green","status":"closed","index":"index2","pri":"10","rep":"0","docs.count":"1497203","docs.deleted":"5048","store.size":"860.9mb","pri.store.size":"860.9mb"}
+        |  {"index":"index1"},
+        |  {"index":"index2"}
         |]
       """.stripMargin
     )
@@ -533,6 +535,13 @@ class CommonsControllerSpec extends MockedServices {
     val body = Json.obj("host" -> "somehost")
     val response = route(application, FakeRequest(POST, "/commons/get_node_stats").withBody(body)).get
     ensure(response, 400, Json.obj("error" -> "Missing required parameter node"))
+  }
+
+  def lookupIndices = {
+    val rows = Json.arr(Json.obj("index" -> "logs-1", "status" -> "open", "pri.store.size" -> "1024"))
+    client.lookupIndices("logs-*,orders", ElasticServer(Host("somehost", None))) returns Future.successful(Success(200, rows))
+    val body = Json.obj("host" -> "somehost", "expression" -> "logs-*,orders")
+    ensure(route(application, FakeRequest(POST, "/commons/indices/lookup").withBody(body)).get, 200, rows)
   }
 
 }

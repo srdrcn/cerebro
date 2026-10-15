@@ -1,0 +1,526 @@
+<section class="page" aria-labelledby="doctor-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="doctor-title" class="page-title">Cluster doctor</h1>
+      <p class="page-subtitle">Checks the cluster for problems and explains how to fix them.</p>
+    </div>
+    <div class="page-header__actions">
+      <button
+        type="button"
+        class="btn btn-primary"
+        [class.is-loading]="running()"
+        [disabled]="running()"
+        (click)="run()"
+      >
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> {{ report() ? 'Run checks again' : 'Run checks' }}
+      </button>
+      <cerebro-menu label="More actions" align="end" [disabled]="raw() === undefined">
+        <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+        <button type="button" class="menu-item" (click)="viewRaw()">
+          <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+        </button>
+      </cerebro-menu>
+    </div>
+  </header>
+
+  <p class="visually-hidden" role="status" aria-live="polite">{{ announcement() }}</p>
+
+  @if (report(); as report) {
+    @if (loadError()) {
+      <div class="callout callout-warning doctor-stale" role="alert">
+        <i class="bi bi-wifi-off" aria-hidden="true"></i>
+        <div class="min-w-0">
+          <strong>Could not run the checks again.</strong>
+          The report below was checked {{ checkedAgo() }}. {{ loadError() }}
+        </div>
+      </div>
+    }
+
+    <section class="card doctor-hero" [class]="'card doctor-hero tone-' + report.verdict.tone" aria-labelledby="doctor-verdict-title" [attr.aria-busy]="running()">
+      <div class="doctor-hero__verdict">
+        <span class="doctor-hero__icon" aria-hidden="true"><i [class]="'bi ' + report.verdict.icon"></i></span>
+        <div class="min-w-0">
+          <h2 id="doctor-verdict-title" class="doctor-hero__title">{{ report.verdict.title }}</h2>
+          <p class="doctor-hero__text">{{ report.verdict.text }}</p>
+          <p class="doctor-hero__meta">
+            @if (report.clusterName) {
+              <span><i class="bi bi-diagram-3" aria-hidden="true"></i> {{ report.clusterName }}</span>
+            }
+            <span><i class="bi bi-box-seam" aria-hidden="true"></i> Elasticsearch {{ report.version ?? 'version unknown' }}</span>
+            <span [title]="checkedAt() !== null ? 'Checked at ' + timestamp(checkedAt()) : ''">
+              @if (running()) {
+                <span class="spinner doctor-inline-spinner" aria-hidden="true"></span> Checking…
+              } @else {
+                <i class="bi bi-clock" aria-hidden="true"></i> {{ checkedLabel() }}
+              }
+            </span>
+          </p>
+        </div>
+      </div>
+      <dl class="doctor-hero__stats">
+        @for (severity of severities; track severity.key) {
+          <div class="doctor-stat" [class]="'doctor-stat tone-' + severity.tone" [class.is-zero]="report.counts[severity.key] === 0">
+            <dt class="stat__label"><i [class]="'bi ' + severity.icon" aria-hidden="true"></i> {{ severity.label }}</dt>
+            <dd class="doctor-stat__value">{{ report.counts[severity.key] | num }}</dd>
+          </div>
+        }
+        <div class="doctor-stat doctor-stat--checks">
+          <dt class="stat__label"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Checks passed</dt>
+          <dd class="doctor-stat__value">
+            {{ report.passed | num }}<span class="doctor-stat__of">/{{ report.ran | num }}</span>
+          </dd>
+          @if (report.gaps > 0) {
+            <dd class="doctor-stat__meta">{{ report.gaps | num }} could not run</dd>
+          }
+        </div>
+      </dl>
+    </section>
+
+    <div class="layout-sidebar-end doctor-layout">
+      <div class="stack min-w-0" [attr.aria-busy]="running()">
+        <section aria-labelledby="doctor-findings-title" class="stack">
+          <div class="doctor-toolbar">
+            <h2 id="doctor-findings-title" class="section-title" tabindex="-1">Findings</h2>
+            @if (report.findings.length > 0) {
+              <div class="row-wrap doctor-chips" role="group" aria-label="Filter by severity">
+                @for (severity of severities; track severity.key) {
+                  <button
+                    type="button"
+                    class="chip-toggle"
+                    [class]="'chip-toggle doctor-chip tone-' + severity.tone"
+                    [attr.aria-pressed]="severityFilter().has(severity.key)"
+                    (click)="toggleSeverity(severity.key)"
+                  >
+                    <i [class]="'bi ' + severity.icon" aria-hidden="true"></i>
+                    {{ severity.label }}
+                    <span class="count">{{ severityCounts()[severity.key] | num }}</span>
+                  </button>
+                }
+              </div>
+              <label class="visually-hidden" for="doctor-category">Category</label>
+              <select
+                id="doctor-category"
+                class="select select-sm doctor-category"
+                [value]="categoryFilter() ?? ''"
+                (change)="selectCategory($any($event.target).value)"
+              >
+                <option value="">All categories</option>
+                @for (category of categories; track category.key) {
+                  <option [value]="category.key" [selected]="categoryFilter() === category.key">
+                    {{ category.label }} ({{ categoryCounts()[category.key] }})
+                  </option>
+                }
+              </select>
+              <span class="count-label doctor-count">
+                @if (filtered()) {
+                  <strong>{{ visibleFindings().length | num }}</strong> of {{ report.findings.length | num }} {{ report.findings.length | plural: 'finding' }}
+                } @else {
+                  <strong>{{ report.findings.length | num }}</strong> {{ report.findings.length | plural: 'finding' }}
+                }
+              </span>
+            }
+          </div>
+
+          @if (report.gaps > 0) {
+            <div class="callout callout-info doctor-gaps">
+              <i class="bi bi-dash-circle" aria-hidden="true"></i>
+              <div class="min-w-0">
+                <strong>{{ report.gaps | num }} {{ report.gaps | plural: 'check' }} could not run.</strong>
+                The report only covers what Elasticsearch let the doctor read.
+                <ul class="doctor-gaps__reasons">
+                  @for (reason of gapReasons(); track reason) {
+                    <li>{{ reason }}</li>
+                  }
+                </ul>
+                <button type="button" class="link-button text-sm" (click)="showChecks()" aria-controls="doctor-checks-list">
+                  See which checks
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (report.findings.length === 0) {
+            <div class="card">
+              <cerebro-empty
+                [tone]="report.gaps > 0 ? 'default' : 'success'"
+                [icon]="report.gaps > 0 ? 'bi-clipboard-check' : 'bi-check2-circle'"
+                [heading]="report.gaps > 0 ? 'Nothing to fix in what was checked' : 'Nothing to fix'"
+                [text]="allPassedText()"
+              >
+                <button type="button" class="btn btn-sm" (click)="showChecks()" aria-controls="doctor-checks-list">
+                  <i class="bi bi-list-check" aria-hidden="true"></i> See what was checked
+                </button>
+              </cerebro-empty>
+            </div>
+          } @else if (visibleFindings().length === 0) {
+            <div class="card">
+              <cerebro-empty icon="bi-funnel" heading="No findings match the filters" text="Change the severity or category to see the other findings.">
+                <button type="button" class="btn btn-sm" (click)="resetFilters()">
+                  <i class="bi bi-x-circle" aria-hidden="true"></i> Clear filters
+                </button>
+              </cerebro-empty>
+            </div>
+          } @else {
+            <ol class="doctor-findings" aria-label="Findings by severity">
+              @for (finding of visibleFindings(); track finding.id) {
+                <li>
+                  <article
+                    class="card finding"
+                    [class]="'card finding tone-' + severityMeta(finding.severity).tone"
+                    [attr.aria-labelledby]="findingDomId(finding.id, 'title')"
+                  >
+                    <div class="finding__head">
+                      <span class="finding__icon" aria-hidden="true"><i [class]="'bi ' + severityMeta(finding.severity).icon"></i></span>
+                      <div class="min-w-0">
+                        <div class="finding__meta">
+                          <span [class]="'badge badge-' + severityMeta(finding.severity).tone">{{ severityMeta(finding.severity).label }}</span>
+                          <span class="finding__category">
+                            <i [class]="'bi ' + categoryMeta(finding.category).icon" aria-hidden="true"></i>
+                            {{ categoryMeta(finding.category).label }}
+                          </span>
+                        </div>
+                        <h3 class="finding__title" [id]="findingDomId(finding.id, 'title')" tabindex="-1">{{ finding.title }}</h3>
+                      </div>
+                    </div>
+
+                    <div class="finding__body">
+                      @if (finding.summary) {
+                        <p class="finding__summary">{{ finding.summary }}</p>
+                      }
+                      <dl class="finding__explain">
+                        <div class="finding__point">
+                          <dt><i class="bi bi-exclamation-diamond" aria-hidden="true"></i> Why it matters</dt>
+                          <dd>{{ finding.impact }}</dd>
+                        </div>
+                        @if (finding.advice) {
+                          <div class="finding__point">
+                            <dt><i class="bi bi-lightbulb" aria-hidden="true"></i> What to do</dt>
+                            <dd>{{ finding.advice }}</dd>
+                          </div>
+                        }
+                      </dl>
+
+                      @if (finding.note) {
+                        <div class="callout callout-info text-sm finding__note">
+                          <i class="bi bi-info-circle" aria-hidden="true"></i>
+                          <span>{{ finding.note }}</span>
+                        </div>
+                      }
+
+                      @if (finding.facts?.length) {
+                        <div class="finding__facts">
+                          @for (fact of finding.facts; track fact.label) {
+                            <span class="tag"><span class="tag-key">{{ fact.label }}</span><span>{{ fact.value }}</span></span>
+                          }
+                        </div>
+                      }
+
+                      @if (finding.resources.length > 0) {
+                        <div class="finding__resources">
+                          <h4 class="section-label finding__resources-label">
+                            {{ finding.resourceLabel ?? 'Affected' }}
+                            <span class="finding__resources-count">{{ finding.resources.length | num }}</span>
+                          </h4>
+                          <ul class="resource-list" [id]="findingDomId(finding.id, 'resources')">
+                            @for (resource of visibleResources(finding); track resource.kind + ':' + resource.name) {
+                              <li class="resource">
+                                <i [class]="'bi ' + resourceIcon(resource) + ' resource__icon'" aria-hidden="true"></i>
+                                <div class="resource__body min-w-0">
+                                  <span class="resource__name" [title]="resource.name">{{ resource.name }}</span>
+                                  @if (resource.detail) {
+                                    <span class="resource__detail">{{ resource.detail }}</span>
+                                  }
+                                </div>
+                                @if (resource.link || resource.fix) {
+                                  <div class="resource__actions">
+                                    @if (resource.link; as link) {
+                                      <a
+                                        class="btn btn-sm btn-ghost"
+                                        [routerLink]="link.route"
+                                        [queryParams]="linkParams(link)"
+                                        [attr.aria-label]="link.label + ': ' + resource.name"
+                                      >
+                                        <i [class]="'bi ' + link.icon" aria-hidden="true"></i> {{ link.label }}
+                                      </a>
+                                    }
+                                    @if (resource.fix; as fix) {
+                                      <button
+                                        type="button"
+                                        class="btn btn-sm"
+                                        [class.is-loading]="fixing() === fix.key"
+                                        [disabled]="fixing() !== null || running()"
+                                        [attr.aria-label]="fix.label + ': ' + resource.name"
+                                        (click)="applyFix(fix, finding)"
+                                      >
+                                        <i [class]="'bi ' + fix.icon" aria-hidden="true"></i> {{ fix.label }}
+                                      </button>
+                                    }
+                                  </div>
+                                }
+                              </li>
+                            }
+                          </ul>
+                          @if (finding.resources.length > resourcePreview) {
+                            <button
+                              type="button"
+                              class="link-button text-sm finding__more"
+                              [attr.aria-expanded]="expandedResources().has(finding.id)"
+                              [attr.aria-controls]="findingDomId(finding.id, 'resources')"
+                              (click)="toggleResources(finding)"
+                            >
+                              @if (expandedResources().has(finding.id)) {
+                                <i class="bi bi-chevron-up" aria-hidden="true"></i> Show fewer
+                              } @else {
+                                <i class="bi bi-chevron-down" aria-hidden="true"></i> Show all {{ finding.resources.length | num }}
+                              }
+                            </button>
+                          }
+                        </div>
+                      }
+                    </div>
+
+                    @if (finding.fixes.length > 0 || finding.links.length > 0 || finding.external?.length) {
+                      <div class="finding__actions">
+                        @for (fix of finding.fixes; track fix.key) {
+                          <button
+                            type="button"
+                            class="btn btn-sm"
+                            [class.btn-primary]="fix.tone !== 'danger'"
+                            [class.btn-danger]="fix.tone === 'danger'"
+                            [class.is-loading]="fixing() === fix.key"
+                            [disabled]="fixing() !== null || running()"
+                            (click)="applyFix(fix, finding)"
+                          >
+                            <i [class]="'bi ' + fix.icon" aria-hidden="true"></i>
+                            {{ fix.label }}
+                          </button>
+                        }
+                        @for (link of finding.links; track link.route + link.label) {
+                          <a class="btn btn-sm" [routerLink]="link.route" [queryParams]="linkParams(link)">
+                            <i [class]="'bi ' + link.icon" aria-hidden="true"></i> {{ link.label }}
+                          </a>
+                        }
+                        @for (link of finding.external ?? []; track link.url) {
+                          <a class="btn btn-sm btn-ghost" [href]="link.url" target="_blank" rel="noopener noreferrer">
+                            <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> {{ link.label }}
+                            <span class="visually-hidden">(opens in a new tab)</span>
+                          </a>
+                        }
+                      </div>
+                    }
+                  </article>
+                </li>
+              }
+            </ol>
+          }
+        </section>
+      </div>
+
+      <aside class="stack doctor-aside" aria-label="Health report and checks">
+        <section class="card" aria-labelledby="doctor-health-title">
+          <div class="card-header">
+            <div class="row min-w-0">
+              <span class="card-icon" aria-hidden="true"><i class="bi bi-heart-pulse"></i></span>
+              <div class="min-w-0">
+                <h2 id="doctor-health-title" class="card-title">Elasticsearch health report</h2>
+                <p class="card-subtitle">Built-in indicators (_health_report)</p>
+              </div>
+            </div>
+            @if (report.healthReport.kind === 'report') {
+              <span [class]="'badge badge-' + report.healthReport.tone">
+                <span [class]="'dot dot-sm dot-' + report.healthReport.tone" aria-hidden="true"></span>
+                {{ statusLabel(report.healthReport.status) }}
+              </span>
+            }
+          </div>
+          @switch (report.healthReport.kind) {
+            @case ('report') {
+              @if (report.healthReport.kind === 'report') {
+                <ul class="indicators">
+                  @for (indicator of report.healthReport.indicators; track indicator.name; let i = $index) {
+                    <li class="indicator" [class.is-open]="openIndicators().has(indicator.name)">
+                      @if (canExpand(indicator)) {
+                        <button
+                          type="button"
+                          class="indicator__head"
+                          [attr.aria-expanded]="openIndicators().has(indicator.name)"
+                          [attr.aria-controls]="'indicator-' + i"
+                          (click)="toggleIndicator(indicator)"
+                        >
+                          <ng-container *ngTemplateOutlet="indicatorHead; context: { $implicit: indicator }" />
+                          <i class="bi bi-chevron-down indicator__chevron" aria-hidden="true"></i>
+                        </button>
+                      } @else {
+                        <div class="indicator__head">
+                          <ng-container *ngTemplateOutlet="indicatorHead; context: { $implicit: indicator }" />
+                        </div>
+                      }
+                      @if (openIndicators().has(indicator.name)) {
+                        <div class="indicator__body" [id]="'indicator-' + i">
+                          @if (indicator.impacts.length > 0) {
+                            <h3 class="section-label">Impact</h3>
+                            <ul class="indicator__list">
+                              @for (impact of indicator.impacts; track $index) {
+                                <li>
+                                  {{ impact.description }}
+                                  @if (impact.areas.length > 0) {
+                                    <span class="indicator__areas">{{ impact.areas.join(', ') }}</span>
+                                  }
+                                </li>
+                              }
+                            </ul>
+                          }
+                          @for (diagnosis of indicator.diagnoses; track $index) {
+                            <div class="diagnosis">
+                              <h3 class="section-label">Diagnosis</h3>
+                              @if (diagnosis.cause) {
+                                <p><strong>Cause.</strong> {{ diagnosis.cause }}</p>
+                              }
+                              @if (diagnosis.action) {
+                                <p><strong>Action.</strong> {{ diagnosis.action }}</p>
+                              }
+                              @for (group of diagnosis.resources; track group.label) {
+                                <p class="diagnosis__resources">
+                                  <span class="diagnosis__resources-label">{{ group.label }} ({{ group.names.length | num }}):</span>
+                                  {{ listSample(group.names, resourcePreview) }}
+                                </p>
+                              }
+                              @if (diagnosis.helpUrl) {
+                                <a class="link-button text-sm" [href]="diagnosis.helpUrl" target="_blank" rel="noopener noreferrer">
+                                  <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> Troubleshooting guide
+                                  <span class="visually-hidden">(opens in a new tab)</span>
+                                </a>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            }
+            @case ('unsupported') {
+              <cerebro-empty
+                [compact]="true"
+                icon="bi-hourglass"
+                heading="Available from Elasticsearch 8.7"
+                [text]="unsupportedText()"
+              />
+            }
+            @case ('unavailable') {
+              @if (report.healthReport.kind === 'unavailable') {
+                <cerebro-empty [compact]="true" icon="bi-slash-circle" heading="Health report unavailable" [text]="report.healthReport.reason" />
+              }
+            }
+          }
+        </section>
+
+        <section class="card" aria-labelledby="doctor-checks-title">
+          <h2 class="doctor-checks__heading">
+            <button
+              id="doctor-checks-toggle"
+              type="button"
+              class="card-header doctor-checks__toggle"
+              [attr.aria-expanded]="checksOpen()"
+              aria-controls="doctor-checks-list"
+              (click)="checksOpen.set(!checksOpen())"
+            >
+              <span class="row min-w-0">
+                <span class="card-icon" aria-hidden="true"><i class="bi bi-list-check"></i></span>
+                <span class="doctor-checks__titles min-w-0">
+                  <span id="doctor-checks-title" class="card-title">Passed checks</span>
+                  <span class="card-subtitle">
+                    {{ passedChecks().length | num }} passed@if (skippedChecks().length > 0) {<span> · {{ skippedChecks().length | num }} not checked</span>}
+                  </span>
+                </span>
+              </span>
+              <i class="bi bi-chevron-down doctor-checks__chevron" aria-hidden="true"></i>
+            </button>
+          </h2>
+          @if (checksOpen()) {
+            <div id="doctor-checks-list" class="doctor-checks">
+              @if (passedChecks().length > 0) {
+                <ul class="check-list" aria-label="Passed checks">
+                  @for (check of passedChecks(); track check.id) {
+                    <li class="check-item">
+                      <i class="bi bi-check-circle-fill check-item__icon is-passed" aria-hidden="true"></i>
+                      <div class="min-w-0">
+                        <div class="check-item__title">{{ check.title }}</div>
+                        <div class="check-item__text">{{ check.description }}</div>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="doctor-checks__empty">No check passed without findings.</p>
+              }
+              @if (skippedChecks().length > 0) {
+                <h3 class="section-label doctor-checks__label">Not checked</h3>
+                <ul class="check-list" aria-label="Checks that could not run">
+                  @for (check of skippedChecks(); track check.id) {
+                    <li class="check-item">
+                      <i class="bi bi-dash-circle check-item__icon" aria-hidden="true"></i>
+                      <div class="min-w-0">
+                        <div class="check-item__title">{{ check.title }}</div>
+                        <div class="check-item__text">{{ check.reason }}</div>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+        </section>
+      </aside>
+    </div>
+  } @else if (loadError()) {
+    <div class="card">
+      <cerebro-empty icon="bi-exclamation-triangle" heading="Could not run the checks" [text]="loadError() ?? ''">
+        <button type="button" class="btn btn-sm" [class.is-loading]="running()" [disabled]="running()" (click)="run()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
+    </div>
+  } @else {
+    <div class="stack" role="status" aria-label="Running the checks">
+      <div class="card doctor-hero doctor-hero--loading">
+        <div class="doctor-hero__verdict">
+          <span class="skeleton doctor-skeleton-icon"></span>
+          <div class="stack-sm doctor-skeleton-text">
+            <span class="skeleton" style="width: 220px; height: 24px"></span>
+            <span class="skeleton" style="width: 320px; max-width: 100%; height: 16px"></span>
+          </div>
+        </div>
+        <div class="doctor-hero__stats">
+          @for (item of [1, 2, 3, 4]; track item) {
+            <span class="skeleton" style="height: 64px"></span>
+          }
+        </div>
+      </div>
+      <div class="layout-sidebar-end">
+        <div class="stack">
+          @for (item of [1, 2, 3]; track item) {
+            <div class="card card-body stack-sm" aria-hidden="true">
+              <span class="skeleton" style="width: 40%; height: 18px"></span>
+              <span class="skeleton" style="height: 14px"></span>
+              <span class="skeleton" style="width: 80%; height: 14px"></span>
+            </div>
+          }
+        </div>
+        <div class="card loading-block"><span class="spinner" aria-hidden="true"></span> Checking the cluster…</div>
+      </div>
+    </div>
+  }
+</section>
+
+<ng-template #indicatorHead let-indicator>
+  <span [class]="'dot dot-' + indicator.tone" aria-hidden="true"></span>
+  <span class="indicator__text min-w-0">
+    <span class="indicator__name">{{ indicator.label }}</span>
+    @if (indicator.symptom) {
+      <span class="indicator__symptom">{{ indicator.symptom }}</span>
+    }
+  </span>
+  <span [class]="'badge badge-' + indicator.tone">{{ indicator.statusLabel }}</span>
+</ng-template>

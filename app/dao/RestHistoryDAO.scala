@@ -3,7 +3,7 @@ package dao
 import java.util.Date
 
 import com.google.inject.{ImplementedBy, Inject}
-import play.api.Configuration
+import play.api.{Configuration, Logger}
 import play.api.db.slick.DatabaseConfigProvider
 import slick.jdbc.JdbcProfile
 import slick.jdbc.SQLiteProfile.api._
@@ -21,12 +21,12 @@ trait RestHistoryDAO {
 
   def save(entry: RestRequest): Future[Option[String]]
 
-  def clear(username: String): Future[Int]
-
 }
 
 class RestHistoryDAOImpl @Inject()(dbConfigProvider: DatabaseConfigProvider,
                                    config: Configuration) extends RestHistoryDAO {
+
+  private val logger = Logger("application")
 
   private val max = config.getOptional[Int]("rest.history.size").getOrElse(50)
 
@@ -47,11 +47,6 @@ class RestHistoryDAOImpl @Inject()(dbConfigProvider: DatabaseConfigProvider,
         update(p, req.createdAt.getTime)
       case None    =>
         create(req).map { md5 => trim(req.username); md5 }
-    }
-
-  def clear(username: String): Future[Int] =
-    dbConfig.db.run(requests.filter(_.username === username).delete).recover {
-      case NonFatal(e) => throw DAOException(s"Error clearing all requests for [$username]", e)
     }
 
   private def findByMd5(md5: String): Future[Option[RestRequests#TableElementType]] =
@@ -81,8 +76,8 @@ class RestHistoryDAOImpl @Inject()(dbConfigProvider: DatabaseConfigProvider,
             SELECT id FROM rest_requests WHERE username=$username ORDER BY created_at DESC LIMIT -1 OFFSET $max
           )
         """
-    dbConfig.db.run(action).recover {
-      case NonFatal(e) => throw DAOException(s"Error while triming history for [$username]", e)
+    dbConfig.db.run(action).failed.foreach { e =>
+      logger.error(s"Error while trimming history for [$username]", e)
     }
   }
 

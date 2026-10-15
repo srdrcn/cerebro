@@ -1,0 +1,314 @@
+:host {
+  display: block;
+}
+
+.it-tabs {
+  margin-bottom: var(--space-5);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.it-tabs > button {
+  flex: none;
+}
+
+.it-tabs > button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ---- List ---- */
+
+.it-item {
+  align-items: flex-start;
+  gap: 11px;
+  padding: 11px var(--space-4);
+}
+
+.it-item:disabled {
+  cursor: default;
+}
+
+.it-item:disabled:not(.is-selected) {
+  opacity: 0.6;
+}
+
+.it-item:disabled:not(.is-selected):hover {
+  background: none;
+}
+
+.it-item__name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.it-item__patterns {
+  display: block;
+  margin-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.it-item__patterns.is-empty {
+  font-family: var(--font-sans);
+  font-style: italic;
+}
+
+.it-item__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.it-item__tags .tag {
+  height: 20px;
+  max-width: 160px;
+  padding: 0 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.it-item__tags .tag .bi {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.it-item__priority {
+  margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.it-skeleton {
+  display: grid;
+}
+
+.it-skeleton__row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.it-skeleton__icon {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: var(--radius);
+}
+
+.it-skeleton__lines {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+}
+
+/* ---- Editor ---- */
+
+.it-main {
+  min-width: 0;
+}
+
+.it-editor__header {
+  flex-wrap: wrap;
+}
+
+.it-editor__actions {
+  flex-wrap: wrap;
+}
+
+/* Facts about the edited template */
+.it-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.it-fact {
+  min-width: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.it-fact--wide {
+  grid-column: span 2;
+}
+
+.it-fact--full {
+  grid-column: 1 / -1;
+}
+
+.it-facts > .it-fact:last-child {
+  border-bottom: 0;
+}
+
+.it-fact dt {
+  margin-bottom: 5px;
+}
+
+.it-fact dd {
+  min-height: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.it-chip {
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition:
+    border-color var(--duration-fast) ease,
+    background var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+
+.it-chip .bi {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+button.it-chip:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+button.it-chip:hover .bi {
+  color: inherit;
+}
+
+button.it-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.it-chip--missing {
+  cursor: default;
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+
+.it-chip--missing .bi {
+  color: inherit;
+}
+
+.it-chip--optional {
+  cursor: default;
+  border-style: dashed;
+  color: var(--text-3);
+}
+
+.it-compose-arrow {
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.it-description {
+  margin-right: 4px;
+  color: var(--text-2);
+}
+
+.it-name-field {
+  max-width: 520px;
+}
+
+.it-body-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: var(--control-height-sm);
+}
+
+.it-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 22px;
+  margin-top: 4px;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.it-status__message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.it-problems {
+  display: grid;
+  gap: 3px;
+  margin: 4px 0 0;
+  padding: 0;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  list-style: none;
+}
+
+.it-problems .bi {
+  margin-right: 4px;
+}
+
+.it-footer {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.it-footer__buttons {
+  margin-left: auto;
+}
+
+.it-preview .card-header {
+  align-items: flex-start;
+}
+
+@media (max-width: 760px) {
+  .it-tabs > button {
+    flex: 1;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 6px;
+    font-size: var(--text-sm);
+  }
+
+  .it-tabs > button > .bi {
+    display: none;
+  }
+
+  .it-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .it-fact--wide {
+    grid-column: 1 / -1;
+  }
+
+  /* Two stacked buttons would cover too much of a phone screen. */
+  .it-editor > .card-footer {
+    position: static;
+  }
+
+  .it-footer > .btn,
+  .it-footer__buttons {
+    width: 100%;
+  }
+
+  .it-footer__buttons > .btn {
+    flex: 1;
+  }
+
+  .it-editor__actions {
+    width: 100%;
+  }
+}

@@ -1,0 +1,179 @@
+:host {
+  display: block;
+}
+
+.pools-stale {
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+.pools-stale__retry {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.pools-stats {
+  margin-bottom: var(--space-5);
+}
+
+.stat--warn .stat__value {
+  color: var(--yellow-text);
+}
+
+.stat--danger .stat__value {
+  color: var(--red-text);
+}
+
+.pools-toolbar {
+  flex-wrap: wrap;
+}
+
+.pools-toolbar .toolbar {
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+}
+
+.pools-toolbar cerebro-search {
+  width: min(300px, 100%);
+}
+
+.pools-toolbar__end {
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-left: auto;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pools-table th[scope="row"] {
+  font-weight: 400;
+}
+
+.pool-cell {
+  white-space: nowrap;
+}
+
+.pool-name {
+  margin-right: 8px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The node folds under the pool name on phones, where its column is hidden. */
+.pool-cell__node,
+.queue-cell__capacity {
+  display: none;
+}
+
+.node-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.queue-cell,
+.rejected-cell {
+  white-space: nowrap;
+}
+
+.queue-meter {
+  width: 36px;
+  height: 4px;
+  display: inline-flex;
+  margin-left: 6px;
+  overflow: hidden;
+  vertical-align: middle;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+}
+
+.queue-meter > span {
+  background: var(--accent);
+}
+
+.queue-meter.is-warn > span {
+  background: var(--yellow);
+}
+
+.queue-meter.is-danger > span {
+  background: var(--red);
+}
+
+.rejected-cell .badge {
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+}
+
+.pools-table tr.is-rejecting > * {
+  background: color-mix(in srgb, var(--red-soft) 70%, transparent);
+}
+
+.pools-footer {
+  flex-wrap: nowrap;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 0;
+}
+
+/* Phones: pool (with its node), active, queue and rejected stay in view. */
+@media (max-width: 760px) {
+  .pools-table .col-wide {
+    display: none;
+  }
+
+  .pool-cell__node {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .pools-table th,
+  .pools-table td {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .pools-table th:first-child,
+  .pools-table td:first-child {
+    padding-left: 14px;
+  }
+
+  .pool-cell {
+    white-space: normal;
+  }
+
+  .pool-cell__type {
+    display: none;
+  }
+
+  .pools-table .sort-button {
+    gap: 2px;
+  }
+
+  /* Capacity and the "+N" badge go under their number so the four columns fit. */
+  .queue-cell__capacity {
+    display: block;
+  }
+
+  .rejected-cell .badge {
+    display: flex;
+    width: fit-content;
+    margin: 2px 0 0 auto;
+  }
+
+  .pools-table .queue-meter {
+    display: none;
+  }
+}

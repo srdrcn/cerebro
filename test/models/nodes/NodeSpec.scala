@@ -1,7 +1,6 @@
 package models.nodes
 
 import models.commons.NodeInfoData
-import models.overview.NodeSpec.noAttributesNode
 import org.specs2.Specification
 import play.api.libs.json.Json
 
@@ -45,6 +44,7 @@ object NodeSpec extends Specification {
         |  "name": "-qkZcMt",
         |  "uptime": 109228,
         |  "version": "5.1.1",
+        |  "roles": ["master", "data", "ingest"],
         |  "host": "127.0.0.1",
         |  "attributes": {
         |    "aws_availability_zone": "eu-west-1c",
@@ -86,6 +86,7 @@ object NodeSpec extends Specification {
         |  "name": "007ywNv",
         |  "uptime": 492790575,
         |  "version": "5.1.1",
+        |  "roles": ["master", "data", "ingest"],
         |  "host": null,
         |  "attributes": {
         |    "aws_availability_zone": "eu-west-1c",
@@ -127,6 +128,7 @@ object NodeSpec extends Specification {
         |  "name": "007ywNv",
         |  "uptime": 492790575,
         |  "version": "5.1.1",
+        |  "roles": ["master", "data", "ingest"],
         |  "host": null,
         |  "attributes": {
         |  }

@@ -18,6 +18,7 @@ object TemplatesControllerSpec extends MockedServices {
       require template name to delete                    $requireNameDelete
       create template                                    $create
       require template name to create                    $requireNameCreate
+      require template body to create                    $requireNameTemplate
                                                          ${step(play.api.Play.stop(application))}
       """
 

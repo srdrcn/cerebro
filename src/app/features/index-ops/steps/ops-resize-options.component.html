@@ -1,0 +1,329 @@
+@if (source(); as source) {
+  <div class="ops-sections">
+    <cerebro-ops-checks [checks]="store.checks()" [busy]="checksBusy()" (fix)="onFix($event)" />
+    @if (canUndo() && kind() !== 'shrink') {
+      <p class="ops-section__hint ops-undo">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        This wizard blocked writes to <span class="mono">{{ source.name }}</span>.
+        <button type="button" class="link-button" [disabled]="store.sourceBusy() !== null" (click)="undo()">Allow writes again</button>
+      </p>
+    }
+
+    @if (kind() === 'shrink' && (source.primaries ?? 0) > 1 && (source.open !== false || source.shards.length > 0)) {
+      <section #preparePanel class="ops-section ops-prepare" aria-labelledby="ops-prepare-title" [attr.aria-busy]="store.preparing()">
+        <div class="ops-section__head">
+          <h3 id="ops-prepare-title" class="section-title" tabindex="-1"><i class="bi bi-pin-map" aria-hidden="true"></i> Prepare the source</h3>
+          @if (canUndo() && !store.preparing()) {
+            <button type="button" class="link-button text-sm ops-section__aside" [disabled]="store.sourceBusy() !== null" (click)="undo()">
+              Undo the preparation
+            </button>
+          }
+        </div>
+
+        @if (preparedOn(); as node) {
+          @if (store.colocation(); as state) {
+            @if (state.done) {
+              <div class="callout callout-success">
+                <i class="bi bi-check-circle" aria-hidden="true"></i>
+                <div>
+                  <strong>Ready on {{ node }}.</strong>
+                  Writes are {{ source.writeBlocked ? 'blocked' : 'still allowed' }} and every shard has a copy on {{ node }}.
+                  @if (!source.writeBlocked) {
+                    Block writes before shrinking (see the checks).
+                  }
+                </div>
+              </div>
+            } @else {
+              <div class="ops-progress" role="status">
+                <div class="ops-progress__head">
+                  <span>
+                    @if (state.moving > 0) {
+                      <span class="spinner ops-inline-spinner" aria-hidden="true"></span>
+                    }
+                    <strong>{{ state.covered | num }} of {{ state.total | num }}</strong> shards have a copy on {{ node }}
+                  </span>
+                  <span class="text-secondary tabular">
+                    {{ state.moving | num }} {{ state.moving | plural: 'copy' : 'copies' }} moving
+                  </span>
+                </div>
+                <cerebro-meter [value]="prepareProgress()" [warn]="101" [danger]="101" [label]="'Shards gathered on ' + node" />
+                @if (movingCopies().length > 0) {
+                  <ul class="ops-moves">
+                    @for (copy of movingCopies(); track $index) {
+                      <li class="text-sm text-secondary">
+                        Shard {{ copy.shard }} ({{ copy.primary ? 'primary' : 'replica' }}, {{ copy.size | bytes }}) · {{ copy.node }}
+                        <i class="bi bi-arrow-right" aria-hidden="true"></i><span class="visually-hidden">to</span> {{ node }}
+                      </li>
+                    }
+                  </ul>
+                }
+                @if (!store.preparing() && state.moving === 0) {
+                  <p class="text-sm text-danger">
+                    Nothing is moving. Check why in
+                    <a routerLink="/allocation" [queryParams]="explainParams()">Shard allocation</a>, or undo the preparation and pick another node.
+                  </p>
+                } @else {
+                  <p class="text-sm text-secondary">The page follows the shards until every copy is in place.</p>
+                }
+              </div>
+            }
+          }
+        } @else if (naturallyColocated(); as node) {
+          <div class="callout callout-info">
+            <i class="bi bi-info-circle" aria-hidden="true"></i>
+            <div>
+              {{ node }} already holds a copy of every shard, so no shard needs to move.
+              @if (!source.writeBlocked) {
+                Writes still need to be blocked: use <strong>Block writes</strong> in the checks, or prepare the source on {{ node }} to pin the copies there as well.
+              }
+            </div>
+          </div>
+        }
+
+        @if (!preparedOn()) {
+          <p class="ops-section__hint">
+            Blocks writes and requires every copy of the index on one node
+            (<span class="mono">index.routing.allocation.require._name</span>). Pick the node that already holds the most
+            shards and has room for a second copy.
+          </p>
+          @if (tierNote(); as note) {
+            <p class="ops-section__hint">
+              <i class="bi bi-layers" aria-hidden="true"></i>
+              Only nodes in
+              @if (note.tierName) {
+                {{ note.tierName }} (<span class="mono">{{ note.tier }}</span>)
+              } @else {
+                <span class="mono">{{ note.tier }}</span>
+              }
+              are offered:
+              @if (note.preference) {
+                the first tier of <span class="mono">index.routing.allocation.include._tier_preference</span>
+                (<span class="mono">{{ note.preference }}</span>) that has nodes.
+              } @else {
+                <span class="mono">index.routing.allocation.include._tier_preference</span> asks for it.
+              }
+            </p>
+          }
+          @if (store.nodeOptions(); as nodes) {
+            <fieldset class="ops-nodes">
+              <legend class="visually-hidden">Node that gathers the shards</legend>
+              @for (node of nodes; track node.id) {
+                <label class="ops-node" [class.is-selected]="store.shrinkNode() === node.name" [class.is-disabled]="!!node.excluded">
+                  <input
+                    type="radio"
+                    name="ops-prepare-node"
+                    [value]="node.name"
+                    [checked]="store.shrinkNode() === node.name"
+                    [disabled]="!!node.excluded"
+                    [attr.aria-describedby]="node.excluded || diskLevelLabel(node.diskLevel) ? 'ops-node-note-' + node.id : null"
+                    (change)="pickNode(node.name)"
+                  />
+                  <span class="ops-node__body">
+                    <span class="ops-node__name">
+                      {{ node.name }}
+                      @if (suggestedNode() === node.name) {
+                        <span class="badge badge-accent">Suggested</span>
+                      }
+                    </span>
+                    <span class="ops-node__meta">
+                      Holds {{ node.shardsHere | num }} of {{ source.primaries | num }} shards ·
+                      {{ node.diskAvailable | bytes }} free of {{ node.diskTotal | bytes }}
+                      @if (node.diskPercent !== null) {
+                        · {{ node.diskPercent }}% used
+                      }
+                      @if (node.diskAvailable !== null && node.diskAvailable < diskNeed(node.name)) {
+                        · <span class="text-danger">needs about {{ diskNeed(node.name) | bytes }}</span>
+                      }
+                    </span>
+                    @if (node.diskPercent !== null) {
+                      <!-- The percentage is in the text above: the radio's name stays a sentence. -->
+                      <cerebro-meter [value]="node.diskPercent" [small]="true" aria-hidden="true" />
+                    }
+                    @if (node.excluded) {
+                      <span [id]="'ops-node-note-' + node.id" class="ops-node__note text-danger">
+                        <i class="bi bi-slash-circle" aria-hidden="true"></i> {{ node.excluded }}
+                      </span>
+                    } @else if (diskLevelLabel(node.diskLevel); as label) {
+                      <span [id]="'ops-node-note-' + node.id" class="ops-node__note text-warning">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ label }}
+                      </span>
+                    }
+                  </span>
+                </label>
+              }
+            </fieldset>
+            <div class="row-wrap">
+              <button
+                type="button"
+                class="btn"
+                [class.is-loading]="store.sourceBusy() === 'prepare'"
+                [disabled]="store.sourceBusy() !== null || !store.shrinkNode()"
+                (click)="prepare()"
+              >
+                <i class="bi bi-pin-map" aria-hidden="true"></i> Prepare source on {{ store.shrinkNode() || '…' }}
+              </button>
+            </div>
+          } @else {
+            <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Loading nodes…</div>
+          }
+        }
+      </section>
+    }
+
+    <section class="ops-section" aria-labelledby="ops-target-title">
+      <div class="ops-section__head">
+        <h3 id="ops-target-title" class="section-title"><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i> Target index</h3>
+      </div>
+      <div class="ops-fields">
+        <div class="field">
+          <label class="field-label" for="ops-target-name">Name</label>
+          <input
+            id="ops-target-name"
+            class="input input-mono"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="e.g. logs-shrunk"
+            [class.is-invalid]="!!showError('target')"
+            [attr.aria-invalid]="!!showError('target')"
+            [attr.aria-describedby]="showError('target') ? 'ops-target-name-error' : 'ops-target-name-hint'"
+            [value]="store.target()"
+            (input)="setTarget($any($event.target).value)"
+          />
+          @if (showError('target'); as error) {
+            <p id="ops-target-name-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+          } @else {
+            <p id="ops-target-name-hint" class="field-hint">A new index; it must not exist yet.</p>
+          }
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="ops-replicas">Replicas <span class="optional">per shard</span></label>
+          <input
+            id="ops-replicas"
+            class="input"
+            type="number"
+            min="0"
+            inputmode="numeric"
+            [class.is-invalid]="!!showError('replicas')"
+            [attr.aria-invalid]="!!showError('replicas')"
+            [attr.aria-describedby]="showError('replicas') ? 'ops-replicas-error' : 'ops-replicas-hint'"
+            [value]="store.replicas()"
+            (input)="setReplicas($any($event.target).value)"
+          />
+          @if (showError('replicas'); as error) {
+            <p id="ops-replicas-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+          } @else {
+            <p id="ops-replicas-hint" class="field-hint">The source has {{ source.replicas | num }}; empty keeps the source's setting.</p>
+          }
+        </div>
+
+        <div class="field col-span-all">
+          <span class="field-label" id="ops-shards-label">Primary shards</span>
+          @if (kind() === 'clone') {
+            <p class="ops-fixed"><strong>{{ source.primaries | num }}</strong><span class="text-secondary">: {{ shardsHint() }}</span></p>
+          } @else {
+            <div class="ops-choices" role="group" aria-labelledby="ops-shards-label" [attr.aria-describedby]="showError('shards') ? 'ops-shards-error' : 'ops-shards-hint'">
+              @for (choice of store.shardOptions(); track choice) {
+                <button
+                  type="button"
+                  class="chip-toggle"
+                  [attr.aria-pressed]="store.shards() === choice && !store.customShards()"
+                  (click)="pickShards(choice)"
+                >
+                  {{ choice | num }}
+                </button>
+              }
+            </div>
+            @if (kind() === 'split') {
+              <div class="ops-inline ops-custom">
+                <label class="text-sm text-secondary" for="ops-custom-shards">Other</label>
+                <input
+                  id="ops-custom-shards"
+                  class="input input-sm"
+                  type="number"
+                  min="2"
+                  [max]="maxShards"
+                  inputmode="numeric"
+                  placeholder="e.g. 24"
+                  [class.is-invalid]="!!showError('shards') && customSelected()"
+                  [attr.aria-invalid]="!!showError('shards') && customSelected()"
+                  [attr.aria-describedby]="showError('shards') ? 'ops-shards-error' : 'ops-shards-hint'"
+                  [value]="store.customShards()"
+                  (input)="setCustomShards($any($event.target).value)"
+                />
+              </div>
+            }
+            @if (showError('shards'); as error) {
+              <p id="ops-shards-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+            } @else {
+              <p id="ops-shards-hint" class="field-hint">{{ shardsHint() }}</p>
+            }
+          }
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="ops-aliases">Aliases <span class="optional">optional</span></label>
+          <input
+            id="ops-aliases"
+            class="input input-mono"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="e.g. logs-archive"
+            [class.is-invalid]="!!showError('aliases')"
+            [attr.aria-invalid]="!!showError('aliases')"
+            [attr.aria-describedby]="showError('aliases') ? 'ops-aliases-error' : 'ops-aliases-hint'"
+            [value]="store.aliasesText()"
+            (input)="setAliases($any($event.target).value)"
+          />
+          @if (showError('aliases'); as error) {
+            <p id="ops-aliases-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+          } @else {
+            <p id="ops-aliases-hint" class="field-hint">Comma separated. The aliases of the source are not copied.</p>
+          }
+        </div>
+
+        <div class="field">
+          <span class="field-label">Compression</span>
+          <label class="check">
+            <input type="checkbox" [checked]="store.bestCompression()" (change)="setCompression($any($event.target).checked)" />
+            <span>
+              Best compression
+              <span class="check-description">Stores the documents with DEFLATE (<span class="mono">index.codec: best_compression</span>): smaller, slower to fetch.</span>
+            </span>
+          </label>
+        </div>
+      </div>
+    </section>
+  </div>
+} @else {
+  @switch (store.sourceLookup().state) {
+    @case ('error') {
+      @if (store.sourceLookup(); as lookup) {
+        <div class="callout callout-danger" role="alert">
+          <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+          <div class="min-w-0">
+            <strong>{{ store.sourceCandidates().length > 0 ? 'Pick an index.' : 'Could not load ' + store.source() + '.' }}</strong> {{ lookup.state === 'error' ? lookup.reason : '' }}
+            <div class="ops-callout-actions row-wrap">
+              @for (name of store.sourceCandidates(); track name) {
+                <button type="button" class="chip-toggle mono" (click)="store.chooseSource(name)">{{ name }}</button>
+              } @empty {
+                <button type="button" class="btn btn-sm" (click)="store.retrySource()">
+                  <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    }
+    @case ('missing') {
+      <div class="callout callout-danger" role="alert">
+        <i class="bi bi-question-circle" aria-hidden="true"></i>
+        <div><strong>Index not found.</strong> No index named “{{ store.source() }}” exists. Go back and choose another one.</div>
+      </div>
+    }
+    @default {
+      <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Loading {{ store.source() }}…</div>
+    }
+  }
+}

@@ -2,9 +2,10 @@ name: build-and-security
 
 on:
   push:
-    branches: [master]
+    branches: [main]
+    tags: ["v*"]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 permissions:
   contents: read
@@ -19,6 +20,14 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      # The two container builds, their archives and Trivy's vulnerability
+      # databases need more room than a hosted runner leaves free.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h /
+
       - name: Check out source
         uses: actions/checkout@v4
 
@@ -46,12 +55,21 @@ jobs:
       - name: Report production-only npm audit
         run: npm audit --omit=dev --audit-level=high
 
+      # Runs after "Build frontend": public/js holds the bundle that is packaged.
+      # grep exits 0 on a match, 1 on no match and 2 on an error; only 1 passes.
       - name: Reject legacy vulnerable frontend bundles
         shell: bash
         run: |
-          if rg -n "AngularJS v1\.|angular\.module\(['\"]cerebro|ng-app=|ng-controller=|Bootstrap v3\." public; then
+          set +e
+          grep -rEn "AngularJS v1\.|angular\.module\(['\"]cerebro|ng-app=|ng-controller=|Bootstrap v3\." public
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
             echo "Legacy AngularJS or Bootstrap 3 content remains in packaged assets."
             exit 1
+          elif [ "$status" -ne 1 ]; then
+            echo "The legacy bundle check could not run (grep exit status $status)."
+            exit "$status"
           fi
 
       - name: Set up Java 17
@@ -94,15 +112,6 @@ jobs:
           --output type=docker,dest=/tmp/cerebro-amd64.tar
           .
 
-      - name: Build arm64 container archive
-        run: >-
-          docker buildx build
-          --platform linux/arm64
-          --provenance=false
-          --sbom=false
-          --output type=docker,dest=/tmp/cerebro-arm64.tar
-          .
-
       - name: Scan complete amd64 image at every severity
         run: >-
           docker run --rm
@@ -120,6 +129,18 @@ jobs:
           --exit-on-eol 1
           --exit-code 1
 
+      - name: Remove the amd64 archive
+        run: rm -f /tmp/cerebro-amd64.tar
+
+      - name: Build arm64 container archive
+        run: >-
+          docker buildx build
+          --platform linux/arm64
+          --provenance=false
+          --sbom=false
+          --output type=docker,dest=/tmp/cerebro-arm64.tar
+          .
+
       - name: Scan complete arm64 image at every severity
         run: >-
           docker run --rm
@@ -136,3 +157,141 @@ jobs:
           --ignorefile /dev/null
           --exit-on-eol 1
           --exit-code 1
+
+  # Runs only after "verify" passed on a push to main or a version tag, so an
+  # image is never published from code that failed its tests or scans.
+  publish:
+    name: Publish image
+    needs: verify
+    if: github.event_name == 'push' && github.repository == 'srdrcn/cerebro'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: publish-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Read the version from build.sbt
+        id: version
+        run: echo "version=$(sed -n 's/^version := "\(.*\)"$/\1/p' build.sbt)" >> "$GITHUB_OUTPUT"
+
+      - name: Check that the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ "${GITHUB_REF_NAME#v}" != "${{ steps.version.outputs.version }}" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match version ${{ steps.version.outputs.version }} in build.sbt."
+            exit 1
+          fi
+
+      - name: Check Docker Hub credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo "Add the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN repository secrets to publish images."
+            exit 1
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # main publishes "latest" and "sha-<commit>"; a tag vX.Y.Z publishes
+      # "X.Y.Z" and "X.Y".
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: chosenwar/cerebro
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push linux/amd64 and linux/arm64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: APP_VERSION=${{ steps.version.outputs.version }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # A version tag also becomes a GitHub release with the server package,
+  # once its image is published.
+  release:
+    name: GitHub release
+    needs: publish
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.repository == 'srdrcn/cerebro'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: npm
+
+      - name: Build frontend
+        run: npm ci && npm run build
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: sbt
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Package server
+        run: sbt -batch Universal/packageBin Universal/packageZipTarball
+
+      # The release notes are the version's section of CHANGES.md.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="### v$version" 'index($0, heading) == 1 { found = 1; next } found && /^### / { exit } found' CHANGES.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGES.md has no section for v$version."
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            "target/universal/cerebro-$version.zip" \
+            "target/universal/cerebro-$version.tgz" \
+            --title "cerebro $version" \
+            --notes-file release-notes.md \
+            --verify-tag

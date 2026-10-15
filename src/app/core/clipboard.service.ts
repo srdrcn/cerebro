@@ -1,9 +1,36 @@
 import { DOCUMENT } from '@angular/common';
 import { inject, Injectable } from '@angular/core';
+import { AlertService } from './alert.service';
+import { failureMessage } from './errors';
+
+/** "host address" → "Host address"; names such as "cURL command" keep their casing. */
+function capitalized(what: string): string {
+  const text = what.trim();
+  if (!text || /^.[A-Z]/.test(text)) {
+    return text;
+  }
+  return text.charAt(0).toLocaleUpperCase() + text.slice(1);
+}
 
 @Injectable({ providedIn: 'root' })
 export class ClipboardService {
   private readonly document = inject(DOCUMENT);
+  private readonly alerts = inject(AlertService);
+
+  /**
+   * Copies `value` and reports the outcome with the app-wide wording:
+   * "Host address copied to the clipboard" or "Could not copy the host
+   * address: <reason>". `what` names the copied thing in lower case
+   * ("request body", "task id", "filter of logs-read").
+   */
+  copyAndNotify(value: string, what: string): Promise<boolean> {
+    const noun = what.trim();
+    return this.copy(
+      value,
+      () => this.alerts.success(`${capitalized(noun)} copied to the clipboard`),
+      (error) => this.alerts.error(failureMessage(`Could not copy the ${noun}`, error), error),
+    );
+  }
 
   async copy(
     value: string,

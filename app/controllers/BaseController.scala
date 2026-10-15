@@ -1,7 +1,7 @@
 package controllers
 
 import controllers.auth.{AuthRequest, AuthenticationModule}
-import exceptions.MissingRequiredParamException
+import exceptions.{InvalidParamException, MissingRequiredParamException}
 import models.{CerebroRequest, CerebroResponse, Hosts}
 import play.api.Logger
 import play.api.libs.json._
@@ -32,7 +32,7 @@ trait BaseController extends InjectedController with AuthSupport {
           Future.successful(CerebroResponse(500, Json.obj("error" -> e.getMessage)))
       }
     } catch {
-      case e: MissingRequiredParamException =>
+      case e @ (_: MissingRequiredParamException | _: InvalidParamException) =>
         Future.successful(CerebroResponse(400, Json.obj("error" -> e.getMessage)))
       case NonFatal(e) =>
         logger.error(s"Error processing request [${formatRequest(request)}]", e)

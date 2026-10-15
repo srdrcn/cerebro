@@ -5,14 +5,13 @@ import java.text.SimpleDateFormat
 
 import javax.inject.Inject
 import controllers.auth.AuthenticationModule
-import dao.{DAOException, RestHistoryDAO, RestRequest}
+import dao.{RestHistoryDAO, RestRequest}
 import elastic.{ElasticClient, Error, Success}
 import models.rest.AutocompletionIndices
 import models.{CerebroResponse, Hosts}
 import play.api.libs.json.{JsArray, JsString, Json}
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.Try
 import scala.util.control.NonFatal
 import play.api.Logger
 
@@ -34,9 +33,8 @@ class RestController @Inject()(val authentication: AuthenticationModule,
           case other => other.toString()
         }.getOrElse("{}")
         val username = request.user.map(_.name).getOrElse("")
-        Try(restHistoryDAO.save(RestRequest(path, method, bodyAsString, username, new Date(System.currentTimeMillis)))).recover {
-          case DAOException(msg, e) => logger.error(msg, e)
-        }
+        restHistoryDAO.save(RestRequest(path, method, bodyAsString, username, new Date(System.currentTimeMillis)))
+          .failed.foreach(e => logger.error("Error saving REST history", e))
         CerebroResponse(s.status, s.body)
 
       case e: Error => CerebroResponse(e.status, e.body)
@@ -58,7 +56,6 @@ class RestController @Inject()(val authentication: AuthenticationModule,
   }
 
   def history = process { request =>
-    implicit val writes = Json.writes[RestRequest]
     val dateFormat = new SimpleDateFormat("dd/MM HH:mm:ss")
     restHistoryDAO.all(request.user.map(_.name).getOrElse("")).map {
       case requests =>
@@ -73,7 +70,7 @@ class RestController @Inject()(val authentication: AuthenticationModule,
         CerebroResponse(200, JsArray(body))
     }.recover {
       case NonFatal(e) =>
-        CerebroResponse(500, Json.obj("Error" -> JsString(s"Error while loading requests history: ${e.getMessage}")))
+        CerebroResponse(500, Json.obj("error" -> JsString(s"Error while loading requests history: ${e.getMessage}")))
     }
   }
 

@@ -1,0 +1,622 @@
+<section class="page rest-page" aria-labelledby="rest-title" (keydown)="onPageKeydown($event)">
+  <header class="page-header rest-header">
+    <div class="page-header__text">
+      <h1 id="rest-title" class="page-title">REST console</h1>
+      <p class="page-subtitle">Send any request to the cluster and inspect the raw response.</p>
+    </div>
+    <div class="page-header__actions rest-shortcuts" aria-hidden="true">
+      <span class="shortcut"><kbd>{{ modKey }}</kbd><kbd>Enter</kbd> send</span>
+      <span class="shortcut"><kbd>{{ modKey }}</kbd><kbd>Shift</kbd><kbd>F</kbd> format</span>
+      <span class="shortcut"><kbd>{{ modKey }}</kbd><kbd>S</kbd> save</span>
+    </div>
+  </header>
+
+  <form class="request-bar" aria-label="Request" (submit)="$event.preventDefault(); send()">
+    <cerebro-menu
+      [label]="'HTTP method: ' + method()"
+      [triggerClass]="'method-trigger method-trigger--' + method()"
+      [tooltip]="false"
+      [minWidth]="220"
+    >
+      <span trigger class="method-trigger__content">
+        {{ method() }}
+        <i class="bi bi-chevron-down" aria-hidden="true"></i>
+      </span>
+      <div class="menu-label">HTTP method</div>
+      @for (option of methodOptions; track option.method) {
+        <button
+          type="button"
+          class="menu-item"
+          role="menuitemradio"
+          [attr.aria-checked]="option.method === method()"
+          (click)="setMethod(option.method)"
+        >
+          <span class="method" [class]="'method method-' + option.method">{{ option.method }}</span>
+          <span class="method-option__text">{{ option.description }}</span>
+          <i
+            class="bi method-option__check"
+            [class.bi-check2]="option.method === method()"
+            aria-hidden="true"
+          ></i>
+        </button>
+      }
+    </cerebro-menu>
+
+    <div class="path-combobox">
+      <div class="path-field" [class.is-open]="showSuggestions()">
+        @if (prefix()) {
+          <span class="path-field__prefix mono" [title]="endpoint()" aria-hidden="true">{{ prefix() }}</span>
+        }
+        <label for="rest-path" class="visually-hidden">Request path</label>
+        <input
+          #pathInput
+          id="rest-path"
+          class="path-field__input mono"
+          type="text"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="rest-path-suggestions"
+          [attr.aria-expanded]="showSuggestions()"
+          [attr.aria-activedescendant]="activeOptionId()"
+          aria-describedby="rest-path-help"
+          placeholder="_cluster/health or products/_search"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          [value]="path()"
+          (input)="onPathInput(pathInput.value)"
+          (focus)="openSuggestions()"
+          (click)="openSuggestions()"
+          (blur)="closeSuggestions()"
+          (keydown)="onPathKeydown($event)"
+        />
+        @if (path()) {
+          <button
+            type="button"
+            class="path-field__clear"
+            aria-label="Clear path"
+            title="Clear path"
+            (click)="clearPath(pathInput)"
+          >
+            <i class="bi bi-x" aria-hidden="true"></i>
+          </button>
+        }
+      </div>
+      <span id="rest-path-help" class="visually-hidden">
+        Use the up and down arrow keys to pick a suggestion and Enter to accept it.
+      </span>
+      <!-- Options are reached through aria-activedescendant on the input, so the
+           scrollable list stays out of the tab order (Chrome would otherwise make
+           it a tab stop that disappears as soon as the input loses focus). -->
+      <ul
+        id="rest-path-suggestions"
+        class="suggestions"
+        role="listbox"
+        aria-label="Path suggestions"
+        tabindex="-1"
+        [hidden]="!showSuggestions()"
+        (mousedown)="$event.preventDefault()"
+      >
+        @for (option of suggestions(); track $index; let index = $index) {
+          <li
+            class="suggestion"
+            role="option"
+            [id]="'rest-path-option-' + index"
+            [attr.aria-selected]="index === activeSuggestion()"
+            [class.is-active]="index === activeSuggestion()"
+            (mouseenter)="activeSuggestion.set(index)"
+            (click)="acceptSuggestion(option)"
+          >
+            <i class="bi" [class]="'bi ' + suggestionIcon(option)" aria-hidden="true"></i>
+            <span class="suggestion__text mono">
+              @let parts = splitSuggestion(option);
+              <span class="suggestion__typed">{{ parts.typed }}</span><span class="suggestion__completion">{{ parts.completion }}</span>
+            </span>
+            @if (index === activeSuggestion()) {
+              <kbd class="suggestion__hint" aria-hidden="true">Enter</kbd>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+
+    <button
+      type="button"
+      class="btn save-button"
+      aria-label="Save request"
+      [title]="saveTitle()"
+      (click)="openSaveDialog()"
+    >
+      <i class="bi bi-bookmark-plus" aria-hidden="true"></i>
+      <span class="save-button__label">Save</span>
+    </button>
+
+    <button
+      #sendButton
+      type="submit"
+      class="btn btn-primary send-button"
+      [class.is-loading]="sending()"
+      [disabled]="sending()"
+      [attr.aria-busy]="sending()"
+      aria-label="Send request"
+      [title]="'Send request (' + modKey + '+Enter)'"
+    >
+      <i class="bi bi-send-fill" aria-hidden="true"></i>
+      <span class="send-button__label">Send</span>
+    </button>
+  </form>
+
+  @if (linked(); as current) {
+    <div class="saved-context" [class.is-dirty]="linkedDirty()" role="group" aria-label="Loaded saved request">
+      <i class="bi saved-context__icon" [class]="linkedDirty() ? 'bi saved-context__icon bi-bookmark' : 'bi saved-context__icon bi-bookmark-check-fill'" aria-hidden="true"></i>
+      <span class="saved-context__label">Saved request</span>
+      <strong class="saved-context__name" [title]="current.name">{{ current.name }}</strong>
+      <span class="saved-context__state" aria-live="polite">
+        @if (linkedDirty()) {
+          <span class="saved-context__dirty" title="The editor differs from the saved request">
+            <span class="dot dot-yellow dot-sm" aria-hidden="true"></span>
+            <span class="saved-context__dirty-text">Unsaved changes</span>
+          </span>
+        } @else {
+          <span class="saved-context__clean">Up to date</span>
+        }
+      </span>
+      <span class="saved-context__actions">
+        @if (linkedDirty()) {
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            aria-label="Revert to the saved version"
+            title="Put the saved version back into the editor"
+            (click)="revertLinked()"
+          >
+            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+            <span class="saved-context__action-label">Revert</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-soft btn-sm"
+            aria-label="Update saved request"
+            [title]="'Save the changes to “' + current.name + '” (' + modKey + '+S)'"
+            (click)="updateLinked()"
+          >
+            <i class="bi bi-check2" aria-hidden="true"></i>
+            <span>Update<span class="saved-context__action-label"> saved request</span></span>
+          </button>
+        }
+        <button
+          type="button"
+          class="btn btn-ghost btn-icon btn-sm"
+          aria-label="Stop tracking this saved request"
+          title="Stop tracking this saved request (the editor keeps its content)"
+          (click)="unlink()"
+        >
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+      </span>
+    </div>
+  }
+
+  <div class="rest-workspace">
+    <!-- Request -->
+    <section class="card pane request-pane" aria-label="Request">
+      <div class="pane-header">
+        <div class="tabs pane-tabs" role="tablist" aria-label="Request panels">
+          <button
+            type="button"
+            role="tab"
+            id="rest-tab-body"
+            aria-controls="rest-panel-body"
+            [attr.aria-selected]="tab() === 'body'"
+            [attr.tabindex]="tab() === 'body' ? 0 : -1"
+            (click)="tab.set('body')"
+            (keydown)="onTabKeydown($event)"
+          >
+            <i class="bi bi-braces" aria-hidden="true"></i> Body
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="rest-tab-history"
+            aria-controls="rest-panel-history"
+            [attr.aria-selected]="tab() === 'history'"
+            [attr.tabindex]="tab() === 'history' ? 0 : -1"
+            (click)="tab.set('history')"
+            (keydown)="onTabKeydown($event)"
+          >
+            <i class="bi bi-clock-history" aria-hidden="true"></i> History
+            @if (history(); as all) {
+              <span class="badge">{{ all.length }}</span>
+            } @else if (historyLoading()) {
+              <span class="spinner tab-spinner" aria-hidden="true"></span>
+            }
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="rest-tab-saved"
+            aria-controls="rest-panel-saved"
+            [attr.aria-selected]="tab() === 'saved'"
+            [attr.tabindex]="tab() === 'saved' ? 0 : -1"
+            (click)="tab.set('saved')"
+            (keydown)="onTabKeydown($event)"
+          >
+            <i class="bi bi-bookmark" aria-hidden="true"></i> Saved
+            @if (saved.count() > 0) {
+              <span class="badge">{{ saved.count() }}</span>
+            }
+          </button>
+        </div>
+
+        @if (tab() === 'body') {
+          <div class="pane-actions">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              aria-label="Format body"
+              [title]="rawText() ? 'Plain-text bodies are sent exactly as typed' : 'Pretty-print the body (' + modKey + '+Shift+F)'"
+              [disabled]="bodyState().kind === 'empty' || bodyState().kind === 'text'"
+              (click)="formatBody()"
+            >
+              <i class="bi bi-text-indent-left" aria-hidden="true"></i>
+              <span class="pane-actions__label">Format</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              aria-label="Copy as cURL"
+              title="Copy this request as a cURL command (credentials are not included)"
+              (click)="copyAsCurl()"
+            >
+              <i class="bi bi-terminal" aria-hidden="true"></i>
+              <span class="pane-actions__label pane-actions__label--long">Copy as cURL</span>
+              <span class="pane-actions__label pane-actions__label--short" aria-hidden="true">cURL</span>
+            </button>
+            <cerebro-menu label="More body actions" align="end">
+              <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+              <button type="button" class="menu-item" (click)="copyBody()" [disabled]="bodyState().kind === 'empty'">
+                <i class="bi bi-clipboard" aria-hidden="true"></i> Copy body
+              </button>
+              <button type="button" class="menu-item menu-item--danger" (click)="clearBody()" [disabled]="bodyState().kind === 'empty'">
+                <i class="bi bi-eraser" aria-hidden="true"></i> Clear body
+              </button>
+            </cerebro-menu>
+          </div>
+        } @else if (tab() === 'saved') {
+          <div class="pane-actions">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              aria-label="Import saved requests"
+              title="Import saved requests from a JSON file"
+              [class.is-loading]="importing()"
+              [disabled]="importing()"
+              (click)="chooseImportFile()"
+            >
+              <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>
+              <span class="pane-actions__label">Import</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              aria-label="Export saved requests"
+              title="Download every saved request as a JSON file"
+              [disabled]="saved.count() === 0"
+              (click)="exportSaved()"
+            >
+              <i class="bi bi-box-arrow-up" aria-hidden="true"></i>
+              <span class="pane-actions__label">Export</span>
+            </button>
+          </div>
+        } @else {
+          <div class="pane-actions">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-icon"
+              aria-label="Reload history"
+              title="Reload history"
+              [disabled]="historyLoading()"
+              (click)="loadHistory()"
+            >
+              <i class="bi bi-arrow-clockwise" [class.is-spinning]="historyLoading()" aria-hidden="true"></i>
+            </button>
+          </div>
+        }
+      </div>
+
+      <div
+        id="rest-panel-body"
+        class="pane-panel"
+        role="tabpanel"
+        aria-labelledby="rest-tab-body"
+        [hidden]="tab() !== 'body'"
+      >
+        <div class="pane-editor" data-rest-body-editor>
+          <cerebro-code-editor
+            #bodyEditor
+            [fill]="true"
+            [flush]="true"
+            [value]="body()"
+            (valueChange)="body.set($event)"
+            [placeholder]="bodyPlaceholder()"
+            [mode]="rawText() ? 'text' : 'json'"
+            ariaLabel="Request body"
+            (submit)="send()"
+          />
+        </div>
+        <div class="status-bar">
+          @switch (bodyState().kind) {
+            @case ('empty') {
+              <span class="status-bar__item text-muted">
+                <i class="bi bi-dash-circle" aria-hidden="true"></i> No body — the request is sent without one
+              </span>
+            }
+            @case ('json') {
+              <span class="status-bar__item text-success">
+                <i class="bi bi-check-circle" aria-hidden="true"></i> Valid JSON
+              </span>
+            }
+            @case ('ndjson') {
+              <span class="status-bar__item text-success">
+                <i class="bi bi-check-circle" aria-hidden="true"></i> {{ ndjsonLines() }}
+              </span>
+            }
+            @case ('text') {
+              <span class="status-bar__item text-muted">
+                <i class="bi bi-file-earmark-text" aria-hidden="true"></i> {{ textLines() }}
+              </span>
+            }
+            @case ('invalid') {
+              <span class="status-bar__item text-danger" [title]="invalidMessage()">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                <span class="truncate">{{ invalidMessage() }}</span>
+              </span>
+            }
+          }
+          @if (ndjson()) {
+            <span class="status-bar__item status-bar__ndjson" title="_bulk and _msearch bodies are newline-delimited JSON: one JSON object per line, ending with a newline (added automatically).">
+              <span class="badge badge-blue">NDJSON</span>
+              <span class="status-bar__hint">One JSON object per line</span>
+            </span>
+          } @else if (rawText()) {
+            <span class="status-bar__item status-bar__ndjson" title="This API analyses arbitrary text: the body is sent exactly as typed.">
+              <span class="badge badge-blue">TEXT</span>
+              <span class="status-bar__hint">Sent as typed</span>
+            </span>
+          }
+        </div>
+      </div>
+
+      <div
+        id="rest-panel-history"
+        class="pane-panel"
+        role="tabpanel"
+        aria-labelledby="rest-tab-history"
+        [hidden]="tab() !== 'history'"
+      >
+        <div class="history-toolbar">
+          <cerebro-search
+            [(value)]="historyQuery"
+            [small]="true"
+            placeholder="Filter by method, path or body"
+            ariaLabel="Filter request history"
+          />
+          @if (history(); as all) {
+            <span class="count-label">
+              @if (historyQuery().trim()) {
+                <strong>{{ visibleHistory().length | num }}</strong> of {{ pluralize(all.length, 'request') }}
+              } @else {
+                <strong>{{ all.length | num }}</strong> {{ all.length | plural: 'request' }}
+              }
+            </span>
+          }
+        </div>
+        <div class="history-scroll">
+          @if (history(); as all) {
+            @if (all.length === 0) {
+              <cerebro-empty
+                icon="bi-clock-history"
+                heading="No requests yet"
+                text="Successful requests are saved here so you can run them again."
+              />
+            } @else if (visibleHistory().length === 0) {
+              <cerebro-empty icon="bi-search" heading="No matching requests" [compact]="true">
+                <button type="button" class="btn btn-sm" (click)="historyQuery.set('')">Clear filter</button>
+              </cerebro-empty>
+            } @else {
+              <ul class="list" aria-label="Previous requests">
+                @for (entry of visibleHistory(); track $index) {
+                  <li>
+                    <button
+                      type="button"
+                      class="list-item list-item--interactive history-item"
+                      [title]="'Restore ' + entry.method + ' ' + entry.path"
+                      (click)="restore(entry)"
+                    >
+                      <span class="method" [class]="'method method-' + entry.method">{{ entry.method }}</span>
+                      <span class="history-item__body">
+                        <span class="history-item__path mono">{{ entry.path }}</span>
+                        @let preview = previewOf(entry);
+                        @if (preview) {
+                          <span class="history-item__preview mono">{{ preview }}</span>
+                        }
+                      </span>
+                      <time class="history-item__time tabular">{{ entry.created_at }}</time>
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          } @else if (historyFailed()) {
+            <cerebro-empty
+              icon="bi-exclamation-triangle"
+              heading="Could not load history"
+              text="Cerebro could not read the request history."
+            >
+              <button type="button" class="btn btn-sm" (click)="loadHistory()">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+              </button>
+            </cerebro-empty>
+          } @else {
+            <div class="loading-block"><span class="spinner" aria-hidden="true"></span> Loading history…</div>
+          }
+        </div>
+      </div>
+
+      <div
+        id="rest-panel-saved"
+        class="pane-panel"
+        role="tabpanel"
+        aria-labelledby="rest-tab-saved"
+        [hidden]="tab() !== 'saved'"
+      >
+        <cerebro-rest-saved
+          [modKey]="modKey"
+          [dirty]="linkedDirty()"
+          (load)="loadSaved($event)"
+          (rename)="openRenameDialog($event)"
+          (saveCurrent)="openSaveDialog()"
+          (importFile)="chooseImportFile()"
+        />
+      </div>
+    </section>
+
+    <!-- Response -->
+    <section #responsePane class="card pane response-pane" aria-labelledby="rest-response-title" [attr.aria-busy]="sending()">
+      <div class="pane-header">
+        <div class="response-header__main">
+          <h2 id="rest-response-title" class="response-title">Response</h2>
+          @if (response(); as result) {
+            <span
+              class="badge badge-lg status-badge"
+              [class]="'badge badge-lg status-badge ' + toneClass(result.status)"
+              role="status"
+            >
+              <span class="dot dot-sm" [class]="'dot dot-sm dot-' + statusToneOf(result.status)" aria-hidden="true"></span>
+              {{ result.status ?? '—' }} {{ statusLabel(result.status) }}
+            </span>
+            @if (result.status !== null) {
+              <span class="response-meta tabular">
+                <span title="Round-trip time through Cerebro"><i class="bi bi-stopwatch" aria-hidden="true"></i> {{ elapsedLabel(result.elapsedMs) }}</span>
+                <span class="response-meta__size" title="Response size"><i class="bi bi-file-earmark-text" aria-hidden="true"></i> {{ result.bytes | bytes }}</span>
+              </span>
+            }
+          }
+        </div>
+        <div class="pane-actions">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-icon"
+            [attr.aria-pressed]="wrapResponse()"
+            [class.is-pressed]="wrapResponse()"
+            aria-label="Wrap long lines"
+            title="Wrap long lines"
+            (click)="toggleWrap()"
+          >
+            <i class="bi bi-text-wrap" aria-hidden="true"></i>
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            aria-label="Copy response"
+            title="Copy the response"
+            [disabled]="!response()"
+            (click)="copyResponse()"
+          >
+            <i class="bi bi-clipboard" aria-hidden="true"></i>
+            <span class="pane-actions__label">Copy</span>
+          </button>
+        </div>
+        @if (sending()) {
+          <span class="progress-line" aria-hidden="true"></span>
+        }
+      </div>
+
+      @if (response(); as result) {
+        <div class="response-request">
+          <span class="method" [class]="'method method-' + result.method">{{ result.method }}</span>
+          <span class="mono truncate" [title]="result.path">/{{ result.path }}</span>
+        </div>
+        @if (result.hint) {
+          <div class="callout callout-warning response-hint">
+            <i class="bi bi-lightbulb" aria-hidden="true"></i>
+            <div class="response-hint__body">
+              <span>{{ result.hint }}</span>
+              @if (canUseJsonFormat()) {
+                <button type="button" class="link-button" [disabled]="sending()" (click)="useJsonFormat()">
+                  Retry with ?format=json <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                </button>
+              }
+            </div>
+          </div>
+        }
+        <div class="pane-editor" [class.is-stale]="sending()">
+          <cerebro-code-editor
+            [fill]="true"
+            [flush]="true"
+            [readOnly]="true"
+            [wrap]="wrapResponse()"
+            [mode]="result.json ? 'json' : 'text'"
+            [value]="result.text"
+            ariaLabel="Response body"
+          />
+        </div>
+      } @else if (sending()) {
+        <div class="pane-center">
+          <div class="loading-block"><span class="spinner spinner-lg" aria-hidden="true"></span> Waiting for Elasticsearch…</div>
+        </div>
+      } @else {
+        <div class="pane-center">
+          <cerebro-empty
+            icon="bi-send"
+            heading="Send a request to see the response"
+            text="Pick a method, type a path and press Send — or start from an example."
+          >
+            <div class="quick-starts" role="group" aria-label="Example requests">
+              @for (example of quickStarts; track example.label) {
+                <button type="button" class="quick-start" (click)="useExample(example)">
+                  <span class="quick-start__label">{{ example.label }}</span>
+                  <span class="quick-start__request">
+                    <span class="method" [class]="'method method-' + example.method">{{ example.method }}</span>
+                    <span class="mono truncate">{{ example.path }}</span>
+                  </span>
+                </button>
+              }
+            </div>
+          </cerebro-empty>
+        </div>
+      }
+    </section>
+  </div>
+
+  <input
+    #importInput
+    type="file"
+    class="visually-hidden"
+    accept="application/json,.json"
+    tabindex="-1"
+    aria-hidden="true"
+    (change)="onImportFile(importInput)"
+  />
+
+  @if (nameDialog(); as dialog) {
+    <cerebro-rest-name-dialog
+      [mode]="dialog.mode"
+      [initialName]="dialog.initialName"
+      [renaming]="dialog.renaming"
+      [request]="dialog.request"
+      [requests]="saved.requests()"
+      (submitted)="onNameSubmitted(dialog, $event)"
+      (closed)="nameDialog.set(null)"
+    />
+  }
+
+  @if (importState(); as state) {
+    <cerebro-rest-import-dialog
+      [plan]="state.plan"
+      [fileName]="state.fileName"
+      (confirmed)="onImportConfirmed(state, $event)"
+      (closed)="importState.set(null)"
+    />
+  }
+</section>

@@ -1,0 +1,228 @@
+<div class="auth-page">
+  <div class="auth-topbar">
+    <button
+      type="button"
+      class="btn btn-ghost btn-icon"
+      [attr.aria-label]="themeLabel()"
+      [title]="themeLabel()"
+      (click)="theme.set(theme.resolved() === 'dark' ? 'light' : 'dark')"
+    >
+      <i class="bi" [class.bi-sun]="theme.resolved() === 'dark'" [class.bi-moon-stars]="theme.resolved() !== 'dark'" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <main class="auth-shell" aria-labelledby="connect-title">
+    <header class="auth-brand">
+      <span class="auth-brand__mark"><cerebro-logo /></span>
+      <div>
+        <h1 id="connect-title">cere<span>bro</span></h1>
+        <p>Elasticsearch administration console</p>
+      </div>
+    </header>
+
+    <section class="auth-card" aria-label="Cluster connection">
+      @if (!unauthorized()) {
+        <div class="auth-card__header">
+          <h2 class="auth-card__title">Connect to a cluster</h2>
+        </div>
+        <div class="auth-card__body">
+          @if (feedback(); as message) {
+            <div class="callout callout-danger" role="alert">
+              <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
+              <div>{{ message }}</div>
+            </div>
+          }
+
+          @if (hosts().length > 0) {
+            <div>
+              <div class="auth-section-label">Configured clusters</div>
+              <div class="cluster-options">
+                @for (knownHost of hosts(); track knownHost) {
+                  <button
+                    type="button"
+                    class="cluster-option"
+                    [disabled]="connecting() !== undefined"
+                    (click)="connectTo(knownHost)"
+                  >
+                    <span class="cluster-option__icon" aria-hidden="true"><i class="bi bi-hdd-network"></i></span>
+                    <span class="cluster-option__body">
+                      <span class="cluster-option__name">{{ knownHost }}</span>
+                    </span>
+                    @if (connecting() === knownHost) {
+                      <span class="spinner" aria-label="Connecting"></span>
+                    } @else {
+                      <i class="bi bi-arrow-right cluster-option__arrow" aria-hidden="true"></i>
+                    }
+                  </button>
+                }
+              </div>
+            </div>
+          } @else if (loadingHosts()) {
+            <div class="stack-sm" aria-hidden="true">
+              <span class="skeleton" style="height: 54px"></span>
+            </div>
+          }
+
+          @if (recent().length > 0) {
+            <div>
+              <div class="auth-section-label">
+                <span>Recent</span>
+              </div>
+              <div class="cluster-options">
+                @for (recentHost of recent(); track recentHost) {
+                  <div class="recent-option">
+                    <button
+                      type="button"
+                      class="cluster-option"
+                      [disabled]="connecting() !== undefined"
+                      (click)="connectTo(recentHost)"
+                    >
+                      <span class="cluster-option__icon" aria-hidden="true"><i class="bi bi-clock-history"></i></span>
+                      <span class="cluster-option__body">
+                        <span class="cluster-option__meta">{{ recentHost }}</span>
+                      </span>
+                      @if (connecting() === recentHost) {
+                        <span class="spinner" aria-label="Connecting"></span>
+                      } @else {
+                        <i class="bi bi-arrow-right cluster-option__arrow" aria-hidden="true"></i>
+                      }
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-icon btn-sm recent-option__remove"
+                      [attr.aria-label]="'Forget ' + recentHost"
+                      title="Forget"
+                      (click)="recentHosts.forget(recentHost)"
+                    >
+                      <i class="bi bi-x" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          @if (hosts().length > 0 || recent().length > 0) {
+            <div class="auth-divider">or enter a node address</div>
+          }
+
+          <form class="stack-sm" (ngSubmit)="submitHost()">
+            <label class="field-label" for="host">Node address</label>
+            <div class="connect-row">
+              <input
+                id="host"
+                name="host"
+                class="input"
+                [class.is-invalid]="hostError()"
+                [attr.aria-invalid]="hostError() ? true : null"
+                [attr.aria-describedby]="hostError() ? 'host-error' : null"
+                type="text"
+                inputmode="url"
+                autocomplete="url"
+                spellcheck="false"
+                placeholder="http://localhost:9200"
+                required
+                [ngModel]="host()"
+                (ngModelChange)="host.set($event)"
+              />
+              <button
+                type="submit"
+                class="btn btn-primary"
+                [class.is-loading]="connecting() !== undefined && connecting() === host().trim()"
+                [disabled]="connecting() !== undefined"
+              >
+                Connect
+                <i class="bi bi-arrow-right" aria-hidden="true"></i>
+              </button>
+            </div>
+            @if (hostError()) {
+              <p id="host-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Enter the address of an Elasticsearch node</p>
+            }
+          </form>
+        </div>
+      } @else {
+        <div class="auth-card__header">
+          <button
+            type="button"
+            class="btn btn-ghost btn-icon btn-sm"
+            aria-label="Back to cluster selection"
+            (click)="cancelAuthorization()"
+          >
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>
+          </button>
+          <h2 class="auth-card__title">Authentication required</h2>
+        </div>
+        <div class="auth-card__body">
+          <div class="auth-target">
+            <i class="bi bi-shield-lock text-muted" aria-hidden="true"></i>
+            <span class="auth-target__host" [title]="host()">{{ host() }}</span>
+          </div>
+
+          @if (feedback(); as message) {
+            <div class="callout callout-danger" role="alert">
+              <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
+              <div>{{ message }}</div>
+            </div>
+          }
+
+          <form class="auth-form" (ngSubmit)="authorize()">
+            <div class="field">
+              <label class="field-label" for="username">Username</label>
+              <input
+                id="username"
+                name="username"
+                class="input"
+                type="text"
+                autocomplete="username"
+                required
+                placeholder="elastic"
+                [class.is-invalid]="usernameError()"
+                [attr.aria-invalid]="usernameError() ? true : null"
+                [attr.aria-describedby]="usernameError() ? 'username-error' : null"
+                [ngModel]="username()"
+                (ngModelChange)="username.set($event)"
+              />
+              @if (usernameError()) {
+                <p id="username-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Enter a username</p>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label" for="password">Password</label>
+              <input
+                id="password"
+                name="password"
+                class="input"
+                type="password"
+                autocomplete="current-password"
+                required
+                [class.is-invalid]="passwordError()"
+                [attr.aria-invalid]="passwordError() ? true : null"
+                [attr.aria-describedby]="passwordError() ? 'password-error' : null"
+                [ngModel]="password()"
+                (ngModelChange)="password.set($event)"
+              />
+              @if (passwordError()) {
+                <p id="password-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Enter a password</p>
+              }
+            </div>
+            <button
+              type="submit"
+              class="btn btn-primary btn-block"
+              [class.is-loading]="connecting() !== undefined"
+              [disabled]="connecting() !== undefined"
+            >
+              Authenticate
+            </button>
+          </form>
+        </div>
+      }
+      <div class="auth-card__footer">
+        Credentials are only kept in memory for this browser tab.
+      </div>
+    </section>
+
+    @if (appVersion) {
+      <p class="auth-footnote">cerebro {{ appVersion }}</p>
+    }
+  </main>
+</div>

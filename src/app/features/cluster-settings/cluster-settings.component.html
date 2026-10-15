@@ -1,0 +1,75 @@
+<section class="page" aria-labelledby="cluster-settings-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="cluster-settings-title" class="page-title">Cluster settings</h1>
+      <p class="page-subtitle">Dynamic settings apply to the whole cluster immediately, without a restart.</p>
+    </div>
+    @if (rows()) {
+      <div class="page-header__actions">
+        <div class="row" role="group" aria-label="Explicitly set settings">
+          <span class="badge badge-lg badge-blue tabular">{{ overrides().persistent | num }} persistent</span>
+          <span class="badge badge-lg badge-purple tabular">{{ overrides().transient | num }} transient</span>
+        </div>
+        <button
+          type="button"
+          class="btn"
+          [class.is-loading]="reloading()"
+          [disabled]="reloading()"
+          title="Read the settings again (they are not refreshed automatically)"
+          (click)="reload()"
+        >
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Reload
+        </button>
+      </div>
+    }
+  </header>
+
+  @if (rows(); as all) {
+    @if (transientSettings().length > 0) {
+      <div class="callout callout-warning transient-callout" role="note">
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        <div class="transient-callout__text">
+          <strong>{{ pluralize(transientSettings().length, 'transient setting') }} {{ transientSettings().length | plural: 'is' : 'are' }} active.</strong>
+          Transient settings are deprecated and are cleared on a full cluster restart; consider saving them as
+          persistent settings instead.
+        </div>
+        @if (unstagedTransient().length > 0) {
+          <button type="button" class="btn btn-sm transient-callout__action" [disabled]="saving()" (click)="moveAllToPersistent()">
+            <i class="bi bi-arrow-right" aria-hidden="true"></i>
+            {{ unstagedTransient().length === transientSettings().length ? 'Make persistent' : 'Make the others persistent' }}
+          </button>
+        }
+      </div>
+    }
+
+    <cerebro-settings-editor
+      label="Cluster settings"
+      preferenceKey="cerebro.cluster-settings"
+      noOverridesText="No persistent or transient setting is set: every setting uses its default value."
+      [rows]="all"
+      [(drafts)]="drafts"
+      [scoped]="true"
+      [grouping]="grouping"
+      [addSuggestions]="addSuggestions"
+      addDescription="Stage a value for a setting that is not listed, such as an allocation filter or a logger."
+      [errors]="errors()"
+      [saving]="saving()"
+      (review)="review($event)"
+      (save)="save($event)"
+    />
+  } @else if (failed()) {
+    <div class="card">
+      <cerebro-empty
+        icon="bi-exclamation-triangle"
+        heading="Could not load cluster settings"
+        [text]="loadError() ?? 'The cluster did not answer the cluster settings request.'"
+      >
+        <button type="button" class="btn btn-sm" (click)="retry()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
+    </div>
+  } @else {
+    <cerebro-settings-skeleton label="Loading cluster settings" />
+  }
+</section>

@@ -1,0 +1,233 @@
+<section class="page" aria-labelledby="ops-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="ops-title" class="page-title">Index operations</h1>
+      <p class="page-subtitle">Shrink, split, clone, roll over or reindex, with live checks before anything changes.</p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn" routerLink="/tasks" [queryParams]="connection.hostQuery()">
+        <i class="bi bi-activity" aria-hidden="true"></i> Tasks
+      </a>
+      @if (store.operation() && !store.running()) {
+        <button type="button" class="btn btn-ghost" (click)="startOver()">
+          <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Start over
+        </button>
+      }
+    </div>
+  </header>
+
+  <p class="visually-hidden" role="status" aria-live="polite">{{ store.announcement() }}</p>
+
+  <nav class="ops-stepper" aria-label="Wizard steps">
+    <ol class="ops-stepper__list">
+      @for (step of steps; track step.key; let i = $index) {
+        <li class="ops-stepper__item" [class.is-current]="i === stepIndex()" [class.is-done]="i < stepIndex()">
+          <button
+            type="button"
+            class="ops-stepper__button"
+            [disabled]="!canVisit(i)"
+            [attr.aria-current]="i === stepIndex() ? 'step' : null"
+            (click)="visit(step.key, i)"
+          >
+            <span class="ops-stepper__marker" aria-hidden="true">
+              @if (i < stepIndex()) {
+                <i class="bi bi-check-lg"></i>
+              } @else {
+                {{ i + 1 }}
+              }
+            </span>
+            <span class="ops-stepper__text">
+              <span class="ops-stepper__label">
+                {{ step.label }}
+                @if (i < stepIndex()) {
+                  <span class="visually-hidden">(done)</span>
+                }
+              </span>
+              @if (i <= stepIndex() && stepValues()[step.key]) {
+                <span class="ops-stepper__value" [class.mono]="step.key === 'source'">{{ stepValues()[step.key] }}</span>
+              }
+            </span>
+          </button>
+        </li>
+      }
+    </ol>
+  </nav>
+
+  @if (store.catalogError() && store.indices() === undefined) {
+    <div class="card">
+      <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load the cluster's indices" [text]="store.catalogError() ?? ''">
+        <button type="button" class="btn btn-sm" (click)="store.retryCatalog()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
+    </div>
+  } @else {
+    <div class="ops-layout" [class.layout-sidebar-end]="store.step() !== 'operation'">
+      <div class="card card--sticky-footer ops-card min-w-0">
+        <div class="card-header">
+          <div class="row min-w-0">
+            <span class="card-icon" aria-hidden="true"><i class="bi" [class]="'bi ' + heading().icon"></i></span>
+            <div class="min-w-0">
+              <h2 id="ops-step-title" class="card-title" tabindex="-1">{{ heading().title }}</h2>
+              <p class="card-subtitle">{{ heading().subtitle }}</p>
+            </div>
+          </div>
+          <span class="ops-step-count text-xs text-muted">Step {{ stepIndex() + 1 }} of {{ steps.length }}</span>
+        </div>
+
+        <div class="card-body">
+          @switch (store.step()) {
+            @case ('operation') {
+              <cerebro-ops-operation-step (chosen)="advance('source')" />
+            }
+            @case ('source') {
+              <cerebro-ops-source-step />
+            }
+            @case ('options') {
+              @switch (store.operation()) {
+                @case ('rollover') {
+                  <cerebro-ops-rollover-options />
+                }
+                @case ('reindex') {
+                  <cerebro-ops-reindex-options />
+                }
+                @default {
+                  <cerebro-ops-resize-options />
+                }
+              }
+            }
+            @case ('review') {
+              <cerebro-ops-review-step />
+            }
+            @case ('run') {
+              <cerebro-ops-run-step />
+            }
+          }
+        </div>
+
+        @if (showFooter()) {
+          <div class="card-footer card-footer--between ops-footer">
+            <div class="ops-footer__start">
+              @if (store.step() === 'run') {
+                @if (canRetry()) {
+                  <button type="button" class="btn" (click)="retry()">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i> Back to review
+                  </button>
+                  <button type="button" class="btn" (click)="changeOptions()">
+                    <i class="bi bi-sliders" aria-hidden="true"></i> Change options
+                  </button>
+                }
+              } @else if (stepIndex() > 0) {
+                <button type="button" class="btn" (click)="back()">
+                  <i class="bi bi-arrow-left" aria-hidden="true"></i> Back
+                </button>
+              }
+            </div>
+            <div class="ops-footer__end">
+              @if (blocked()) {
+                <p class="ops-blocked" role="alert">
+                  <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ blocked() }}
+                </p>
+              }
+              @switch (store.step()) {
+                @case ('operation') {
+                  @if (store.operation()) {
+                    <button type="button" class="btn btn-primary" (click)="continue()">
+                      Continue <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                    </button>
+                  }
+                }
+                @case ('options') {
+                  <button type="button" class="btn btn-primary" (click)="continue()">
+                    Review <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                  </button>
+                }
+                @case ('review') {
+                  <button
+                    type="button"
+                    class="btn"
+                    [class.btn-danger]="runTone() === 'danger'"
+                    [class.btn-primary]="runTone() === 'primary'"
+                    (click)="continue()"
+                  >
+                    <i class="bi bi-play-fill" aria-hidden="true"></i> {{ runLabel() }}
+                  </button>
+                }
+                @case ('run') {
+                  <button type="button" class="btn btn-primary" (click)="startOver()">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i> Start another operation
+                  </button>
+                }
+                @default {
+                  <button type="button" class="btn btn-primary" (click)="continue()">
+                    Continue <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                  </button>
+                }
+              }
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (store.step() !== 'operation') {
+        <aside class="stack ops-aside" aria-label="Operation summary">
+          <section class="card" aria-labelledby="ops-summary-title">
+            <div class="card-header">
+              <h2 id="ops-summary-title" class="card-title"><i class="bi bi-card-checklist" aria-hidden="true"></i> Summary</h2>
+            </div>
+            <div class="card-body">
+              @if (store.info(); as info) {
+                <div class="ops-summary__operation">
+                  <span class="card-icon" aria-hidden="true"><i [class]="'bi ' + info.icon"></i></span>
+                  <div class="min-w-0">
+                    <p class="ops-summary__title">{{ info.label }}</p>
+                    <p class="text-sm text-secondary">{{ info.summary }}</p>
+                  </div>
+                </div>
+                @if (summaryRows().length > 0) {
+                  <dl class="ops-summary">
+                    @for (row of summaryRows(); track row.label) {
+                      <div class="ops-summary__row">
+                        <dt>{{ row.label }}</dt>
+                        <dd [class.mono]="row.mono" class="break-all">{{ row.value }}</dd>
+                      </div>
+                    }
+                  </dl>
+                }
+                @if (store.furthest() >= 2 && store.checks().length > 0 && store.run().kind === 'idle') {
+                  <div class="ops-summary__checks" aria-label="Checks">
+                    @if (store.checkSummary().pass > 0) {
+                      <span class="badge badge-green"><i class="bi bi-check-circle" aria-hidden="true"></i> {{ store.checkSummary().pass }} passed</span>
+                    }
+                    @if (store.checkSummary().warn > 0) {
+                      <span class="badge badge-yellow"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ store.checkSummary().warn }} {{ store.checkSummary().warn | plural: 'warning' }}</span>
+                    }
+                    @if (store.checkSummary().fail > 0) {
+                      <span class="badge badge-red"><i class="bi bi-x-circle" aria-hidden="true"></i> {{ store.checkSummary().fail }} failed</span>
+                    }
+                    @if (store.checkSummary().pending > 0) {
+                      <span class="badge badge-blue"><i class="bi bi-hourglass-split" aria-hidden="true"></i> {{ store.checkSummary().pending }} pending</span>
+                    }
+                  </div>
+                }
+              } @else {
+                <p class="text-sm text-secondary">
+                  Pick an operation to start. The wizard checks the cluster as you go and shows the exact requests before anything runs.
+                </p>
+              }
+            </div>
+          </section>
+
+          @if (note(); as note) {
+            <section class="card" aria-labelledby="ops-note-title">
+              <div class="card-body ops-note">
+                <h2 id="ops-note-title" class="section-label">Good to know</h2>
+                <p class="text-sm text-secondary">{{ note }}</p>
+              </div>
+            </section>
+          }
+        </aside>
+      }
+    </div>
+  }
+</section>

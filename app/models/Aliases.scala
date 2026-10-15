@@ -24,6 +24,8 @@ object Aliases {
       "index"          -> JsString(index),
       "filter"         -> (properties \ "filter").asOpt[JsValue],
       "search_routing" -> (properties \ "search_routing").asOpt[JsValue],
-      "index_routing"  -> (properties \ "index_routing").asOpt[JsValue]
+      "index_routing"  -> (properties \ "index_routing").asOpt[JsValue],
+      "is_write_index" -> (properties \ "is_write_index").asOpt[JsValue],
+      "is_hidden"      -> (properties \ "is_hidden").asOpt[JsValue]
     )
 }

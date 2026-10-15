@@ -4,7 +4,7 @@ import javax.inject.Inject
 
 import controllers.auth.AuthenticationModule
 import elastic.{ElasticClient, Error, Success}
-import models.commons.{Indices, Nodes}
+import models.commons.Indices
 import models.{CerebroResponse, Hosts}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -20,10 +20,10 @@ class CommonsController @Inject()(val authentication: AuthenticationModule,
     }
   }
 
-  def nodes = process { request =>
-    client.getNodes(request.target).map {
-      case Success(status, nodes) => CerebroResponse(status, Nodes(nodes))
-      case Error(status, error) => CerebroResponse(status, error)
+  // Indices matching an expression (patterns, comma lists) with sizes in bytes.
+  def lookupIndices = process { request =>
+    client.lookupIndices(request.get("expression"), request.target).map { response =>
+      CerebroResponse(response.status, response.body)
     }
   }
 

@@ -16,7 +16,6 @@ Before getting started on a pull request(be it a new feature or a bug fix), plea
 Even though I'm open to feature requests, I might not always agree on the value a feature might bring. And I would hate to waste someone else's time.
 
 Once working on a pull request, please:
-- include the generated Angular browser assets (`npm run build`)
 - add tests that validate your changes
 - squash your development commits to keep only important commits(fix typo, wrong indent should not be part of git history)
 - rebase it against development before submiting
@@ -46,4 +45,12 @@ npm ci
 npm start
 ```
 
-Production builds write deterministic assets to `public/js` with `npm run build`.
+Production builds write the assets to `public/js` with `npm run build`. That
+folder is build output and is ignored by git, so a fresh clone needs `npm run
+build` (or `npm start`) before `sbt run` or `sbt stage` serves the web
+application. Do not commit it.
+
+The web application's architecture, shared components and design system
+(colour tokens, layout and component classes, accessibility rules) are
+documented in [docs/FRONTEND.md](docs/FRONTEND.md). New screens must follow it
+and work in both the light and the dark theme.

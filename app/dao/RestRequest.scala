@@ -16,14 +16,6 @@ case class RestRequest(path: String, method: String, body: String, username: Str
 
 }
 
-object RestRequest {
-
-  def apply(request: HashedRestRequest): RestRequest = {
-    RestRequest(request.path, request.method, request.body, request.username, new Date(request.createdAt))
-  }
-
-}
-
 class RestRequests(tag: Tag) extends Table[HashedRestRequest](tag, "rest_requests") {
 
   def id = column[Int]("id", O.PrimaryKey, O.AutoInc)

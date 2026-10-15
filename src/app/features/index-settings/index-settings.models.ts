@@ -1,4 +1,14 @@
-export type IndexSettingValues = Record<string, string>;
+import { SettingRow, settingValueToString } from '../../shared/settings-editor/settings-editor.models';
+import {
+  DYNAMIC_INDEX_SETTINGS,
+  DYNAMIC_INDEX_SETTING_PATTERNS,
+  FINAL_INDEX_SETTINGS,
+  FINAL_INDEX_SETTING_PATTERNS,
+  INTERNAL_INDEX_SETTINGS,
+  INTERNAL_INDEX_SETTING_PATTERNS,
+} from './index-settings.catalog';
+
+type IndexSettingValues = Record<string, string>;
 
 export interface IndexSettingsGroupResponse {
   defaults?: Record<string, unknown>;
@@ -7,15 +17,8 @@ export interface IndexSettingsGroupResponse {
 
 export type IndexSettingsResponse = Record<string, IndexSettingsGroupResponse>;
 
-export interface IndexSettingDescriptor {
-  name: string;
-  static: boolean;
-}
-
-export interface IndexSettingGroup {
-  name: string;
-  settings: IndexSettingDescriptor[];
-}
+/** How a setting of an existing index can be changed. */
+export type IndexSettingKind = 'dynamic' | 'static' | 'final' | 'internal';
 
 const HIDDEN_INDEX_METADATA = [
   'index.creation_date',
@@ -24,101 +27,118 @@ const HIDDEN_INDEX_METADATA = [
   'index.version.created',
 ] as const;
 
-const DYNAMIC_INDEX_SETTINGS = new Set([
-  'index.mapper.dynamic',
-  'index.max_refresh_listeners',
-  'index.number_of_replicas',
-  'index.allocation.max_retries',
-  'index.auto_expand_replicas',
-  'index.blocks.metadata',
-  'index.blocks.read',
-  'index.blocks.read_only',
-  'index.blocks.read_only_allow_delete',
-  'index.blocks.write',
-  'index.compound_format',
-  'index.gc_deletes',
-  'index.indexing.slowlog.level',
-  'index.indexing.slowlog.reformat',
-  'index.indexing.slowlog.source',
-  'index.indexing.slowlog.threshold.index.debug',
-  'index.indexing.slowlog.threshold.index.info',
-  'index.indexing.slowlog.threshold.index.trace',
-  'index.indexing.slowlog.threshold.index.warn',
-  'index.mapping.depth.limit',
-  'index.mapping.nested_fields.limit',
-  'index.mapping.total_fields.limit',
-  'index.max_adjacency_matrix_filters',
-  'index.max_rescore_window',
-  'index.max_result_window',
-  'index.max_slices_per_scroll',
-  'index.merge.policy.expunge_deletes_allowed',
-  'index.merge.policy.floor_segment',
-  'index.merge.policy.max_merge_at_once',
-  'index.merge.policy.max_merge_at_once_explicit',
-  'index.merge.policy.max_merged_segment',
-  'index.merge.policy.reclaim_deletes_weight',
-  'index.merge.policy.segments_per_tier',
-  'index.merge.scheduler.auto_throttle',
-  'index.merge.scheduler.max_merge_count',
-  'index.merge.scheduler.max_thread_count',
-  'index.optimize_auto_generated_id',
-  'index.priority',
-  'index.recovery.initial_shards',
-  'index.refresh_interval',
-  'index.requests.cache.enable',
-  'index.routing.allocation.enable',
-  'index.routing.allocation.total_shards_per_node',
-  'index.routing.rebalance.enable',
-  'index.search.slowlog.level',
-  'index.search.slowlog.threshold.fetch.debug',
-  'index.search.slowlog.threshold.fetch.info',
-  'index.search.slowlog.threshold.fetch.trace',
-  'index.search.slowlog.threshold.fetch.warn',
-  'index.search.slowlog.threshold.query.debug',
-  'index.search.slowlog.threshold.query.info',
-  'index.search.slowlog.threshold.query.trace',
-  'index.search.slowlog.threshold.query.warn',
-  'index.shared_filesystem.recover_on_any_node',
-  'index.store.throttle.max_bytes_per_sec',
-  'index.store.throttle.type',
-  'index.translog.durability',
-  'index.translog.flush_threshold_size',
-  'index.ttl.disable_purge',
-  'index.unassigned.node_left.delayed_timeout',
-  'index.warmer.enabled',
-  'index.write.wait_for_active_shards',
-]);
-
 function normalize(group: Record<string, unknown> | undefined): IndexSettingValues {
   const values: IndexSettingValues = {};
   for (const [name, value] of Object.entries(group ?? {})) {
     if (isVisibleIndexSetting(name)) {
-      values[name] = value === null || value === undefined ? '' : String(value);
+      values[name] = settingValueToString(value);
     }
   }
   return values;
 }
 
-export function isVisibleIndexSetting(name: string): boolean {
+function isVisibleIndexSetting(name: string): boolean {
   return HIDDEN_INDEX_METADATA.every((metadata) => !name.includes(metadata));
 }
 
-export function isDynamicIndexSetting(name: string): boolean {
-  return DYNAMIC_INDEX_SETTINGS.has(name);
+function matches(name: string, names: ReadonlySet<string>, patterns: readonly RegExp[]): boolean {
+  return names.has(name) || patterns.some((pattern) => pattern.test(name));
 }
 
-export function mergeIndexSettings(response: IndexSettingsResponse, index: string): IndexSettingValues {
-  const groups = response[index] ?? {};
-  return { ...normalize(groups.defaults), ...normalize(groups.settings) };
+function isDynamicIndexSetting(name: string): boolean {
+  return matches(name, DYNAMIC_INDEX_SETTINGS, DYNAMIC_INDEX_SETTING_PATTERNS);
 }
 
-export function groupIndexSettings(settings: readonly IndexSettingDescriptor[]): IndexSettingGroup[] {
-  const groups = new Map<string, IndexSettingDescriptor[]>();
-  for (const setting of settings) {
-    const group = setting.name.split('.')[1] || setting.name.split('.')[0] || 'other';
-    groups.set(group, [...(groups.get(group) ?? []), setting]);
+export function indexSettingKind(name: string): IndexSettingKind {
+  if (matches(name, INTERNAL_INDEX_SETTINGS, INTERNAL_INDEX_SETTING_PATTERNS)) {
+    return 'internal';
   }
-  return [...groups.entries()]
-    .map(([name, values]) => ({ name, settings: values.sort((a, b) => a.name.localeCompare(b.name)) }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  if (matches(name, FINAL_INDEX_SETTINGS, FINAL_INDEX_SETTING_PATTERNS)) {
+    return 'final';
+  }
+  return isDynamicIndexSetting(name) ? 'dynamic' : 'static';
+}
+
+export type ResolvedIndexSettings =
+  | { readonly kind: 'single'; readonly index: string; readonly group: IndexSettingsGroupResponse }
+  | { readonly kind: 'multiple'; readonly indices: readonly string[] }
+  | { readonly kind: 'missing' };
+
+/**
+ * The endpoint answers with one entry per concrete index; an alias or a
+ * wildcard may therefore resolve to several indices.
+ */
+export function resolveIndexSettings(response: IndexSettingsResponse, index: string): ResolvedIndexSettings {
+  const exact = response[index];
+  if (exact) {
+    return { kind: 'single', index, group: exact };
+  }
+  const indices = Object.keys(response).sort((left, right) => left.localeCompare(right));
+  const [only] = indices;
+  if (indices.length === 1 && only !== undefined) {
+    return { kind: 'single', index: only, group: response[only] ?? {} };
+  }
+  return indices.length > 1 ? { kind: 'multiple', indices } : { kind: 'missing' };
+}
+
+/** Closed indices carry `index.verified_before_close` (Elasticsearch 7.2+). */
+export function isClosedIndex(group: IndexSettingsGroupResponse): boolean {
+  return settingValueToString(group.settings?.['index.verified_before_close']) === 'true';
+}
+
+export interface IndexMetadata {
+  readonly uuid?: string;
+  readonly createdAt?: Date;
+  readonly closed: boolean;
+}
+
+export function indexMetadata(group: IndexSettingsGroupResponse): IndexMetadata {
+  const settings = group.settings ?? {};
+  const uuid = settingValueToString(settings['index.uuid']);
+  const created = Number(settingValueToString(settings['index.creation_date']));
+  return {
+    ...(uuid ? { uuid } : {}),
+    ...(Number.isFinite(created) && created > 0 ? { createdAt: new Date(created) } : {}),
+    closed: isClosedIndex(group),
+  };
+}
+
+const LOCK_REASONS: Readonly<Record<Exclude<IndexSettingKind, 'dynamic'>, { label: string; reason: string }>> = {
+  static: {
+    label: 'Static',
+    reason: 'Static setting: it can only be changed while the index is closed.',
+  },
+  final: {
+    label: 'Fixed',
+    reason: 'Fixed when the index is created and cannot be changed afterwards.',
+  },
+  internal: {
+    label: 'Managed',
+    reason: 'Managed by Elasticsearch or through a dedicated API.',
+  },
+};
+
+/**
+ * One row per visible setting. Explicitly set values override defaults; on a
+ * closed index static settings become editable too.
+ */
+export function buildIndexSettingRows(group: IndexSettingsGroupResponse, closed = isClosedIndex(group)): SettingRow[] {
+  const defaults = normalize(group.defaults);
+  const explicit = normalize(group.settings);
+  const names = new Set([...Object.keys(defaults), ...Object.keys(explicit)]);
+  return [...names]
+    .filter((name) => name !== 'index.verified_before_close')
+    .sort((left, right) => left.localeCompare(right))
+    .map((name): SettingRow => {
+      const kind = indexSettingKind(name);
+      const editable = kind === 'dynamic' || (closed && kind === 'static');
+      const lock = kind === 'dynamic' ? undefined : LOCK_REASONS[kind];
+      return {
+        name,
+        value: explicit[name] ?? defaults[name] ?? '',
+        origin: explicit[name] !== undefined ? 'index' : 'default',
+        editable,
+        ...(!editable && lock ? { lockReason: lock.reason, lockLabel: lock.label } : {}),
+      };
+    });
 }

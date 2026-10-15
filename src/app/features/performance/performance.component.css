@@ -1,0 +1,28 @@
+:host {
+  display: block;
+}
+
+/* Scrolls when the tabs do not fit (cerebroScrollTabs); the faded edges
+   are the only cue, without a scrollbar under the tabs. */
+.performance-tabs {
+  margin-bottom: var(--space-5);
+  scrollbar-width: none;
+}
+
+.performance-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.performance-tabs > button {
+  height: 42px;
+}
+
+.performance-tabs > button:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.performance-panel:focus-visible {
+  outline: none;
+}

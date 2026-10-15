@@ -21,8 +21,10 @@
             "deleteOutputPath": true,
             "outputHashing": "none",
             "index": false,
+            "allowedCommonJsDependencies": ["ace-builds"],
             "styles": [
-              "node_modules/bootstrap/dist/css/bootstrap.min.css",
+              "node_modules/@fontsource-variable/inter/index.css",
+              "node_modules/@fontsource-variable/jetbrains-mono/index.css",
               "node_modules/bootstrap-icons/font/bootstrap-icons.min.css",
               "src/styles.css"
             ],

@@ -1,226 +1,382 @@
-import { ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { Location } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { map } from 'rxjs';
 import { AlertService } from '../../core/alert.service';
+import { ClusterApiError } from '../../core/api-envelope';
 import { ClusterApiService } from '../../core/cluster-api.service';
 import { ConnectionService } from '../../core/connection.service';
-import { ModalService } from '../../core/modal.service';
+import { DialogService } from '../../core/dialog.service';
+import { failureMessage, readableReason } from '../../core/errors';
+import { formatRelative, pluralize } from '../../core/format';
+import { isRecord } from '../../core/json';
+import { PendingChangesAware } from '../../core/pending-changes.guard';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { IndexPickerComponent } from '../../shared/index-picker.component';
+import { SettingsEditorComponent } from '../../shared/settings-editor/settings-editor.component';
 import {
-  IndexSettingGroup,
-  IndexSettingValues,
+  GroupingOptions,
+  PendingChange,
+  SettingDrafts,
+  SettingErrors,
+  SettingRow,
+  buildFlatSettingsPayload,
+  pendingChanges,
+  pruneDrafts,
+  settingErrorsFor,
+  withoutSavedDrafts,
+} from '../../shared/settings-editor/settings-editor.models';
+import { SettingsSkeletonComponent } from '../../shared/settings-editor/settings-skeleton.component';
+import {
+  IndexMetadata,
   IndexSettingsResponse,
-  groupIndexSettings,
-  isDynamicIndexSetting,
-  mergeIndexSettings,
+  buildIndexSettingRows,
+  indexMetadata,
+  resolveIndexSettings,
 } from './index-settings.models';
+
+type LoadState = 'idle' | 'loading' | 'ready' | 'missing' | 'multiple' | 'error';
+
+const GROUPING: GroupingOptions = {
+  stripPrefix: 'index.',
+  generalTitle: 'General',
+  generalFirst: true,
+  featured: [
+    'index.number_of_replicas',
+    'index.auto_expand_replicas',
+    'index.refresh_interval',
+    'index.number_of_shards',
+    'index.max_result_window',
+    'index.priority',
+    'index.hidden',
+    'index.default_pipeline',
+    'index.lifecycle.name',
+    'index.routing.allocation.include._tier_preference',
+    'index.blocks.write',
+    'index.blocks.read_only',
+  ],
+};
+const QUICK_PICKS = 8;
+
+/** Settings Elasticsearch does not list until they are set, offered by "Add setting". */
+const ADD_SUGGESTIONS: readonly string[] = [
+  'index.routing.allocation.require._name',
+  'index.routing.allocation.include._name',
+  'index.routing.allocation.exclude._name',
+  'index.routing.allocation.require._ip',
+  'index.routing.allocation.exclude._ip',
+  'index.routing.allocation.require._host',
+  'index.routing.allocation.exclude._host',
+];
 
 @Component({
   selector: 'cerebro-index-settings',
-  standalone: true,
-  imports: [FormsModule],
-  template: `
-    <section aria-labelledby="index-settings-title">
-      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
-        <div>
-          <h2 id="index-settings-title" class="h4 mb-1">Index settings</h2>
-          <p class="text-body-secondary mb-0">
-            {{ index || 'No index selected' }} · {{ connection.host() || 'connected cluster' }}
-          </p>
-        </div>
-        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="load()"
-                [disabled]="loading || !index">
-          <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
-        </button>
-      </div>
-
-      @if (!index) {
-        <div class="alert alert-warning">Open index settings from an index action so the <code>index</code> query parameter is available.</div>
-      } @else {
-        <div class="row g-3 align-items-center mb-4">
-          <div class="col-lg-5 col-md-7">
-            <label class="visually-hidden" for="index-setting-filter">Filter settings by name</label>
-            <input id="index-setting-filter" class="form-control" [(ngModel)]="nameFilter"
-                   placeholder="Filter settings by name" />
-          </div>
-          <div class="col-auto">
-            <div class="form-check">
-              <input id="show-static-index-settings" class="form-check-input" type="checkbox" [(ngModel)]="showStatic" />
-              <label class="form-check-label" for="show-static-index-settings">
-                Show static settings <i class="bi bi-lock-fill text-warning" aria-hidden="true"></i>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        @if (loading) {
-          <p class="text-body-secondary" role="status">Loading index settings…</p>
-        } @else {
-          @for (group of visibleGroups; track group.name) {
-            <section class="mb-4" [attr.aria-labelledby]="'index-setting-group-' + group.name">
-              <h3 class="h6 text-uppercase border-bottom pb-2 mb-3" [id]="'index-setting-group-' + group.name">{{ group.name }}</h3>
-              <div class="row g-3">
-                @for (setting of group.settings; track setting.name) {
-                  <div class="col-xl-4 col-md-6">
-                    <label class="form-label small text-break" [for]="settingId(setting.name)">
-                      {{ setting.name }}
-                      @if (setting.static) { <i class="bi bi-lock-fill text-warning ms-1" title="Static setting" aria-hidden="true"></i> }
-                    </label>
-                    <input class="form-control" [id]="settingId(setting.name)" [disabled]="setting.static"
-                           [ngModel]="form[setting.name]" (ngModelChange)="set(setting.name, $event)" />
-                  </div>
-                }
-              </div>
-            </section>
-          } @empty {
-            <p class="text-body-secondary py-4">No settings match the current filter.</p>
-          }
-        }
-
-        @if (changeEntries.length) {
-          <aside class="position-sticky bottom-0 bg-body border-top shadow-sm py-3 mt-4" aria-label="Pending index setting changes">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-2">
-              <strong>{{ changeEntries.length }} pending changes</strong>
-              <div class="d-flex gap-2">
-                <button type="button" class="btn btn-outline-secondary btn-sm" (click)="preview()">Preview</button>
-                <button type="button" class="btn btn-success btn-sm" (click)="save()" [disabled]="saving">
-                  {{ saving ? 'Saving…' : 'Save' }}
-                </button>
-              </div>
-            </div>
-            <div class="table-responsive" style="max-height: 14rem">
-              <table class="table table-sm align-middle mb-0">
-                <tbody>
-                  @for (entry of changeEntries; track entry.name) {
-                    <tr>
-                      <td class="text-break"><i class="bi bi-gear me-1" aria-hidden="true"></i>{{ entry.name }}</td>
-                      <td>{{ entry.value }}</td>
-                      <td class="text-end">
-                        <button type="button" class="btn btn-link btn-sm text-body-secondary" (click)="revert(entry.name)"
-                                aria-label="Revert setting"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          </aside>
-        }
-      }
-    </section>
-  `,
+  imports: [EmptyStateComponent, IndexPickerComponent, RouterLink, SettingsEditorComponent, SettingsSkeletonComponent],
+  templateUrl: './index-settings.component.html',
+  styleUrl: './index-settings.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class IndexSettingsComponent implements OnInit {
+export class IndexSettingsComponent implements PendingChangesAware {
   private readonly api = inject(ClusterApiService);
   private readonly alerts = inject(AlertService);
-  private readonly modal = inject(ModalService);
+  private readonly dialogs = inject(DialogService);
   private readonly route = inject(ActivatedRoute);
-  private readonly destroyRef = inject(DestroyRef);
-  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
   readonly connection = inject(ConnectionService);
 
-  index = '';
-  settings: IndexSettingValues = {};
-  form: IndexSettingValues = {};
-  changes: IndexSettingValues = {};
-  groups: IndexSettingGroup[] = [];
-  nameFilter = '';
-  showStatic = false;
-  loading = false;
-  saving = false;
+  readonly grouping = GROUPING;
+  readonly addSuggestions = ADD_SUGGESTIONS;
+  /** The `index` query parameter (an index, or an alias resolving to one). */
+  readonly index = toSignal(this.route.queryParamMap.pipe(map((params) => params.get('index') ?? '')), {
+    initialValue: '',
+  });
 
-  ngOnInit(): void {
-    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
-      const index = params.get('index') ?? '';
-      if (index === this.index) return;
-      this.index = index;
-      this.settings = {};
-      this.form = {};
-      this.changes = {};
-      this.groups = [];
-      if (index) void this.load();
-      this.cdr.markForCheck();
+  readonly state = signal<LoadState>('idle');
+  readonly rows = signal<readonly SettingRow[] | undefined>(undefined);
+  readonly metadata = signal<IndexMetadata | undefined>(undefined);
+  /** Concrete index the settings belong to. */
+  readonly resolvedIndex = signal('');
+  readonly candidates = signal<readonly string[]>([]);
+  /** The `index` parameter the rows and drafts belong to (lags behind while a switch is confirmed). */
+  readonly loadedIndex = signal('');
+  readonly drafts = signal<SettingDrafts>({});
+  readonly errors = signal<SettingErrors>({});
+  readonly saving = signal(false);
+  readonly reloading = signal(false);
+  /** Why the settings could not be loaded, as Elasticsearch put it. */
+  readonly loadError = signal<string | undefined>(undefined);
+  /** Reference time of relative dates, moved on every load. */
+  readonly now = signal(Date.now());
+
+  readonly quickPicks = QUICK_PICKS;
+  readonly overridden = computed(() => (this.rows() ?? []).filter((row) => row.origin === 'index').length);
+  readonly pending = computed(() => pendingChanges(this.rows() ?? [], this.drafts()));
+
+  private readonly picker = viewChild(IndexPickerComponent);
+  private loadSequence = 0;
+  private lastResponse = '';
+  /** A Back/Forward switch to another index waits for the discard dialog. */
+  private confirmingSwitch = false;
+  /** History position of the entry showing the loaded index (see `historyPosition`). */
+  private loadedPosition: number | undefined;
+
+  constructor() {
+    // Settings only change when someone edits them: they load on open, on an
+    // index switch, after a save and on Reload, not on refresh ticks (another
+    // cluster creates the page again).
+    effect(() => {
+      const index = this.index();
+      untracked(() => {
+        if (index !== this.loadedIndex()) {
+          if (this.pending().length > 0) {
+            // Picker switches discard first, so this is browser history navigation.
+            void this.confirmHistorySwitch();
+            return;
+          }
+          this.reset(index);
+        } else {
+          this.loadedPosition = this.historyPosition();
+        }
+        if (index) {
+          void this.load(index);
+        }
+      });
     });
   }
 
-  get visibleGroups(): IndexSettingGroup[] {
-    return this.groups
-      .map((group) => ({
-        ...group,
-        settings: group.settings.filter((setting) =>
-          setting.name.includes(this.nameFilter) && (!setting.static || this.showStatic)),
-      }))
-      .filter((group) => group.settings.length > 0);
-  }
-
-  get changeEntries(): Array<{ name: string; value: string }> {
-    return Object.entries(this.changes).map(([name, value]) => ({ name, value }));
-  }
-
-  async load(): Promise<void> {
-    const index = this.index;
-    if (!index) return;
-    this.loading = true;
+  /**
+   * Reloads (after a save or on Reload) leave the current state (ready,
+   * missing, multiple or error) on screen until the answer arrives; only
+   * switching index or an explicit retry shows the skeleton.
+   */
+  async load(index: string): Promise<void> {
+    const sequence = ++this.loadSequence;
     try {
       const response = await this.api.post<IndexSettingsResponse>('index_settings', { index });
-      if (index !== this.index) return;
-      this.settings = mergeIndexSettings(response, index);
-      this.form = { ...this.settings };
-      this.changes = {};
-      this.groups = groupIndexSettings(Object.keys(this.form).map((name) => ({
-        name,
-        static: !isDynamicIndexSetting(name),
-      })));
-    } catch (error) {
-      this.alerts.error('Error loading index settings', error);
+      if (sequence !== this.loadSequence || index !== this.index()) {
+        return;
+      }
+      this.now.set(Date.now());
+      const serialized = JSON.stringify(response);
+      if (serialized === this.lastResponse && this.state() === 'ready') {
+        return;
+      }
+      this.lastResponse = serialized;
+      const resolved = resolveIndexSettings(response, index);
+      if (resolved.kind === 'single') {
+        const rows = buildIndexSettingRows(resolved.group);
+        this.resolvedIndex.set(resolved.index);
+        this.metadata.set(indexMetadata(resolved.group));
+        this.rows.set(rows);
+        this.drafts.update((drafts) => pruneDrafts(rows, drafts));
+        this.state.set('ready');
+      } else {
+        this.rows.set(undefined);
+        this.metadata.set(undefined);
+        this.resolvedIndex.set('');
+        this.candidates.set(resolved.kind === 'multiple' ? resolved.indices : []);
+        this.state.set(resolved.kind);
+      }
+    } catch (error: unknown) {
+      if (sequence !== this.loadSequence || index !== this.index()) {
+        return;
+      }
+      if (error instanceof ClusterApiError && error.status === 404) {
+        this.rows.set(undefined);
+        this.metadata.set(undefined);
+        this.resolvedIndex.set('');
+        this.state.set('missing');
+      } else {
+        // Keep showing the last good values when a reload fails.
+        if (this.state() !== 'ready') {
+          this.loadError.set(readableReason(error));
+          this.state.set('error');
+        }
+        this.alerts.error(failureMessage(`Could not load the settings of ${index}`, error), error);
+      }
+    }
+  }
+
+  age(date: Date): string {
+    return formatRelative(date.getTime(), this.now());
+  }
+
+  /** Reads the settings again, keeping the table and the staged changes on screen. */
+  async reload(): Promise<void> {
+    const index = this.index();
+    if (!index || this.reloading()) {
+      return;
+    }
+    this.reloading.set(true);
+    try {
+      await this.load(index);
     } finally {
-      this.loading = false;
-      this.cdr.markForCheck();
+      this.reloading.set(false);
     }
   }
 
-  set(name: string, value: string): void {
-    this.form[name] = value;
-    if (value !== this.settings[name]) {
-      this.changes = { ...this.changes, [name]: value };
-    } else {
-      this.removeChange(name);
+  retry(): void {
+    const index = this.index();
+    if (index) {
+      this.state.set('loading');
+      void this.load(index);
     }
   }
 
-  revert(name: string): void {
-    this.form[name] = this.settings[name] ?? '';
-    this.removeChange(name);
+  async pick(next: string): Promise<void> {
+    if (next === this.index()) {
+      return;
+    }
+    if (this.pending().length > 0) {
+      const confirmed = await this.confirmDiscardDrafts('will be lost.', 'Discard and switch');
+      if (!confirmed) {
+        this.picker()?.revert();
+        return;
+      }
+      this.drafts.set({});
+    }
+    this.navigate(next);
   }
 
-  preview(): void {
-    this.modal.showJson(`Pending settings for ${this.index}`, this.changes);
+  navigate(index: string): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { index: index || null },
+      queryParamsHandling: 'merge',
+    });
   }
 
-  async save(): Promise<void> {
-    if (!this.index || !this.changeEntries.length) return;
-    this.saving = true;
+  async confirmDiscard(): Promise<boolean> {
+    if (this.pending().length === 0) {
+      return true;
+    }
+    return this.confirmDiscardDrafts('will be lost if you leave this page.', 'Discard changes');
+  }
+
+  review(changes: readonly PendingChange[]): void {
+    this.dialogs.showJson(
+      'Review pending changes',
+      buildFlatSettingsPayload(changes),
+      `PUT /${this.resolvedIndex()}/_settings`,
+    );
+  }
+
+  async save(changes: readonly PendingChange[]): Promise<void> {
+    const index = this.resolvedIndex();
+    if (this.saving() || changes.length === 0 || !index) {
+      return;
+    }
+    this.saving.set(true);
+    this.errors.set({});
     try {
       const response = await this.api.post<unknown>('index_settings/update', {
-        index: this.index,
-        settings: this.changes,
+        index,
+        settings: buildFlatSettingsPayload(changes),
       });
-      this.alerts.info('Settings successfully saved', response);
-      await this.load();
-    } catch (error) {
-      this.alerts.error('Error while saving settings', error);
+      this.alerts.success(
+        changes.length === 1 ? `Saved ${changes[0]?.name} on ${index}` : `Saved ${pluralize(changes.length, 'setting')} on ${index}`,
+        response,
+      );
+      this.lastResponse = '';
+      await this.load(this.index());
+      this.drafts.update((drafts) => withoutSavedDrafts(drafts, changes));
+    } catch (error: unknown) {
+      this.errors.set(settingErrorsFor(error, changes));
+      this.alerts.error(failureMessage(`Could not save the settings of ${index}`, error), error);
     } finally {
-      this.saving = false;
-      this.cdr.markForCheck();
+      this.saving.set(false);
     }
   }
 
-  settingId(name: string): string {
-    return `index-setting-${name.replaceAll('.', '-')}`;
+  private confirmDiscardDrafts(consequence: string, confirmLabel: string): Promise<boolean> {
+    const changes = this.pending();
+    return this.dialogs.confirm({
+      title: 'Discard unsaved changes?',
+      message: `${pluralize(changes.length, 'unsaved change')} to ${this.resolvedIndex() || this.loadedIndex()} ${consequence}`,
+      items: changes.map((change) => change.name),
+      confirmLabel,
+      cancelLabel: 'Keep editing',
+      tone: 'danger',
+    });
   }
 
-  private removeChange(name: string): void {
-    const { [name]: _removed, ...remaining } = this.changes;
-    this.changes = remaining;
+  /**
+   * The `index` query parameter changed while edits are pending (Back or
+   * Forward; the canDeactivate guard does not run for query parameters).
+   * Either discard the edits and show the new index, or put the edited index
+   * back in the URL.
+   */
+  private async confirmHistorySwitch(): Promise<void> {
+    if (this.confirmingSwitch) {
+      return;
+    }
+    this.confirmingSwitch = true;
+    try {
+      if (await this.confirmDiscardDrafts('will be lost.', 'Discard and switch')) {
+        const index = this.index();
+        this.reset(index);
+        if (index) {
+          void this.load(index);
+        }
+      } else {
+        this.restoreHistoryEntry();
+      }
+    } finally {
+      this.confirmingSwitch = false;
+    }
+  }
+
+  /**
+   * Puts the edited index back in the URL after a declined Back/Forward. With
+   * the router's `computed` cancel resolution every entry carries its
+   * position, so the browser simply steps back to the edited entry and the
+   * history stays exactly as it was. Without positions, a new entry for the
+   * edited index is pushed instead, so another Back asks again rather than
+   * leaving the page.
+   */
+  private restoreHistoryEntry(): void {
+    const loaded = this.loadedPosition;
+    const current = this.historyPosition();
+    if (loaded !== undefined && current !== undefined && loaded !== current) {
+      this.location.historyGo(loaded - current);
+      return;
+    }
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { index: this.loadedIndex() || null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  /** Position of the current history entry, as recorded by the router (`computed` mode only). */
+  private historyPosition(): number | undefined {
+    const state: unknown = this.location.getState();
+    const position = isRecord(state) ? state['ɵrouterPageId'] : undefined;
+    return typeof position === 'number' ? position : undefined;
+  }
+
+  private reset(index: string): void {
+    this.loadedPosition = this.historyPosition();
+    this.loadedIndex.set(index);
+    this.loadSequence++;
+    this.lastResponse = '';
+    this.rows.set(undefined);
+    this.metadata.set(undefined);
+    this.resolvedIndex.set('');
+    this.candidates.set([]);
+    this.drafts.set({});
+    this.errors.set({});
+    this.state.set(index ? 'loading' : 'idle');
   }
 }

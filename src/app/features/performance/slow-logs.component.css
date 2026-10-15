@@ -1,0 +1,379 @@
+:host {
+  display: block;
+}
+
+/* ---- Configured indices -------------------------------------------------------- */
+
+.slowlog-toolbar {
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.slowlog-toolbar > .row {
+  flex: 1 1 320px;
+}
+
+.slowlog-toolbar__end {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.slowlog-toolbar__end cerebro-search {
+  width: min(240px, 100%);
+}
+
+.slowlog-table th[scope="row"] {
+  font-weight: 400;
+}
+
+.slowlog-table tbody th,
+.slowlog-table tbody td {
+  height: auto;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  vertical-align: top;
+}
+
+.index-cell {
+  min-width: 220px;
+  max-width: 340px;
+}
+
+/* One line: long names end with an ellipsis and keep the full name in the title. */
+.index-link {
+  display: block;
+  max-width: 100%;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.index-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+}
+
+.levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 260px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.levels .tag.is-off {
+  opacity: 0.7;
+}
+
+.other-cell {
+  min-width: 170px;
+}
+
+.other-setting {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+}
+
+.slowlog-actions {
+  justify-content: flex-end;
+}
+
+/* ---- Editor ----------------------------------------------------------------------- */
+
+.slowlog-editor__body {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.slowlog-picker {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.slowlog-picker__legend {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.slowlog-picker__count {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.slowlog-picker__tools {
+  gap: 4px var(--space-3);
+}
+
+.slowlog-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.slowlog-chip {
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.slowlog-chip:hover {
+  background: var(--surface-active);
+}
+
+.slowlog-chip .bi {
+  color: var(--text-3);
+}
+
+.slowlog-chips > li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.slowlog-picker__list {
+  max-height: 360px;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.slowlog-picker__list.is-invalid {
+  border-color: var(--red);
+}
+
+.slowlog-picker__item {
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.slowlog-picker__item:hover {
+  background: var(--surface-hover);
+}
+
+.slowlog-picker__item > span {
+  min-width: 0;
+}
+
+.slowlog-picker__group {
+  margin-top: 6px;
+  padding: 4px 6px 0;
+}
+
+.slowlog-picker__group-note {
+  margin: 0;
+  padding: 0 6px 4px;
+}
+
+.slowlog-picker__note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 6px;
+}
+
+.slowlog-settings {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-5);
+}
+
+.thresholds {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.thresholds__grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.4fr) repeat(4, minmax(72px, 1fr));
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.thresholds__level {
+  color: var(--text-3);
+  font-size: var(--text-xs);
+  font-weight: 620;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.thresholds__group {
+  min-width: 0;
+  display: grid;
+}
+
+.thresholds__name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.thresholds__cell {
+  min-width: 0;
+}
+
+.thresholds__cell .input {
+  width: 100%;
+}
+
+/* The level is the column header on wide screens; phones show it per field. */
+.thresholds__cell-label {
+  display: none;
+}
+
+.thresholds__messages {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 2px;
+  margin-top: -2px;
+}
+
+.thresholds__warning {
+  color: var(--yellow-text);
+}
+
+.slowlog-options {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.slowlog-footer__buttons {
+  justify-content: flex-end;
+}
+
+@media (max-width: 1180px) {
+  .slowlog-editor__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .slowlog-picker__list {
+    max-height: 260px;
+  }
+}
+
+@media (max-width: 760px) {
+  .slowlog-toolbar__end {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  /* The table stacks: the index and its actions on top, then one labelled block per column. */
+  .slowlog-table thead {
+    display: none;
+  }
+
+  .slowlog-table,
+  .slowlog-table tbody {
+    display: block;
+  }
+
+  .slowlog-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px var(--space-3);
+    padding: 12px var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .slowlog-table tbody th,
+  .slowlog-table tbody td {
+    display: block;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border: 0;
+  }
+
+  .slowlog-table tbody td[data-label] {
+    grid-column: 1 / -1;
+  }
+
+  .slowlog-table tbody td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    color: var(--text-3);
+    font-size: var(--text-xs);
+    font-weight: 620;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .slowlog-table tbody td.actions {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+  }
+
+  .slowlog-table tbody td[colspan] {
+    grid-column: 1 / -1;
+  }
+
+  .levels {
+    max-width: none;
+  }
+
+  .thresholds__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .thresholds__corner,
+  .thresholds__level {
+    display: none;
+  }
+
+  .thresholds__group {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+  }
+
+  .thresholds__cell-label {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--text-3);
+    font-size: var(--text-xs);
+    font-weight: 620;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .slowlog-footer__summary {
+    display: none;
+  }
+
+  .slowlog-footer__buttons {
+    width: 100%;
+  }
+
+  .slowlog-footer__buttons .btn-primary {
+    flex: 1;
+  }
+}

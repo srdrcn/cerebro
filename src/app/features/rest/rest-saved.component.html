@@ -1,0 +1,145 @@
+@if (requests().length > 0) {
+  <div class="saved-toolbar">
+    <cerebro-search
+      [(value)]="query"
+      [small]="true"
+      placeholder="Filter by name, path or body"
+      ariaLabel="Filter saved requests"
+    />
+    <div class="saved-toolbar__end">
+      <span class="count-label saved-count">
+        @if (query().trim()) {
+          <strong>{{ visible().length | num }}</strong> of {{ pluralize(requests().length, 'request') }}
+        } @else {
+          <strong>{{ requests().length | num }}</strong> {{ requests().length | plural: 'request' }}
+        }
+      </span>
+      <div class="segmented segmented-sm" role="group" aria-label="Sort saved requests">
+        <button
+          type="button"
+          aria-label="Sort by name"
+          title="Sort by name"
+          [attr.aria-pressed]="sort() === 'name'"
+          (click)="setSort('name')"
+        >
+          <i class="bi bi-sort-alpha-down" aria-hidden="true"></i>
+          <span class="saved-sort__label">Name</span>
+        </button>
+        <button
+          type="button"
+          aria-label="Sort by most recently used"
+          title="Most recently used first"
+          [attr.aria-pressed]="sort() === 'recent'"
+          (click)="setSort('recent')"
+        >
+          <i class="bi bi-clock" aria-hidden="true"></i>
+          <span class="saved-sort__label">Recent</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (readOnly()) {
+  <div class="callout callout-warning saved-readonly" role="status">
+    <i class="bi bi-lock" aria-hidden="true"></i>
+    <div>
+      <strong>Stored by a newer version of Cerebro.</strong>
+      These saved requests can be loaded, but changes made here are not stored so that nothing is lost.
+    </div>
+  </div>
+}
+
+<div class="saved-scroll">
+  @if (requests().length === 0) {
+    <cerebro-empty
+      icon="bi-bookmark"
+      heading="No saved requests yet"
+      text="Save the requests you run often and load them again in one click. They stay in this browser and work with every cluster."
+    >
+      <div class="saved-empty">
+        <div class="saved-empty__actions">
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            title="Save the request in the editor"
+            (click)="saveCurrent.emit()"
+          >
+            <i class="bi bi-bookmark-plus" aria-hidden="true"></i> Save current request
+          </button>
+          <button type="button" class="btn btn-sm" (click)="importFile.emit()">
+            <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Import from file
+          </button>
+        </div>
+        <p class="saved-empty__tip">
+          Tip: press <kbd>{{ modKey() }}</kbd><kbd>S</kbd> anywhere on this page to save the request.
+        </p>
+      </div>
+    </cerebro-empty>
+  } @else if (visible().length === 0) {
+    <cerebro-empty icon="bi-search" heading="No matching saved requests" [compact]="true">
+      <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+    </cerebro-empty>
+  } @else {
+    <ul class="list" aria-label="Saved requests">
+      @for (request of visible(); track request.name) {
+        @let linked = isLinked(request);
+        <li class="list-item saved-item" [class.is-selected]="linked">
+          <button
+            type="button"
+            class="saved-item__main"
+            [attr.aria-current]="linked ? 'true' : null"
+            [title]="'Load “' + request.name + '” into the editor'"
+            (click)="load.emit(request)"
+          >
+            <span class="method" [class]="'method method-' + request.method">{{ request.method }}</span>
+            <span class="saved-item__body">
+              <span class="saved-item__name">
+                <span class="truncate">{{ request.name }}</span>
+                @if (linked) {
+                  @if (dirty()) {
+                    <span class="saved-item__state saved-item__state--dirty" title="The editor has unsaved changes">
+                      <span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Edited
+                    </span>
+                  } @else {
+                    <span class="saved-item__state" title="Loaded in the editor">
+                      <i class="bi bi-pencil-square" aria-hidden="true"></i> In editor
+                    </span>
+                  }
+                }
+              </span>
+              <span class="saved-item__path mono">{{ request.path || '(no path)' }}</span>
+            </span>
+            <span class="saved-item__meta">
+              <span class="tabular" [title]="usedTitle(request)">{{ usedLabel(request) }}</span>
+              @if (request.body.trim()) {
+                <span class="saved-item__badge" [title]="summary(request)">
+                  <i class="bi bi-braces" aria-hidden="true"></i><span class="visually-hidden">{{ summary(request) }}</span>
+                </span>
+              }
+            </span>
+          </button>
+          <cerebro-menu class="saved-item__menu" [label]="'Actions for ' + request.name" align="end" [minWidth]="210">
+            <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+            <button type="button" class="menu-item" (click)="load.emit(request)">
+              <i class="bi bi-box-arrow-in-up-left" aria-hidden="true"></i> Load into editor
+            </button>
+            <button type="button" class="menu-item" (click)="rename.emit(request)">
+              <i class="bi bi-pencil" aria-hidden="true"></i> Rename…
+            </button>
+            <button type="button" class="menu-item" (click)="duplicate(request)">
+              <i class="bi bi-copy" aria-hidden="true"></i> Duplicate
+            </button>
+            <button type="button" class="menu-item" (click)="viewJson(request)">
+              <i class="bi bi-filetype-json" aria-hidden="true"></i> View JSON
+            </button>
+            <div class="menu-separator" role="separator"></div>
+            <button type="button" class="menu-item menu-item--danger" (click)="remove(request)">
+              <i class="bi bi-trash" aria-hidden="true"></i> Delete
+            </button>
+          </cerebro-menu>
+        </li>
+      }
+    </ul>
+  }
+</div>

@@ -11,19 +11,11 @@ trait ElasticClient {
 
   def main(target: ElasticServer): Future[ElasticResponse]
 
-  def clusterState(target: ElasticServer): Future[ElasticResponse]
-
-  def indicesStats(target: ElasticServer): Future[ElasticResponse]
-
   def nodesStats(stats: Seq[String], target: ElasticServer): Future[ElasticResponse]
 
   def nodeStats(node: String, target: ElasticServer): Future[ElasticResponse]
 
   def indexStats(index: String, target: ElasticServer): Future[ElasticResponse]
-
-  def clusterSettings(target: ElasticServer): Future[ElasticResponse]
-
-  def aliases(target: ElasticServer): Future[ElasticResponse]
 
   def clusterHealth(target: ElasticServer): Future[ElasticResponse]
 
@@ -49,11 +41,6 @@ trait ElasticClient {
 
   def getIndexMapping(index: String, target: ElasticServer): Future[ElasticResponse]
 
-  def putClusterSettings(settings: String, target: ElasticServer): Future[ElasticResponse]
-
-  private def allocationSettings(value: String) =
-    s"""{"transient": {"cluster": {"routing": {"allocation": {"enable": \"$value\"}}}}}"""
-
   def enableShardAllocation(target: ElasticServer): Future[ElasticResponse]
 
   def disableShardAllocation(target: ElasticServer, kind: String): Future[ElasticResponse]
@@ -64,8 +51,6 @@ trait ElasticClient {
 
   def getIndexRecovery(index: String, target: ElasticServer): Future[ElasticResponse]
 
-  def getClusterMapping(target: ElasticServer): Future[ElasticResponse]
-
   def getAliases(target: ElasticServer): Future[ElasticResponse]
 
   def updateAliases(changes: Seq[JsValue], target: ElasticServer): Future[ElasticResponse]
@@ -74,15 +59,17 @@ trait ElasticClient {
 
   def createIndex(index: String, metadata: JsValue, target: ElasticServer): Future[ElasticResponse]
 
+  // Index names only (`_cat/indices` rows with the index column)
   def getIndices(target: ElasticServer): Future[ElasticResponse]
+
+  // Index names and their status (`_cat/indices` rows with the index and status columns)
+  def getIndexStatuses(target: ElasticServer): Future[ElasticResponse]
 
   def getTemplates(target: ElasticServer): Future[ElasticResponse]
 
   def createTemplate(name: String, template: JsValue, target: ElasticServer): Future[ElasticResponse]
 
   def deleteTemplate(name: String, target: ElasticServer): Future[ElasticResponse]
-
-  def getNodes(target: ElasticServer): Future[ElasticResponse]
 
   def analyzeTextByField(index: String, field: String, text: String, target: ElasticServer): Future[ElasticResponse]
 
@@ -120,5 +107,106 @@ trait ElasticClient {
   def catMaster(target: ElasticServer): Future[ElasticResponse]
 
   def executeRequest(method: String, path: String, data: Option[JsValue], target: ElasticServer): Future[ElasticResponse]
+
+  // Shard allocation explain (explains the first unassigned shard without a request)
+  def allocationExplain(request: Option[JsValue], target: ElasticServer): Future[ElasticResponse]
+
+  // Composable index templates and component templates
+  def getIndexTemplates(target: ElasticServer): Future[ElasticResponse]
+
+  def putIndexTemplate(name: String, template: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def deleteIndexTemplate(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  def simulateIndexTemplate(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  def getComponentTemplates(target: ElasticServer): Future[ElasticResponse]
+
+  def putComponentTemplate(name: String, template: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def deleteComponentTemplate(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Index details
+  def getIndexAliases(index: String, target: ElasticServer): Future[ElasticResponse]
+
+  def getIndexShards(index: String, target: ElasticServer): Future[ElasticResponse]
+
+  def getIndexRoutingShards(index: String, target: ElasticServer): Future[ElasticResponse]
+
+  def lookupIndices(expression: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Tasks
+  def getTasks(parentTaskId: Option[String], target: ElasticServer): Future[ElasticResponse]
+
+  def cancelTask(taskId: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Data streams; includeHidden also lists hidden and system streams (Elasticsearch 7.11+)
+  def getDataStreams(includeHidden: Boolean, target: ElasticServer): Future[ElasticResponse]
+
+  def getDataStreamStats(includeHidden: Boolean, target: ElasticServer): Future[ElasticResponse]
+
+  def rolloverDataStream(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  def deleteDataStream(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Index lifecycle management
+  def getIlmPolicies(target: ElasticServer): Future[ElasticResponse]
+
+  def putIlmPolicy(name: String, policy: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def deleteIlmPolicy(name: String, target: ElasticServer): Future[ElasticResponse]
+
+  def explainIlm(index: String, target: ElasticServer): Future[ElasticResponse]
+
+  def retryIlm(indices: String, target: ElasticServer): Future[ElasticResponse]
+
+  // Ingest pipelines
+  def getPipelines(target: ElasticServer): Future[ElasticResponse]
+
+  def putPipeline(id: String, pipeline: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def deletePipeline(id: String, target: ElasticServer): Future[ElasticResponse]
+
+  def simulatePipeline(request: JsValue, verbose: Boolean, target: ElasticServer): Future[ElasticResponse]
+
+  // Shard recoveries
+  def getRecoveries(activeOnly: Boolean, target: ElasticServer): Future[ElasticResponse]
+
+  // Cluster doctor
+  def healthReport(target: ElasticServer): Future[ElasticResponse]
+
+  def migrationDeprecations(target: ElasticServer): Future[ElasticResponse]
+
+  def ilmErrors(target: ElasticServer): Future[ElasticResponse]
+
+  def indexBlocks(target: ElasticServer): Future[ElasticResponse]
+
+  def catIndexSizes(target: ElasticServer): Future[ElasticResponse]
+
+  def catShardSizes(target: ElasticServer): Future[ElasticResponse]
+
+  def retryFailedAllocations(target: ElasticServer): Future[ElasticResponse]
+
+  // Live metrics; indexing pressure exists from Elasticsearch 7.9
+  def nodeMetrics(includeIndexingPressure: Boolean, target: ElasticServer): Future[ElasticResponse]
+
+  // Performance diagnosis
+  def hotThreads(node: Option[String], threads: Int, interval: String, kind: String, ignoreIdle: Boolean,
+                 target: ElasticServer): Future[ElasticResponse]
+
+  def catThreadPools(target: ElasticServer): Future[ElasticResponse]
+
+  def pendingClusterTasks(target: ElasticServer): Future[ElasticResponse]
+
+  def slowlogSettings(target: ElasticServer): Future[ElasticResponse]
+
+  // Index operations
+  def resizeIndex(kind: String, index: String, targetIndex: String, body: JsValue, target: ElasticServer): Future[ElasticResponse]
+
+  def rollover(alias: String, newIndex: Option[String], body: JsValue, dryRun: Boolean, target: ElasticServer): Future[ElasticResponse]
+
+  def reindex(body: JsValue, slices: Option[String], requestsPerSecond: Option[String], target: ElasticServer): Future[ElasticResponse]
+
+  def getTask(taskId: String, target: ElasticServer): Future[ElasticResponse]
 
 }

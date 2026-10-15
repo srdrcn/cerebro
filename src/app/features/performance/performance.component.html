@@ -1,0 +1,64 @@
+<section class="page" aria-labelledby="performance-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="performance-title" class="page-title">Performance</h1>
+      <p class="page-subtitle">Find out what keeps the cluster busy: hot threads, thread pools, the master’s task queue and slow logs.</p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn" routerLink="/tasks" [queryParams]="connection.hostQuery()">
+        <i class="bi bi-activity" aria-hidden="true"></i> Tasks
+      </a>
+      <a class="btn" routerLink="/nodes" [queryParams]="connection.hostQuery()">
+        <i class="bi bi-hdd-stack" aria-hidden="true"></i> Nodes
+      </a>
+    </div>
+  </header>
+
+  <div #tablist class="tabs performance-tabs" role="tablist" aria-label="Performance views" cerebroScrollTabs>
+    @for (definition of tabs; track definition.key) {
+      <button
+        type="button"
+        role="tab"
+        [id]="'performance-tab-' + definition.key"
+        [attr.aria-controls]="'performance-panel-' + definition.key"
+        [attr.aria-selected]="tab() === definition.key"
+        [attr.tabindex]="tab() === definition.key ? 0 : -1"
+        (click)="selectTab(definition.key)"
+        (keydown)="onTabKeydown($event)"
+      >
+        <i class="bi" [class]="'bi ' + definition.icon" aria-hidden="true"></i>
+        <span>{{ definition.label }}</span>
+        @if (tabBadge(definition.key); as badge) {
+          <span class="badge tabular" [class]="'badge tabular ' + badge.tone" [attr.aria-label]="badge.label">{{ badge.value }}</span>
+        }
+      </button>
+    }
+  </div>
+
+  @for (definition of tabs; track definition.key) {
+    <div
+      class="performance-panel"
+      role="tabpanel"
+      [id]="'performance-panel-' + definition.key"
+      [attr.aria-labelledby]="'performance-tab-' + definition.key"
+      [hidden]="tab() !== definition.key"
+    >
+      @if (visited().has(definition.key)) {
+        @switch (definition.key) {
+          @case ('hot-threads') {
+            <cerebro-hot-threads [active]="tab() === 'hot-threads'" />
+          }
+          @case ('thread-pools') {
+            <cerebro-thread-pools [active]="tab() === 'thread-pools'" (newRejections)="newRejections.set($event)" />
+          }
+          @case ('pending-tasks') {
+            <cerebro-pending-tasks [active]="tab() === 'pending-tasks'" (count)="pendingCount.set($event)" />
+          }
+          @case ('slow-logs') {
+            <cerebro-slow-logs [active]="tab() === 'slow-logs'" (configured)="slowLogIndices.set($event)" />
+          }
+        }
+      }
+    </div>
+  }
+</section>

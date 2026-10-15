@@ -9,22 +9,27 @@ import models.{CerebroResponse, Hosts}
 import play.api.libs.json.Json
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 
 class SnapshotsController @Inject()(val authentication: AuthenticationModule,
                                     val hosts: Hosts,
                                     client: ElasticClient) extends BaseController {
 
+  // Elasticsearch errors (401, 403, …) are passed through with their reason.
   def get = process { request =>
-    Future.sequence(Seq(
-      client.getIndices(request.target),
-      client.getRepositories(request.target)
-    )).map { responses =>
-      Json.obj(
-        "indices" -> Indices(responses(0).body),
-        "repositories" -> Repositories(responses(1).body)
-      )
-    }.map(CerebroResponse(200, _))
+    val indices = client.getIndices(request.target)
+    val repositories = client.getRepositories(request.target)
+    for {
+      indicesResponse <- indices
+      repositoriesResponse <- repositories
+    } yield (indicesResponse, repositoriesResponse) match {
+      case (Success(_, indicesBody), Success(_, repositoriesBody)) =>
+        CerebroResponse(200, Json.obj(
+          "indices" -> Indices(indicesBody),
+          "repositories" -> Repositories(repositoriesBody)
+        ))
+      case (Error(status, error), _) => CerebroResponse(status, error)
+      case (_, Error(status, error)) => CerebroResponse(status, error)
+    }
   }
 
   def getSnapshots = process { request =>

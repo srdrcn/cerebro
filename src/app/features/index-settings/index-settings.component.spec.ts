@@ -1,0 +1,127 @@
+import { TestBed } from '@angular/core/testing';
+import { Location } from '@angular/common';
+import { Router, provideRouter, withRouterConfig } from '@angular/router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AlertService } from '../../core/alert.service';
+import { ClusterApiService } from '../../core/cluster-api.service';
+import { ConnectionService } from '../../core/connection.service';
+import { DialogService } from '../../core/dialog.service';
+import { RefreshService } from '../../core/refresh.service';
+import { IndexSettingsComponent } from './index-settings.component';
+import { buildIndexSettingRows } from './index-settings.models';
+
+describe('IndexSettingsComponent', () => {
+  const alerts = { error: vi.fn(), success: vi.fn(), info: vi.fn(), warn: vi.fn() };
+  const dialogs = { confirm: vi.fn(), showJson: vi.fn() };
+
+  beforeEach(() => {
+    Object.values(alerts).forEach((mock) => mock.mockReset());
+    dialogs.confirm.mockReset();
+    dialogs.confirm.mockResolvedValue(true);
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: ClusterApiService, useValue: { post: vi.fn(async () => ({})) } },
+        { provide: AlertService, useValue: alerts },
+        { provide: DialogService, useValue: dialogs },
+      ],
+    });
+  });
+
+  function component(): IndexSettingsComponent {
+    const target = TestBed.runInInjectionContext(() => new IndexSettingsComponent());
+    target.resolvedIndex.set('products');
+    target.rows.set(
+      buildIndexSettingRows({ defaults: { 'index.refresh_interval': '1s' }, settings: { 'index.number_of_replicas': '1' } }),
+    );
+    return target;
+  }
+
+  it('lets the route leave without a dialog when nothing is pending', async () => {
+    await expect(component().confirmDiscard()).resolves.toBe(true);
+    expect(dialogs.confirm).not.toHaveBeenCalled();
+  });
+
+  it('asks once before discarding pending edits and lists them', async () => {
+    const target = component();
+    target.drafts.set({ 'index.number_of_replicas': { value: '2', scope: 'persistent' } });
+
+    await expect(target.confirmDiscard()).resolves.toBe(true);
+
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+    expect(dialogs.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Discard unsaved changes?',
+        message: '1 unsaved change to products will be lost if you leave this page.',
+        tone: 'danger',
+        items: ['index.number_of_replicas'],
+      }),
+    );
+  });
+
+  it('lists the pending edits when switching index with the picker', async () => {
+    const target = component();
+    target.drafts.set({ 'index.number_of_replicas': { value: '2', scope: 'persistent' } });
+    await target.pick('customers');
+
+    expect(dialogs.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ confirmLabel: 'Discard and switch', items: ['index.number_of_replicas'] }),
+    );
+    expect(target.drafts()).toEqual({});
+  });
+
+  it('steps back to the edited index when a Back/Forward switch is declined', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([], withRouterConfig({ canceledNavigationResolution: 'computed' })),
+        // The settings never arrive, so the drafts set below stay pending.
+        { provide: ClusterApiService, useValue: { post: vi.fn(() => new Promise(() => undefined)) } },
+        { provide: AlertService, useValue: alerts },
+        { provide: DialogService, useValue: dialogs },
+      ],
+    });
+    dialogs.confirm.mockResolvedValue(false);
+    const router = TestBed.inject(Router);
+    const location = TestBed.inject(Location);
+    const position = (): unknown => (location.getState() as Record<string, unknown> | null)?.['ɵrouterPageId'];
+
+    // Listens to popstate, as the bootstrapped app does.
+    router.initialNavigation();
+    await router.navigateByUrl('/?index=products');
+    const edited = position();
+    const target = component();
+    TestBed.tick();
+    expect(target.loadedIndex()).toBe('products');
+    target.drafts.set({ 'index.number_of_replicas': { value: '2', scope: 'persistent' } });
+
+    // The history entry after the edited one, as Forward would show it.
+    await router.navigateByUrl('/?index=customers');
+    TestBed.tick();
+
+    await vi.waitFor(() => expect(router.url).toBe('/?index=products'));
+    expect(position()).toBe(edited);
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+    expect(target.loadedIndex()).toBe('products');
+    expect(target.pending().length).toBe(1);
+  });
+
+  it('loads the settings on open and on Reload, not on refresh ticks', async () => {
+    const post = vi.fn(async () => ({ products: { settings: { index: { number_of_replicas: '1' } }, defaults: {} } }));
+    TestBed.overrideProvider(ClusterApiService, { useValue: { post } });
+    TestBed.inject(ConnectionService).connect('http://localhost:9200');
+    await TestBed.inject(Router).navigateByUrl('/?index=products');
+    const target = TestBed.runInInjectionContext(() => new IndexSettingsComponent());
+    TestBed.tick();
+    await vi.waitFor(() => expect(target.state()).toBe('ready'));
+    expect(post).toHaveBeenCalledTimes(1);
+
+    TestBed.inject(RefreshService).refresh();
+    TestBed.tick();
+    expect(post).toHaveBeenCalledTimes(1);
+
+    await target.reload();
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenLastCalledWith('index_settings', { index: 'products' });
+  });
+});

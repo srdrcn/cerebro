@@ -1,0 +1,128 @@
+/*
+ * Ace editor theme driven by the design tokens. CodeEditorComponent applies it
+ * as an inline Ace theme (cssClass "ace-cerebro"), so the editor follows the
+ * light/dark theme without re-initialising Ace.
+ */
+
+.ace-cerebro {
+  background: var(--code-bg);
+  color: var(--code-text);
+  font-family: var(--font-mono) !important;
+  line-height: 1.6;
+}
+
+.ace-cerebro .ace_gutter {
+  background: var(--code-gutter);
+  color: var(--code-gutter-text);
+}
+
+.ace-cerebro .ace_gutter-active-line {
+  background: var(--code-line);
+  color: var(--text-2);
+}
+
+.ace-cerebro .ace_print-margin {
+  width: 1px;
+  background: var(--border);
+}
+
+.ace-cerebro .ace_cursor {
+  color: var(--accent);
+}
+
+.ace-cerebro .ace_marker-layer .ace_selection {
+  background: var(--code-selection);
+}
+
+.ace-cerebro.ace_multiselect .ace_selection.ace_start {
+  box-shadow: 0 0 3px 0 var(--code-bg);
+}
+
+.ace-cerebro .ace_marker-layer .ace_step {
+  background: var(--yellow-soft);
+}
+
+.ace-cerebro .ace_marker-layer .ace_bracket {
+  margin: -1px 0 0 -1px;
+  border: 1px solid var(--border-strong);
+}
+
+.ace-cerebro .ace_marker-layer .ace_active-line {
+  background: var(--code-line);
+}
+
+.ace-cerebro .ace_marker-layer .ace_selected-word {
+  border: 1px solid var(--code-selection);
+}
+
+.ace-cerebro .ace_fold {
+  border-color: var(--code-punct);
+  background-color: var(--accent-soft-strong);
+}
+
+.ace-cerebro .ace_gutter .ace_fold-widget {
+  opacity: 0.6;
+}
+
+.ace-cerebro .ace_indent-guide {
+  background: linear-gradient(var(--border-subtle), var(--border-subtle)) right / 1px 100% no-repeat;
+}
+
+.ace-cerebro .ace_variable {
+  color: var(--code-key);
+}
+
+.ace-cerebro .ace_string {
+  color: var(--code-string);
+}
+
+.ace-cerebro .ace_constant.ace_numeric {
+  color: var(--code-number);
+}
+
+.ace-cerebro .ace_constant.ace_language,
+.ace-cerebro .ace_keyword,
+.ace-cerebro .ace_boolean {
+  color: var(--code-keyword);
+}
+
+.ace-cerebro .ace_paren,
+.ace-cerebro .ace_punctuation,
+.ace-cerebro .ace_text {
+  color: var(--code-punct);
+}
+
+.ace-cerebro .ace_invalid {
+  color: var(--code-invalid);
+  text-decoration: underline wavy;
+}
+
+.ace-cerebro .ace_scrollbar {
+  scrollbar-color: var(--scrollbar) transparent;
+}
+
+.ace-cerebro .ace_placeholder {
+  margin: 0;
+  padding: 0 8px !important;
+  color: var(--placeholder);
+  font-family: var(--font-mono) !important;
+  opacity: 1;
+  transform: none;
+}
+
+.ace_editor .ace_search {
+  border: 1px solid var(--border);
+  border-radius: 0 0 0 var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.ace_editor .ace_search_field,
+.ace_editor .ace_searchbtn,
+.ace_editor .ace_replacebtn {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+}

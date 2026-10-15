@@ -1,0 +1,208 @@
+:host {
+  display: block;
+  margin-bottom: var(--space-4);
+}
+
+.ov-live__header {
+  min-height: 48px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px var(--space-3);
+  padding: 8px var(--space-4) 8px 10px;
+}
+
+.ov-live:not(.is-collapsed) .ov-live__header {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ov-live__title {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 620;
+}
+
+.ov-live__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+}
+
+.ov-live__toggle:hover {
+  background: var(--surface-hover);
+}
+
+.ov-live__chevron {
+  color: var(--text-3);
+  font-size: 12px;
+  transition: transform var(--duration) var(--ease-out);
+}
+
+.ov-live__toggle[aria-expanded="true"] .ov-live__chevron {
+  transform: rotate(90deg);
+}
+
+.ov-live__icon {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.ov-live__status {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.ov-live__sampling,
+.ov-live__collecting,
+.ov-live__warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ov-live__collecting .spinner,
+.ov-live__warning .spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.ov-live__warning {
+  color: var(--yellow-text);
+}
+
+.ov-live__window {
+  font-variant-numeric: tabular-nums;
+}
+
+.ov-live__callout {
+  flex-wrap: wrap;
+  align-items: center;
+  margin: var(--space-3) var(--space-4) 0;
+}
+
+/* The reason keeps a readable width; the button moves below it on phones. */
+.ov-live__callout > .min-w-0 {
+  flex: 1 1 240px;
+}
+
+.ov-live__retry {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/*
+ * Five readings in a row on wide pages, then 3 + 2, 2 + 2 + 1 and one column.
+ * The 1px gaps over a border-coloured background draw every divider, so no
+ * breakpoint has to undo the borders of another.
+ */
+.ov-live__grid {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border-radius: 0 0 calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px);
+  background: var(--border-subtle);
+}
+
+.ov-live__callout + .ov-live__grid {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ov-live__tile {
+  min-width: 0;
+  display: grid;
+  /* A footer that wraps in one tile must not push down the readings of the
+     others: the rows keep their height and the spare room stays below. */
+  align-content: start;
+  gap: 6px;
+  padding: 12px var(--space-4) 14px;
+  background: var(--surface);
+}
+
+.ov-live__reading {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ov-live__value {
+  color: var(--text);
+  font-size: var(--text-xl);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.ov-live__unit {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ov-live__chart {
+  margin: 2px 0;
+}
+
+/* Wraps rather than truncating: the busiest node's name ends the line, and
+   touch screens never show a title tooltip. */
+.ov-live__meta {
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .ov-live__grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .ov-live__tile {
+    grid-column: span 2;
+  }
+
+  .ov-live__tile:nth-child(n + 4) {
+    grid-column: span 3;
+  }
+}
+
+@media (max-width: 760px) {
+  .ov-live__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ov-live__tile,
+  .ov-live__tile:nth-child(n + 4) {
+    grid-column: auto;
+  }
+
+  .ov-live__tile:last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+
+  .ov-live__value {
+    font-size: var(--text-lg);
+  }
+}

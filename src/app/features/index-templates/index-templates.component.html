@@ -1,0 +1,610 @@
+<section class="page" aria-labelledby="index-templates-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="index-templates-title" class="page-title">Index templates</h1>
+      <p class="page-subtitle">
+        Composable templates give new indices and data streams their settings, mappings and aliases, built from reusable component templates.
+      </p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn" routerLink="/templates" [queryParams]="connection.hostQuery()">
+        <i class="bi bi-file-earmark-code" aria-hidden="true"></i> Legacy templates
+      </a>
+    </div>
+  </header>
+
+  <div class="tabs it-tabs" role="tablist" aria-label="Template type">
+    <button
+      type="button"
+      role="tab"
+      id="templates-tab-index"
+      aria-controls="templates-panel"
+      [attr.aria-selected]="tab() === 'index'"
+      [attr.tabindex]="tab() === 'index' ? 0 : -1"
+      [disabled]="saving()"
+      (click)="setTab('index')"
+      (keydown)="onTabKeydown($event)"
+    >
+      <i class="bi bi-layers" aria-hidden="true"></i> Index templates
+      @if (loaded()) {
+        <span class="badge tabular">{{ counts().index }}</span>
+      }
+    </button>
+    <button
+      type="button"
+      role="tab"
+      id="templates-tab-component"
+      aria-controls="templates-panel"
+      [attr.aria-selected]="tab() === 'component'"
+      [attr.tabindex]="tab() === 'component' ? 0 : -1"
+      [disabled]="saving()"
+      (click)="setTab('component')"
+      (keydown)="onTabKeydown($event)"
+    >
+      <i class="bi bi-puzzle" aria-hidden="true"></i> Component templates
+      @if (loaded()) {
+        <span class="badge tabular">{{ counts().component }}</span>
+      }
+    </button>
+  </div>
+
+  <div
+    id="templates-panel"
+    role="tabpanel"
+    class="layout-sidebar-start"
+    [attr.aria-labelledby]="'templates-tab-' + tab()"
+  >
+    <!-- ---------------------------------------------------------- List -->
+    <div class="card list-card">
+      <div class="card-header">
+        <!-- The tab above names the kind; the short title leaves room for the count and the action. -->
+        <h2 class="card-title spacer">
+          <i class="bi" [class]="'bi ' + (tab() === 'index' ? 'bi-layers' : 'bi-puzzle')" aria-hidden="true"></i> Templates
+        </h2>
+        @if (loaded()) {
+          <span class="count-label">
+            @if (query().trim()) {
+              <strong>{{ rows().length | num }}</strong> of {{ totalCount() | num }} {{ totalCount() | plural: 'template' }}
+            } @else {
+              <strong>{{ totalCount() | num }}</strong> {{ totalCount() | plural: 'template' }}
+            }
+          </span>
+        }
+        <button
+          type="button"
+          class="btn btn-sm btn-soft"
+          [disabled]="saving()"
+          [attr.title]="saving() ? 'Wait for the template to be saved' : tab() === 'index' ? 'New index template' : 'New component template'"
+          (click)="newTemplate()"
+        >
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> New template
+        </button>
+      </div>
+
+      @if (loaded()) {
+        <div class="list-card__toolbar">
+          <cerebro-search
+            [(value)]="query"
+            [small]="true"
+            [placeholder]="tab() === 'index' ? 'Filter by name, pattern or component' : 'Filter by name'"
+            [ariaLabel]="tab() === 'index' ? 'Filter index templates by name, index pattern or component' : 'Filter component templates by name'"
+          />
+          <label class="switch list-card__switch">
+            <input
+              type="checkbox"
+              [ngModel]="showManaged()"
+              (ngModelChange)="setShowManaged($event)"
+            />
+            Show managed templates
+            <span class="count">{{ managedCount() }}</span>
+          </label>
+        </div>
+
+        <ul class="list list-card__list" [attr.aria-label]="tab() === 'index' ? 'Index templates' : 'Component templates'" [attr.aria-busy]="loading() || saving() ? true : null">
+          @for (row of rows(); track row.name) {
+            @let isSelected = kind() === row.kind && selected() === row.name;
+            <li>
+              <button
+                type="button"
+                class="list-item list-item--interactive it-item"
+                [class.is-selected]="isSelected"
+                [attr.aria-current]="isSelected ? 'true' : null"
+                [disabled]="saving()"
+                (click)="select(row)"
+              >
+                <span class="list-item__icon" aria-hidden="true">
+                  <i class="bi" [class]="'bi ' + (row.managed ? 'bi-gear-wide-connected' : row.kind === 'index' ? (row.dataStream ? 'bi-water' : 'bi-layers') : 'bi-puzzle')"></i>
+                </span>
+                <span class="list-item__body">
+                  <span class="list-item__title it-item__name">
+                    <span class="truncate min-w-0">{{ row.name }}</span>
+                    @if (isSelected && dirty()) {
+                      <span class="dot dot-yellow dot-sm" title="Unsaved changes"></span>
+                      <span class="visually-hidden">(unsaved changes)</span>
+                    }
+                  </span>
+                  @if (row.kind === 'index') {
+                    <span class="list-item__meta it-item__patterns" [class.is-empty]="row.patterns.length === 0" [title]="row.patterns.join(', ')">
+                      {{ row.patterns.join(', ') || 'No index patterns' }}
+                    </span>
+                    @if (row.dataStream || row.composedOf.length > 0 || row.managed) {
+                      <span class="it-item__tags">
+                        @if (row.managed) {
+                          <span class="badge badge-outline">managed</span>
+                        }
+                        @if (row.dataStream) {
+                          <span class="badge badge-blue" title="Creates data streams for matching names"><i class="bi bi-water" aria-hidden="true"></i> data stream</span>
+                        }
+                        @for (component of row.composedOf.slice(0, 3); track $index) {
+                          <span class="tag" [title]="'Composed of ' + component"><i class="bi bi-puzzle" aria-hidden="true"></i><span>{{ component }}</span></span>
+                        }
+                        @if (row.composedOf.length > 3) {
+                          <span class="tag" [title]="row.composedOf.slice(3).join(', ')">+{{ row.composedOf.length - 3 }}</span>
+                        }
+                      </span>
+                    }
+                  } @else {
+                    <span class="list-item__meta">{{ row.contents }}</span>
+                    <span class="it-item__tags">
+                      @if (row.managed) {
+                        <span class="badge badge-outline">managed</span>
+                      }
+                      @if (row.usedBy.length > 0) {
+                        <span class="badge badge-accent" [title]="'Used by ' + row.usedBy.join(', ')">used by {{ row.usedBy.length }}</span>
+                      } @else {
+                        <span class="badge" title="No index template is composed of it">unused</span>
+                      }
+                      @if (row.version !== null) {
+                        <span class="badge badge-outline tabular">v{{ row.version }}</span>
+                      }
+                    </span>
+                  }
+                </span>
+                @if (row.kind === 'index' && row.priority !== null) {
+                  <span class="badge tabular it-item__priority" [title]="'Priority ' + row.priority + ': the highest priority wins when several templates match'">
+                    priority {{ row.priority }}
+                  </span>
+                }
+              </button>
+            </li>
+          } @empty {
+            <li>
+              @if (query().trim()) {
+                <cerebro-empty
+                  icon="bi-funnel"
+                  heading="No matching templates"
+                  [text]="showManaged() ? 'No template matches this filter.' : 'No template matches this filter. Managed templates are hidden.'"
+                  [compact]="true"
+                >
+                  <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+                  @if (!showManaged() && managedCount() > 0) {
+                    <button type="button" class="btn btn-sm btn-ghost" (click)="setShowManaged(true)">Show managed</button>
+                  }
+                </cerebro-empty>
+              } @else if (tab() === 'index') {
+                <cerebro-empty
+                  icon="bi-layers"
+                  heading="No index templates yet"
+                  text="Create one to give new indices or data streams predefined settings, mappings and aliases."
+                  [compact]="true"
+                />
+              } @else {
+                <cerebro-empty
+                  icon="bi-puzzle"
+                  heading="No component templates yet"
+                  text="Component templates are reusable blocks of settings and mappings that index templates are composed of."
+                  [compact]="true"
+                />
+              }
+            </li>
+          }
+        </ul>
+      } @else if (failed()) {
+        <cerebro-empty
+          icon="bi-exclamation-triangle"
+          heading="Could not load templates"
+          [text]="loadError() ?? 'The cluster did not answer the template requests.'"
+        >
+          <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+          </button>
+        </cerebro-empty>
+      } @else {
+        <div class="it-skeleton" role="status" aria-label="Loading templates">
+          @for (placeholder of [1, 2, 3, 4, 5]; track placeholder) {
+            <div class="it-skeleton__row" aria-hidden="true">
+              <span class="skeleton it-skeleton__icon"></span>
+              <span class="it-skeleton__lines">
+                <span class="skeleton" style="height: 12px; width: 58%"></span>
+                <span class="skeleton" style="height: 10px; width: 38%"></span>
+              </span>
+            </div>
+          }
+        </div>
+      }
+
+      <p class="list-card__note">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        @if (tab() === 'index') {
+          <span>When several templates match a new index, only the one with the highest priority is applied.</span>
+        } @else {
+          <span>Changes apply to indices created afterwards by the index templates that use them.</span>
+        }
+      </p>
+    </div>
+
+    <!-- -------------------------------------------------------- Editor -->
+    <div class="stack it-main">
+      <div #editorCard class="card card--sticky-footer it-editor" role="region" aria-labelledby="it-editor-title">
+        <div class="card-header it-editor__header">
+          <span class="card-icon" aria-hidden="true">
+            <i class="bi" [class]="'bi ' + (selected() === null ? 'bi-plus-lg' : kind() === 'index' ? 'bi-layers' : 'bi-puzzle')"></i>
+          </span>
+          <div class="min-w-0 spacer">
+            <h2 id="it-editor-title" class="card-title">
+              @if (selected(); as current) {
+                <span class="truncate">{{ current }}</span>
+              } @else {
+                New {{ noun() }}
+              }
+            </h2>
+            <p class="card-subtitle truncate">
+              @if (selected() === null) {
+                Not saved yet
+              } @else if (kind() === 'index') {
+                Index template
+                @if (selectedPatterns()) {
+                  · matches <span class="mono">{{ selectedPatterns() }}</span>
+                }
+              } @else {
+                Component template
+                · {{ usedBy().length === 0 ? 'not used by any index template' : 'used by ' + pluralize(usedBy().length, 'index template') }}
+              }
+            </p>
+          </div>
+          <div class="row it-editor__actions">
+            @if (dirty()) {
+              <span class="badge badge-yellow" role="status">
+                <span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Unsaved changes
+              </span>
+            }
+            @if (selected() !== null) {
+              <button type="button" class="btn btn-sm" (click)="viewJson()" [disabled]="!selectedBody()">
+                <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-danger-soft"
+                [class.is-loading]="deleting()"
+                [disabled]="deleting() || saving() || selectedMissing() || !loaded()"
+                (click)="remove()"
+              >
+                <i class="bi bi-trash" aria-hidden="true"></i> Delete
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="card-body stack">
+          @if (selectedMissing()) {
+            <div class="callout callout-warning">
+              <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+              <p><strong>{{ selected() }}</strong> no longer exists on the cluster. Saving creates it again.</p>
+            </div>
+          } @else if (selectedManaged()) {
+            <div class="callout callout-info">
+              <i class="bi bi-gear-wide-connected" aria-hidden="true"></i>
+              <p>
+                <strong>Managed template.</strong> It was installed by Elasticsearch or a stack component, which may overwrite your changes on upgrade.
+                Prefer a custom template with a higher priority, or an <span class="mono">&#64;custom</span> component template.
+              </p>
+            </div>
+          }
+
+          <!-- Summary of what the body describes -->
+          @if (summary(); as facts) {
+            <dl class="it-facts">
+              @if (kind() === 'index') {
+                <div class="it-fact it-fact--wide">
+                  <dt class="section-label">Index patterns</dt>
+                  <dd>
+                    @for (pattern of facts.patterns; track $index) {
+                      <span class="tag mono">{{ pattern }}</span>
+                    } @empty {
+                      <span class="text-danger">None</span>
+                    }
+                  </dd>
+                </div>
+                <div class="it-fact">
+                  <dt class="section-label">Priority</dt>
+                  <dd class="tabular">{{ facts.priority ?? 0 }}@if (facts.priority === null) { <span class="text-muted text-xs"> (default)</span> }</dd>
+                </div>
+                <div class="it-fact">
+                  <dt class="section-label">Creates</dt>
+                  <dd>
+                    @if (facts.dataStream) {
+                      <span class="badge badge-blue"><i class="bi bi-water" aria-hidden="true"></i> data streams</span>
+                    } @else {
+                      <span class="badge"><i class="bi bi-box" aria-hidden="true"></i> indices</span>
+                    }
+                  </dd>
+                </div>
+                <div class="it-fact it-fact--wide">
+                  <dt class="section-label">Composed of</dt>
+                  <dd>
+                    @for (component of facts.composedOf; track $index; let i = $index) {
+                      @if (i > 0) {
+                        <i class="bi bi-chevron-right it-compose-arrow" aria-hidden="true"></i>
+                      }
+                      @if (component.missing) {
+                        <span class="tag it-chip it-chip--missing" title="This component template does not exist; Elasticsearch rejects the template until it does">
+                          <i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span class="mono">{{ component.name }}</span> missing
+                        </span>
+                      } @else if (component.optional) {
+                        <span class="tag it-chip it-chip--optional" title="Does not exist yet; listed in ignore_missing_component_templates, so it is skipped until it is created">
+                          <i class="bi bi-puzzle" aria-hidden="true"></i><span class="mono">{{ component.name }}</span> optional
+                        </span>
+                      } @else {
+                        <button type="button" class="tag it-chip" [title]="'Open component template ' + component.name" (click)="openTemplate('component', component.name)">
+                          <i class="bi bi-puzzle" aria-hidden="true"></i><span class="mono">{{ component.name }}</span>
+                        </button>
+                      }
+                    } @empty {
+                      <span class="text-muted">No component templates</span>
+                    }
+                  </dd>
+                </div>
+                <div class="it-fact">
+                  <dt class="section-label">Own template block</dt>
+                  <dd [class.text-muted]="facts.contents === 'Empty'">{{ facts.contents === 'Empty' ? 'None' : facts.contents }}</dd>
+                </div>
+              } @else {
+                <div class="it-fact it-fact--wide">
+                  <dt class="section-label">Defines</dt>
+                  <dd>{{ facts.contents }}</dd>
+                </div>
+                <div class="it-fact it-fact--wide">
+                  <dt class="section-label">Used by</dt>
+                  <dd>
+                    @for (user of usedBy(); track $index) {
+                      <button type="button" class="tag it-chip" [title]="'Open index template ' + user" (click)="openTemplate('index', user)">
+                        <i class="bi bi-layers" aria-hidden="true"></i><span class="mono">{{ user }}</span>
+                      </button>
+                    } @empty {
+                      <span class="text-muted">{{ selected() === null ? 'Not saved yet' : 'No index template' }}</span>
+                    }
+                  </dd>
+                </div>
+              }
+              <!-- A component's two wide cells fill the row above, so its Version takes a full row of its own. -->
+              <div class="it-fact" [class.it-fact--full]="kind() === 'component'">
+                <dt class="section-label">Version</dt>
+                <dd class="tabular">{{ facts.version ?? '–' }}</dd>
+              </div>
+              <div class="it-fact it-fact--full">
+                <dt class="section-label">{{ facts.description || facts.meta.length === 0 ? 'Description' : 'Metadata' }}</dt>
+                <dd>
+                  @if (facts.description) {
+                    <span class="it-description">{{ facts.description }}</span>
+                  } @else if (facts.meta.length === 0) {
+                    <span class="text-muted">No description <span class="text-xs">(set <span class="mono">_meta.description</span>)</span></span>
+                  }
+                  @for (entry of facts.meta; track entry.key) {
+                    <span class="tag" [title]="entry.key + ': ' + entry.value"><span class="tag-key">{{ entry.key }}</span><span>{{ entry.value }}</span></span>
+                  }
+                </dd>
+              </div>
+            </dl>
+          }
+
+          <div class="field it-name-field">
+            <label class="field-label" for="it-name">Name</label>
+            <input
+              #nameInput
+              id="it-name"
+              class="input input-mono"
+              [class.is-invalid]="nameError()"
+              [ngModel]="name()"
+              (ngModelChange)="name.set($event)"
+              (keydown.enter)="save()"
+              [placeholder]="kind() === 'index' ? 'e.g. logs-app' : 'e.g. logs-mappings'"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              required
+              aria-required="true"
+              [attr.aria-invalid]="nameError() ? true : null"
+              [attr.aria-describedby]="nameError() ? 'it-name-error' : 'it-name-help'"
+            />
+            <div id="it-name-help" aria-live="polite">
+              @if (nameError(); as error) {
+                <p id="it-name-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+              } @else {
+                @switch (mode()) {
+                  @case ('overwrite') {
+                    <p class="field-hint text-warning">
+                      <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                      A {{ noun() }} named <span class="mono">{{ name() }}</span> already exists. Saving overwrites it.
+                    </p>
+                  }
+                  @case ('copy') {
+                    <p class="field-hint">
+                      <i class="bi bi-copy" aria-hidden="true"></i>
+                      Saving creates <span class="mono">{{ name() }}</span>; <span class="mono">{{ selected() }}</span> stays unchanged.
+                    </p>
+                  }
+                  @case ('update') {
+                    <p class="field-hint">Rename to save a copy under a new name.</p>
+                  }
+                  @default {
+                    <p class="field-hint">Lowercase, without spaces, and not starting with an underscore.</p>
+                  }
+                }
+              }
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="it-body-label">
+              <span class="field-label" id="it-body-label">Body</span>
+              <span class="text-muted text-sm">
+                @if (kind() === 'index') {
+                  index_patterns, composed_of, priority, template, data_stream, _meta
+                } @else {
+                  template (settings, mappings, aliases), version, _meta
+                }
+              </span>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-sm btn-ghost" (click)="format()" title="Format JSON">
+                <i class="bi bi-text-indent-left" aria-hidden="true"></i> Format
+              </button>
+            </div>
+            <cerebro-code-editor
+              [value]="body()"
+              (valueChange)="body.set($event)"
+              [minLines]="20"
+              [maxLines]="60"
+              [ariaLabel]="(kind() === 'index' ? 'Index template' : 'Component template') + ' body JSON'"
+              [invalid]="bodyInvalid()"
+              [describedBy]="bodyInvalid() ? 'it-body-error' : null"
+              (submit)="save()"
+            />
+            <!-- Only the coarse state is live: the details change on every keystroke. -->
+            <span class="visually-hidden" role="status">{{ bodyStatus() }}</span>
+            <div class="it-status">
+              @if (syntaxError(); as error) {
+                <span class="badge badge-red">
+                  <i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid JSON
+                </span>
+                <span id="it-body-error" class="it-status__message text-danger">{{ error }}</span>
+              } @else if (errors().length > 0) {
+                <span class="badge badge-red">
+                  <i class="bi bi-x-circle-fill" aria-hidden="true"></i> {{ pluralize(errors().length, 'problem') }}
+                </span>
+                <span id="it-body-error" class="it-status__message text-danger">{{ errors()[0]?.message }}</span>
+              } @else if (warnings().length > 0) {
+                <span class="badge badge-yellow">
+                  <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check
+                </span>
+                <span class="it-status__message">{{ warnings()[0]?.message }}</span>
+              } @else {
+                <span class="badge badge-green">
+                  <i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid
+                </span>
+                <span class="it-status__message text-muted">{{ bodyLinesLabel() }}</span>
+              }
+            </div>
+            @if (!syntaxError() && problems().length > 1) {
+              <ul class="it-problems">
+                @for (problem of problems().slice(1); track $index) {
+                  <li [class.text-danger]="problem.level === 'error'">
+                    <i class="bi" [class]="'bi ' + (problem.level === 'error' ? 'bi-x-circle' : 'bi-exclamation-triangle')" aria-hidden="true"></i>
+                    {{ problem.message }}
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+
+          @if (saveError(); as error) {
+            <div class="callout callout-danger" role="alert">
+              <i class="bi bi-x-octagon" aria-hidden="true"></i>
+              <p>{{ error }}</p>
+            </div>
+          }
+        </div>
+
+        <div class="card-footer card-footer--between it-footer">
+          @if (kind() === 'index') {
+            <button
+              type="button"
+              class="btn"
+              [class.is-loading]="preview().status === 'loading'"
+              [disabled]="!canPreview()"
+              [attr.title]="selected() === null || selectedMissing() ? 'Save the template to preview what it resolves to' : 'Show the settings, mappings and aliases a new matching index receives'"
+              (click)="loadPreview()"
+            >
+              <i class="bi bi-eye" aria-hidden="true"></i> Preview resolved template
+            </button>
+          } @else {
+            <span class="footer-keys"><kbd>Ctrl</kbd><kbd>Enter</kbd> to save</span>
+          }
+          <div class="row it-footer__buttons">
+            @if (dirty()) {
+              <button type="button" class="btn btn-ghost" (click)="discardChanges()" [disabled]="saving()">Discard changes</button>
+            }
+            <button
+              type="button"
+              class="btn btn-primary"
+              [class.is-loading]="saving()"
+              [disabled]="saving()"
+              [attr.aria-busy]="saving() ? true : null"
+              (click)="save()"
+            >
+              <i class="bi" [class]="'bi ' + (mode() === 'update' || mode() === 'overwrite' ? 'bi-floppy' : 'bi-plus-lg')" aria-hidden="true"></i>
+              {{ saveLabel() }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ------------------------------------------------ Resolved preview -->
+      @if (preview(); as state) {
+        @if (state.status !== 'idle') {
+          <div #previewCard class="card it-preview" role="region" aria-labelledby="it-preview-title">
+            <div class="card-header">
+              <div class="min-w-0">
+                <h2 id="it-preview-title" class="card-title"><i class="bi bi-eye" aria-hidden="true"></i> Resolved template</h2>
+                <p class="card-subtitle">
+                  @if (state.status === 'ready') {
+                    What a new index matching <span class="mono">{{ state.patterns || state.name }}</span> receives from
+                    {{ state.components === 0 ? 'this template' : 'this template and ' + pluralize(state.components, 'component template') }}.
+                  } @else {
+                    Settings, mappings and aliases a new matching index receives.
+                  }
+                </p>
+              </div>
+              <div class="row">
+                @if (state.status === 'ready') {
+                  <button type="button" class="btn btn-sm" (click)="viewPreviewJson()">
+                    <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                  </button>
+                }
+                <button type="button" class="btn btn-sm btn-ghost btn-icon" aria-label="Close the preview" title="Close" (click)="closePreview()">
+                  <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+            <div class="card-body stack">
+              @if (dirty() && state.name === selected()) {
+                <div class="callout callout-info">
+                  <i class="bi bi-info-circle" aria-hidden="true"></i>
+                  <p>The preview shows the saved version of <strong>{{ state.name }}</strong>. Save your changes to preview them.</p>
+                </div>
+              }
+              @switch (state.status) {
+                @case ('loading') {
+                  <div class="loading-block" role="status"><span class="spinner"></span> Resolving {{ state.name }}…</div>
+                }
+                @case ('error') {
+                  <cerebro-empty icon="bi-exclamation-triangle" heading="Could not resolve the template" [text]="state.message" [compact]="true">
+                    <button type="button" class="btn btn-sm" (click)="loadPreview()">
+                      <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                    </button>
+                  </cerebro-empty>
+                }
+                @case ('ready') {
+                  <cerebro-resolved-template
+                    [view]="state.view"
+                    (openComponent)="openTemplate('component', $event)"
+                    (openIndexTemplate)="openTemplate('index', $event)"
+                  />
+                }
+              }
+            </div>
+          </div>
+        }
+      }
+    </div>
+  </div>
+</section>

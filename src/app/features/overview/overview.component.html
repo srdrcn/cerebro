@@ -1,458 +1,689 @@
-<section class="overview-page" aria-labelledby="overview-title">
-  <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
-    <div>
-      <h1 id="overview-title" class="h4 mb-1">Cluster overview</h1>
-      <p class="text-secondary mb-0">Indices, nodes and shard allocation</p>
+<section class="page page--wide" aria-labelledby="overview-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="overview-title" class="page-title">Overview</h1>
+      <p class="page-subtitle">
+        @if (data(); as overview) {
+          Shard allocation of <strong class="overview-cluster">{{ overview.cluster_name }}</strong> across its data nodes.
+        } @else {
+          Cluster health and shard allocation across the data nodes.
+        }
+      </p>
     </div>
-    <button
-      type="button"
-      class="btn btn-sm btn-outline-light"
-      (click)="requestRefresh()"
-      [disabled]="loading()"
-    >
-      <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-      Refresh
-    </button>
-  </div>
+    @if (data(); as overview) {
+      <div class="page-header__actions">
+        @if (overview.shard_allocation) {
+          <cerebro-menu
+            label="Shard allocation"
+            triggerClass="btn"
+            align="end"
+            [tooltip]="false"
+            [minWidth]="280"
+            [disabled]="isBusy('allocation')"
+          >
+            <ng-container trigger>
+              <span class="dot dot-green" aria-hidden="true"></span>
+              Allocation
+              <i class="bi bi-chevron-down ov-chevron" aria-hidden="true"></i>
+            </ng-container>
+            <div class="menu-label">Shard allocation is enabled</div>
+            @for (option of allocationOptions; track option.kind) {
+              <button type="button" class="menu-item ov-menu-item--described" (click)="disableAllocation(option)">
+                <i class="bi" [class]="'bi ' + option.icon" aria-hidden="true"></i>
+                <span class="ov-menu-text">
+                  <span>{{ option.label }}</span>
+                  <span class="ov-menu-description">{{ option.description }}</span>
+                </span>
+              </button>
+            }
+          </cerebro-menu>
+        }
+        <a class="btn btn-primary" routerLink="/create" [queryParams]="connection.hostQuery()">
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> Create index
+        </a>
+      </div>
+    }
+  </header>
 
   @if (data(); as overview) {
-    <div class="stats-bar row g-0 mb-3" [attr.data-status]="overview.status">
-      <div class="col-12 col-md-4 col-xl-2 stat-cell">
-        <span class="stat-value text-truncate" [title]="overview.cluster_name">
-          {{ overview.cluster_name }}
-        </span>
-        <span class="stat-label">cluster</span>
-      </div>
-      <div class="col-6 col-md-4 col-xl-2 stat-cell">
-        <span class="stat-value">{{ overview.number_of_nodes | number: '1.0-0' }}</span>
-        <span class="stat-label">nodes</span>
-      </div>
-      <div class="col-6 col-md-4 col-xl-2 stat-cell">
-        <span class="stat-value">{{ overview.total_indices | number: '1.0-0' }}</span>
-        <span class="stat-label">indices</span>
-      </div>
-      <div class="col-6 col-md-4 col-xl-2 stat-cell">
-        <span class="stat-value">{{ totalShards() | number: '1.0-0' }}</span>
-        <span class="stat-label">shards</span>
-      </div>
-      <div class="col-6 col-md-4 col-xl-2 stat-cell">
-        <span class="stat-value">{{ overview.docs_count | number: '1.0-0' }}</span>
-        <span class="stat-label">docs</span>
-      </div>
-      <div class="col-12 col-md-4 col-xl-2 stat-cell">
-        <span class="stat-value">{{ bytes(overview.size_in_bytes) }}</span>
-        <span class="stat-label">total size</span>
+    <!-- Health summary -->
+    <div class="ov-stats-wrap">
+      <div class="stat-grid ov-stats">
+        <div class="stat ov-stat--status" [attr.data-health]="health()">
+          <div class="stat__label"><i class="bi bi-heart-pulse" aria-hidden="true"></i> Status</div>
+          <div class="stat__value ov-status">
+            <span class="dot" [class]="'dot dot-' + health()" aria-hidden="true"></span>
+            <span class="ov-status__text">{{ healthLabel() }}</span>
+          </div>
+          <div class="stat__meta">{{ activePercent() }}% of shards active</div>
+        </div>
+        <div class="stat">
+          <div class="stat__label"><i class="bi bi-hdd-stack" aria-hidden="true"></i> Nodes</div>
+          <div class="stat__value">{{ overview.number_of_nodes | num }}</div>
+          <div class="stat__meta" [title]="pluralize(dataNodeCount(), 'data node') + ' · ' + pluralize(masterNodeCount(), 'master-eligible node')">
+            {{ dataNodeCount() }} data · {{ masterNodeCount() }} master
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat__label"><i class="bi bi-boxes" aria-hidden="true"></i> Indices</div>
+          <div class="stat__value">{{ overview.total_indices | num }}</div>
+          <div class="stat__meta" [title]="indicesMeta().full">{{ indicesMeta().short }}</div>
+        </div>
+        <div class="stat">
+          <div class="stat__label"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i> Active shards</div>
+          <div class="stat__value">{{ overview.active_shards | num }}</div>
+          <div class="stat__meta ov-shard-meta">
+            <span>{{ overview.active_primary_shards | num }} {{ overview.active_primary_shards | plural: 'primary' : 'primaries' }}</span>
+            @if (overview.unassigned_shards > 0) {
+              <span class="badge badge-yellow" title="Unassigned shards">{{ overview.unassigned_shards | num }} unassigned</span>
+            }
+            @if (overview.relocating_shards > 0) {
+              <span class="badge badge-purple" title="Relocating shards">{{ overview.relocating_shards | num }} relocating</span>
+            }
+            @if (overview.initializing_shards > 0) {
+              <span class="badge badge-blue" title="Initializing shards">{{ overview.initializing_shards | num }} initializing</span>
+            }
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat__label"><i class="bi bi-file-earmark-text" aria-hidden="true"></i> Documents</div>
+          <div class="stat__value" [title]="pluralize(overview.docs_count, 'document')">{{ overview.docs_count | compact }}</div>
+          <div class="stat__meta">{{ overview.docs_count | num }} in primaries</div>
+        </div>
+        <div class="stat">
+          <div class="stat__label"><i class="bi bi-database" aria-hidden="true"></i> Data size</div>
+          <div class="stat__value">{{ overview.size_in_bytes | bytes }}</div>
+          <div class="stat__meta">{{ primarySize() | bytes }} in primaries</div>
+        </div>
       </div>
     </div>
 
-    <div class="filter-bar row g-2 align-items-end mb-3">
-      <div class="col-12 col-lg-4">
-        <label for="overview-index-filter" class="form-label">Indices</label>
-        <input
-          id="overview-index-filter"
-          type="search"
-          class="form-control form-control-sm"
-          placeholder="Filter by index name or alias"
-          [ngModel]="indexName()"
-          (ngModelChange)="setIndexName($event)"
-        />
-      </div>
-      <div class="col-6 col-sm-auto">
-        <div class="form-check filter-check">
-          <input
-            id="include-closed"
-            type="checkbox"
-            class="form-check-input"
-            [ngModel]="includeClosed()"
-            (ngModelChange)="setIncludeClosed($event)"
-          />
-          <label for="include-closed" class="form-check-label">
-            closed ({{ overview.closed_indices }})
-          </label>
+    <!-- Callouts -->
+    @if (!overview.shard_allocation) {
+      <div class="callout callout-danger ov-callout" role="alert">
+        <i class="bi bi-sign-stop" aria-hidden="true"></i>
+        <div class="ov-callout__body">
+          <strong>Shard allocation is restricted or disabled.</strong>
+          Replicas, shards of new indices and shards of restarted nodes may stay unassigned until it is enabled for all shards again.
         </div>
+        <button
+          type="button"
+          class="btn btn-sm"
+          [class.is-loading]="isBusy('allocation')"
+          [disabled]="isBusy('allocation')"
+          (click)="enableAllocation()"
+        >
+          <i class="bi bi-play-circle" aria-hidden="true"></i> Enable allocation
+        </button>
       </div>
-      <div class="col-6 col-sm-auto">
-        <div class="form-check filter-check">
-          <input
-            id="include-special"
-            type="checkbox"
-            class="form-check-input"
-            [ngModel]="includeSpecial()"
-            (ngModelChange)="setIncludeSpecial($event)"
-          />
-          <label for="include-special" class="form-check-label">
-            .special ({{ overview.special_indices }})
-          </label>
+    }
+    @if (failed()) {
+      <div class="callout callout-warning ov-callout" role="alert">
+        <i class="bi bi-wifi-off" aria-hidden="true"></i>
+        <div class="ov-callout__body">
+          <strong>Could not refresh the overview.</strong>
+          <span class="ov-callout__text">Showing data from {{ loadedAt() | date: 'HH:mm:ss' }}; it may be out of date.@if (loadError(); as reason) { {{ reason }}}</span>
         </div>
+        <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="load()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
       </div>
-      <div class="col-12 col-lg">
-        <label for="overview-node-filter" class="form-label">Data nodes</label>
-        <input
-          id="overview-node-filter"
-          type="search"
-          class="form-control form-control-sm"
-          placeholder="Filter nodes by name"
-          [ngModel]="nodeName()"
-          (ngModelChange)="nodeName.set($event)"
-        />
-      </div>
-      <div class="col-12 col-xl-auto">
-        <nav class="page-nav" aria-label="Index pages">
-          <span class="small text-secondary">
-            {{ firstVisibleIndex() }}–{{ lastVisibleIndex() }} of
-            {{ filteredIndices().length }} selected indices
+    }
+    @if (hasActivity()) {
+      <div class="callout callout-warning ov-callout" role="status">
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        <div class="ov-callout__body">
+          <strong>{{ activityLabel() }}</strong>
+          <span class="ov-callout__text">
+            {{ pluralize(affectedCount(), 'index is', 'indices are') }} affected.
           </span>
-          <div class="btn-group btn-group-sm" role="group">
-            <button
-              type="button"
-              class="btn btn-outline-light"
-              aria-label="Previous index page"
-              (click)="previousPage()"
-              [disabled]="currentPage() <= 1"
+        </div>
+        <div class="ov-callout__actions">
+          @if (counts().unassigned > 0) {
+            <a
+              class="btn btn-sm"
+              routerLink="/allocation"
+              [queryParams]="connection.hostQuery()"
+              title="Explain why the next unassigned shard cannot be allocated"
+              aria-label="Explain why the next unassigned shard cannot be allocated"
             >
-              <i class="bi bi-chevron-left" aria-hidden="true"></i>
+              <i class="bi bi-signpost-split" aria-hidden="true"></i> Explain
+            </a>
+          }
+          <button type="button" class="btn btn-sm" [attr.aria-pressed]="affectedOnly()" (click)="toggleAffected()">
+            {{ affectedOnly() ? 'Show all indices' : 'Show only affected indices' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Live activity (sampled by MetricsService while expanded) -->
+    <cerebro-overview-live />
+
+    <!-- Shard map -->
+    <div class="card ov-map-card">
+      <div class="card-header ov-filters">
+        <div class="toolbar">
+          <cerebro-search
+            class="ov-index-search"
+            [value]="indexName()"
+            (valueChange)="setIndexName($event)"
+            placeholder="Filter by index or alias"
+            ariaLabel="Filter indices by name or alias"
+          />
+          <div class="row-wrap" role="group" aria-label="Index visibility">
+            <button type="button" class="chip-toggle" [attr.aria-pressed]="includeClosed()" (click)="toggleClosed()">
+              <i class="bi bi-lock" aria-hidden="true"></i> Closed <span class="count">{{ overview.closed_indices }}</span>
+            </button>
+            <button type="button" class="chip-toggle" [attr.aria-pressed]="includeSpecial()" (click)="toggleSpecial()">
+              <i class="bi bi-asterisk" aria-hidden="true"></i> Special <span class="count">{{ overview.special_indices }}</span>
             </button>
             <button
               type="button"
-              class="btn btn-outline-light"
-              aria-label="Next index page"
-              (click)="nextPage()"
-              [disabled]="currentPage() >= pageCount()"
+              class="chip-toggle ov-chip-affected"
+              [attr.aria-pressed]="affectedOnly()"
+              [disabled]="affectedCount() === 0 && !affectedOnly()"
+              (click)="toggleAffected()"
             >
-              <i class="bi bi-chevron-right" aria-hidden="true"></i>
+              <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Affected only
+              <span class="count">{{ affectedCount() }}</span>
             </button>
           </div>
-        </nav>
+        </div>
+        <cerebro-search
+          class="ov-node-search"
+          [small]="true"
+          [value]="nodeName()"
+          (valueChange)="setNodeName($event)"
+          placeholder="Filter nodes"
+          ariaLabel="Filter data nodes by name"
+        />
       </div>
-    </div>
 
-    <div class="table-responsive shard-map-wrap">
-      <table class="table table-dark table-bordered align-middle shard-map mb-0">
-        <thead>
-          <tr>
-            <th scope="col" class="node-column">
-              <div class="cluster-controls">
-                @if (overview.shard_allocation) {
-                  <details class="action-menu">
-                    <summary class="btn btn-sm btn-outline-success" title="Disable shard allocation">
-                      <i class="bi bi-unlock" aria-hidden="true"></i>
-                      allocation
-                    </summary>
-                    <div class="action-menu-panel">
-                      <button type="button" (click)="disableShardAllocation('none')">
-                        Disable all (default)
-                      </button>
-                      <button type="button" (click)="disableShardAllocation('primaries')">
-                        Primaries only
-                      </button>
-                      <button type="button" (click)="disableShardAllocation('new_primaries')">
-                        New primaries only
-                      </button>
-                    </div>
-                  </details>
-                } @else {
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-danger"
-                    title="Enable shard allocation"
-                    (click)="enableShardAllocation()"
-                  >
-                    <i class="bi bi-lock" aria-hidden="true"></i>
-                    allocation
-                  </button>
+      <div class="ov-bar">
+        <div class="ov-bar__start">
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost"
+            [attr.aria-label]="ascending() ? 'Sorted A to Z, sort Z to A' : 'Sorted Z to A, sort A to Z'"
+            [title]="ascending() ? 'Sort Z → A' : 'Sort A → Z'"
+            (click)="toggleSort()"
+          >
+            <i class="bi" [class.bi-sort-alpha-down]="ascending()" [class.bi-sort-alpha-up-alt]="!ascending()" aria-hidden="true"></i>
+            {{ ascending() ? 'A → Z' : 'Z → A' }}
+          </button>
+          <div class="segmented segmented-sm" role="group" aria-label="Node row density">
+            <button type="button" [attr.aria-pressed]="!expanded()" (click)="setExpanded(false)" title="Compact node rows">
+              <i class="bi bi-list" aria-hidden="true"></i><span class="ov-hide-narrow">Compact</span>
+            </button>
+            <button type="button" [attr.aria-pressed]="expanded()" (click)="setExpanded(true)" title="Show versions and attributes">
+              <i class="bi bi-view-list" aria-hidden="true"></i><span class="ov-hide-narrow">Detailed</span>
+            </button>
+          </div>
+          <cerebro-menu
+            [label]="'Actions for ' + pluralize(filteredIndices().length, 'filtered index', 'filtered indices')"
+            triggerClass="btn btn-sm"
+            [tooltip]="false"
+            [minWidth]="240"
+            [disabled]="filteredIndices().length === 0 || isBusy('bulk')"
+          >
+            <ng-container trigger>
+              @if (isBusy('bulk')) {
+                <span class="spinner ov-trigger-spinner" aria-hidden="true"></span>
+              } @else {
+                <i class="bi bi-lightning-charge" aria-hidden="true"></i>
+              }
+              <span class="ov-hide-narrow">Bulk actions</span>
+              <span class="badge ov-count-badge">{{ filteredIndices().length | num }}</span>
+              <i class="bi bi-chevron-down ov-chevron" aria-hidden="true"></i>
+            </ng-container>
+            <div class="menu-label">
+              All {{ pluralize(filteredIndices().length, 'filtered index', 'filtered indices') }}
+            </div>
+            @for (operation of bulkOperations; track operation) {
+              @let hint = bulkHint(operation);
+              <button
+                type="button"
+                class="menu-item"
+                [disabled]="hint !== '' && openFilteredCount() === 0"
+                (click)="operateOnFiltered(operation)"
+              >
+                <i class="bi" [class]="'bi ' + operations[operation].icon" aria-hidden="true"></i>
+                {{ operations[operation].label }}
+                @if (hint) {
+                  <span class="menu-item__hint">{{ hint }}</span>
                 }
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-light"
-                  (click)="toggleExpandedView()"
-                  [attr.aria-pressed]="expandedView()"
-                  [title]="expandedView() ? 'Condense view' : 'Expand view'"
-                >
-                  <i
-                    class="bi"
-                    [class.bi-arrows-collapse]="expandedView()"
-                    [class.bi-arrows-expand]="!expandedView()"
-                    aria-hidden="true"
-                  ></i>
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-light"
-                  (click)="toggleSort()"
-                  [title]="ascending() ? 'Sort descending' : 'Sort ascending'"
-                >
-                  <i
-                    class="bi"
-                    [class.bi-sort-alpha-down]="ascending()"
-                    [class.bi-sort-alpha-up]="!ascending()"
-                    aria-hidden="true"
-                  ></i>
-                </button>
-                <details class="action-menu">
-                  <summary class="btn btn-sm btn-outline-light" title="Bulk index actions">
-                    <i class="bi bi-three-dots" aria-hidden="true"></i>
-                  </summary>
-                  <div class="action-menu-panel">
-                    <button type="button" (click)="operateOnFiltered('close')">Close selected</button>
-                    <button type="button" (click)="operateOnFiltered('open')">Open selected</button>
-                    <button type="button" (click)="operateOnFiltered('merge')">Force merge selected</button>
-                    <button type="button" (click)="operateOnFiltered('refresh')">Refresh selected</button>
-                    <button type="button" (click)="operateOnFiltered('flush')">Flush selected</button>
-                    <button type="button" (click)="operateOnFiltered('cache')">Clear selected caches</button>
-                    <hr />
-                    <button type="button" class="text-danger" (click)="operateOnFiltered('delete')">
-                      Delete selected
-                    </button>
-                  </div>
-                </details>
-              </div>
-            </th>
-            @for (index of pageIndices(); track index.name) {
-              <th scope="col" class="index-column" [class.closed-index]="index.closed">
-                <div class="d-flex align-items-start justify-content-between gap-2">
-                  <div class="min-width-0">
-                    <div class="index-name text-truncate" [title]="index.name">{{ index.name }}</div>
-                    @if (index.aliases.length > 0) {
-                      <div class="index-alias text-truncate" [title]="index.aliases.join(', ')">
-                        <i class="bi bi-tag" aria-hidden="true"></i>
-                        {{ index.aliases[0] }}
-                        @if (index.aliases.length > 1) {
-                          (+{{ index.aliases.length - 1 }})
-                        }
-                      </div>
-                    }
-                  </div>
-                  <details class="action-menu index-actions">
-                    <summary class="btn btn-sm btn-link text-light" [attr.aria-label]="'Actions for ' + index.name">
-                      <i class="bi bi-chevron-down" aria-hidden="true"></i>
-                    </summary>
-                    <div class="action-menu-panel action-menu-panel-end">
-                      <button type="button" (click)="showIndexSettings(index)">Show settings</button>
-                      <button type="button" (click)="showIndexMapping(index)">Show mappings</button>
-                      <button type="button" (click)="showIndexStats(index)">Show stats</button>
-                      @if (index.closed) {
-                        <button type="button" (click)="operateOnIndex('open', index)">Open index</button>
-                      } @else {
-                        <button type="button" (click)="operateOnIndex('close', index)">Close index</button>
-                      }
-                      <button type="button" (click)="operateOnIndex('merge', index)">Force merge</button>
-                      <button type="button" (click)="operateOnIndex('refresh', index)">Refresh index</button>
-                      <button type="button" (click)="operateOnIndex('flush', index)">Flush index</button>
-                      <button type="button" (click)="operateOnIndex('cache', index)">Clear cache</button>
-                      <a [routerLink]="['/index_settings']" [queryParams]="{ index: index.name, host: connection.host() }">
-                        Index settings editor
-                      </a>
-                      <hr />
-                      <button type="button" class="text-danger" (click)="operateOnIndex('delete', index)">
-                        Delete index
-                      </button>
-                    </div>
-                  </details>
-                </div>
-                <div class="index-detail">
-                  @if (index.closed) {
-                    <em>index closed</em>
-                  } @else {
-                    shards: {{ index.num_shards }} × {{ index.num_replicas + 1 }} ·
-                    docs: {{ index.doc_count | number: '1.0-0' }} ·
-                    {{ bytes(index.size_in_bytes) }}
-                  }
-                </div>
-              </th>
+              </button>
             }
-          </tr>
-        </thead>
-        <tbody>
-          @if (
-            overview.unassigned_shards > 0 ||
-            overview.relocating_shards > 0 ||
-            overview.initializing_shards > 0
-          ) {
-            <tr class="affected-row">
-              <th scope="row">
-                @if (overview.unassigned_shards > 0) {
-                  <div class="text-warning">
-                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-                    {{ overview.unassigned_shards }} unassigned shards
-                  </div>
-                }
-                @if (overview.relocating_shards > 0) {
-                  <div>
-                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
-                    {{ overview.relocating_shards }} relocating shards
-                  </div>
-                }
-                @if (overview.initializing_shards > 0) {
-                  <div>
-                    <i class="bi bi-hourglass-split" aria-hidden="true"></i>
-                    {{ overview.initializing_shards }} initializing shards
-                  </div>
-                }
-                <button
-                  type="button"
-                  class="btn btn-link btn-sm p-0 mt-1"
-                  (click)="setIncludeHealthy(!includeHealthy())"
-                >
-                  {{ includeHealthy() ? 'Show only affected indices' : 'Show all indices' }}
-                </button>
-              </th>
-              @for (index of pageIndices(); track index.name) {
-                <td>
-                  <div class="shards">
-                    @for (shard of shardsFor(index, 'unassigned'); track shard.shard + '-' + $index) {
-                      <span class="shard shard-unassigned" [title]="'Unassigned shard ' + shard.shard">
-                        {{ shard.shard }}
-                      </span>
-                    }
-                  </div>
-                </td>
-              }
-            </tr>
+            <div class="menu-separator"></div>
+            <button type="button" class="menu-item menu-item--danger" (click)="operateOnFiltered('delete')">
+              <i class="bi bi-trash3" aria-hidden="true"></i> Delete
+            </button>
+          </cerebro-menu>
+          @if (loading()) {
+            <span class="spinner ov-bar__spinner" role="status" aria-label="Refreshing"></span>
           }
+        </div>
+        <cerebro-pager
+          [page]="currentPage()"
+          [pageSize]="pageSize()"
+          [total]="filteredIndices().length"
+          noun="indices"
+          (pageChange)="goToPage($event)"
+        />
+      </div>
 
-          @for (node of visibleNodes(); track node.id) {
-            <tr>
-              <th scope="row" class="node-cell">
-                <div class="d-flex align-items-start gap-2">
-                  <div class="node-badges" aria-label="Node roles">
-                    @if (node.master) {
-                      <i
-                        class="bi"
-                        [class.bi-star-fill]="node.current_master"
-                        [class.bi-star]="!node.current_master"
-                        [title]="node.current_master ? 'Current master' : 'Master eligible'"
-                      ></i>
-                    }
-                    @if (node.data) {
-                      <i class="bi bi-device-hdd" title="Data node"></i>
-                    }
-                    @if (node.ingest) {
-                      <i class="bi bi-funnel" title="Ingest node"></i>
-                    }
-                  </div>
-                  <div class="min-width-0">
-                    <button
-                      type="button"
-                      class="node-name btn btn-link p-0 text-start text-truncate"
-                      [title]="'Show stats for ' + node.name"
-                      (click)="showNodeStats(node)"
-                    >
-                      {{ node.name }}
-                    </button>
-                    <div class="small text-secondary text-truncate" [title]="node.host ?? ''">
-                      {{ node.host || 'host unavailable' }}
-                    </div>
-                  </div>
-                </div>
-                @if (attributeEntries(node.attributes).length > 0) {
-                  <div class="node-attributes mt-2">
-                    @for (attribute of attributeEntries(node.attributes); track attribute[0]) {
-                      <span class="badge text-bg-success" [title]="attribute[0]">{{ attribute[1] }}</span>
-                    }
-                  </div>
-                }
-                @if (expandedView()) {
-                  <div class="node-versions mt-2">
-                    @if (node.jvm_version) {
-                      <span class="badge text-bg-primary">JVM: {{ node.jvm_version }}</span>
-                    }
-                    <span class="badge text-bg-primary">ES: {{ node.es_version }}</span>
-                  </div>
-                }
-                <div class="resource-grid mt-2">
-                  <div>
-                    <span>heap {{ node.heap.used_percent }}%</span>
-                    <div class="progress" title="Used: {{ bytes(node.heap.used) }}; max: {{ bytes(node.heap.max) }}">
-                      <div class="progress-bar" [style.width.%]="percent(node.heap.used_percent)"></div>
-                    </div>
-                  </div>
-                  <div>
-                    <span>disk {{ node.disk.used_percent }}%</span>
-                    <div class="progress" title="Free: {{ bytes(node.disk.free) }}; total: {{ bytes(node.disk.total) }}">
-                      <div class="progress-bar" [style.width.%]="percent(node.disk.used_percent)"></div>
-                    </div>
-                  </div>
-                  <div>
-                    <span>cpu {{ node.cpu_percent }}%</span>
-                    <div class="progress" [title]="'Process CPU: ' + node.cpu_percent + '%'">
-                      <div class="progress-bar" [style.width.%]="percent(node.cpu_percent)"></div>
-                    </div>
-                  </div>
-                  <div>
-                    <span>load {{ node.load_average | number: '1.0-2' }}</span>
-                    <div class="progress" [title]="'Available processors: ' + node.available_processors">
-                      <div
-                        class="progress-bar"
-                        [style.width.%]="percent(node.available_processors ? node.load_average / node.available_processors * 100 : 0)"
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              </th>
-              @for (index of pageIndices(); track index.name) {
-                <td [class.closed-index]="index.closed">
-                  <div class="shards">
-                    @for (shard of shardsFor(index, node.id); track shard.shard + '-' + shard.state + '-' + $index) {
-                      @if (index.closed) {
-                        <span
-                          class="shard shard-closed"
-                          [class.shard-replica]="!shard.primary"
-                          [title]="'Closed shard ' + shard.shard"
-                        >
-                          {{ shard.shard }}
-                        </span>
-                      } @else {
-                        <details class="shard-action">
-                          <summary
-                            class="shard"
-                            [ngClass]="shardStateClass(shard)"
-                            [class.shard-replica]="!shard.primary"
-                            [class.shard-selected]="isSelected(shard)"
-                            [title]="shard.state + ' shard ' + shard.shard"
-                          >
-                            {{ shard.shard }}
-                          </summary>
-                          <div class="action-menu-panel shard-menu">
-                            <button type="button" (click)="showShardStats(shard)">Display shard stats</button>
-                            <button type="button" (click)="selectShard(shard)">
-                              {{ isSelected(shard) ? 'Unselect relocation' : 'Select for relocation' }}
-                            </button>
-                          </div>
-                        </details>
-                      }
-                    }
-                    @if (canReceive(index, node)) {
-                      <button
-                        type="button"
-                        class="shard shard-target"
-                        [attr.aria-label]="'Relocate selected shard to ' + node.name"
-                        (click)="relocateShard(node)"
-                      >
-                        <i class="bi bi-download" aria-hidden="true"></i>
-                      </button>
-                    }
-                  </div>
-                </td>
-              }
-            </tr>
-          } @empty {
-            <tr>
-              <td [attr.colspan]="pageIndices().length + 1" class="empty-state">
-                No data nodes match the current filter.
-              </td>
-            </tr>
+      <div #gridHost class="ov-map-host">
+        @if (filteredIndices().length === 0) {
+          @if (overview.indices.length === 0) {
+            <cerebro-empty icon="bi-boxes" heading="No indices yet" text="This cluster does not hold any index. Create one to see how its shards are allocated.">
+              <a class="btn btn-sm btn-primary" routerLink="/create" [queryParams]="connection.hostQuery()">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Create index
+              </a>
+            </cerebro-empty>
+          } @else {
+            <cerebro-empty icon="bi-funnel" heading="No indices match" text="No index matches the current filters. Closed and special indices are hidden unless their chips are on.">
+              <button type="button" class="btn btn-sm" (click)="clearFilters()">Clear filters</button>
+            </cerebro-empty>
           }
-        </tbody>
-      </table>
+        } @else {
+          <div class="ov-map-wrap" [class.is-scroll]="layout().scroll">
+            <table
+              class="shard-map"
+              [class.is-relocating]="!!selected()"
+              [style.width.px]="tableWidth()"
+              aria-label="Shard allocation by node and index"
+            >
+              <colgroup>
+                <col [style.width.px]="layout().nodeColumn" />
+                @for (column of columns(); track column.index.name) {
+                  <col [style.width.px]="layout().columnWidth" />
+                }
+                @if (fillerColumn()) {
+                  <col />
+                }
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" class="map-corner">
+                    <span class="section-label">Nodes</span>
+                    <span class="map-corner__count">
+                      @if (nodeName().trim()) {
+                        {{ nodes().length }} of {{ pluralize(dataNodeCount(), 'data node') }}
+                      } @else {
+                        {{ pluralize(dataNodeCount(), 'data node') }}
+                      }
+                    </span>
+                  </th>
+                  @for (column of columns(); track column.index.name) {
+                    <th
+                      scope="col"
+                      class="index-head"
+                      [class.is-closed]="column.index.closed"
+                      [class.is-unhealthy]="column.index.unhealthy"
+                      [class.is-selected-index]="selected()?.index === column.index.name"
+                    >
+                      <div class="index-head__top">
+                        @if (column.index.unhealthy) {
+                          <span class="index-head__flag" role="img" title="Some shards are not started" aria-label="Some shards are not started">
+                            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+                          </span>
+                        } @else if (column.index.special) {
+                          <span class="index-head__flag is-special" title="Special index" aria-hidden="true">
+                            <i class="bi bi-asterisk"></i>
+                          </span>
+                        }
+                        <a
+                          class="index-head__name truncate"
+                          routerLink="/index_detail"
+                          [queryParams]="indexDetailQuery(column.index)"
+                          [title]="'Open details of ' + column.index.name"
+                        >{{ column.index.name }}</a>
+                        @if (column.index.closed) {
+                          <span class="badge ov-closed-badge">closed</span>
+                        }
+                        <cerebro-menu
+                          [label]="isBusy('index:' + column.index.name) ? 'Running an operation on ' + column.index.name : 'Actions for ' + column.index.name"
+                          align="end"
+                          [minWidth]="220"
+                          [disabled]="isBusy('index:' + column.index.name)"
+                          [triggerClass]="isBusy('index:' + column.index.name) ? 'btn btn-ghost btn-icon btn-sm is-loading' : 'btn btn-ghost btn-icon btn-sm'"
+                          class="index-head__menu"
+                        >
+                          <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+                          <div class="menu-label">{{ column.index.name }}</div>
+                          <a class="menu-item" routerLink="/index_detail" [queryParams]="indexDetailQuery(column.index)">
+                            <i class="bi bi-box" aria-hidden="true"></i> Index details
+                          </a>
+                          <div class="menu-separator"></div>
+                          <button type="button" class="menu-item" (click)="showIndexJson('settings', column.index)">
+                            <i class="bi bi-sliders" aria-hidden="true"></i> View settings
+                          </button>
+                          <button type="button" class="menu-item" (click)="showIndexJson('mappings', column.index)">
+                            <i class="bi bi-diagram-3" aria-hidden="true"></i> View mappings
+                          </button>
+                          @if (!column.index.closed) {
+                            <button type="button" class="menu-item" (click)="showIndexJson('stats', column.index)">
+                              <i class="bi bi-bar-chart-line" aria-hidden="true"></i> View stats
+                            </button>
+                          }
+                          <a
+                            class="menu-item"
+                            routerLink="/index_settings"
+                            [queryParams]="indexSettingsQuery(column.index)"
+                          >
+                            <i class="bi bi-pencil-square" aria-hidden="true"></i> Edit settings
+                          </a>
+                          <div class="menu-separator"></div>
+                          @if (column.index.closed) {
+                            <!-- Stats, merge, refresh, flush and cache fail on closed indices. -->
+                            <button type="button" class="menu-item" (click)="operateOnIndex('open', column.index)">
+                              <i class="bi bi-unlock" aria-hidden="true"></i> Open index
+                            </button>
+                          } @else {
+                            <button type="button" class="menu-item" (click)="operateOnIndex('close', column.index)">
+                              <i class="bi bi-lock" aria-hidden="true"></i> Close index
+                            </button>
+                            <button type="button" class="menu-item" (click)="operateOnIndex('merge', column.index)">
+                              <i class="bi bi-intersect" aria-hidden="true"></i> Force merge
+                            </button>
+                            <button type="button" class="menu-item" (click)="operateOnIndex('refresh', column.index)">
+                              <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Refresh
+                            </button>
+                            <button type="button" class="menu-item" (click)="operateOnIndex('flush', column.index)">
+                              <i class="bi bi-save" aria-hidden="true"></i> Flush
+                            </button>
+                            <button type="button" class="menu-item" (click)="operateOnIndex('cache', column.index)">
+                              <i class="bi bi-eraser" aria-hidden="true"></i> Clear cache
+                            </button>
+                          }
+                          <div class="menu-separator"></div>
+                          <button type="button" class="menu-item menu-item--danger" (click)="operateOnIndex('delete', column.index)">
+                            <i class="bi bi-trash3" aria-hidden="true"></i> Delete index
+                          </button>
+                        </cerebro-menu>
+                      </div>
+                      <div class="index-head__meta truncate" [title]="column.summary">{{ column.summary }}</div>
+                      @if (column.index.aliases.length > 0) {
+                        <div class="index-head__aliases" [title]="'Aliases: ' + column.aliasTitle">
+                          <span class="tag ov-alias">
+                            <i class="bi bi-link-45deg" aria-hidden="true"></i>
+                            <span>{{ column.index.aliases[0] }}</span>
+                          </span>
+                          @if (column.index.aliases.length > 1) {
+                            <span class="ov-alias-more">+{{ column.index.aliases.length - 1 }}</span>
+                          }
+                        </div>
+                      }
+                    </th>
+                  }
+                  @if (fillerColumn()) {
+                    <th class="map-filler" aria-hidden="true"></th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @if (showUnassignedRow()) {
+                  <tr class="map-row map-row--unassigned">
+                    <th scope="row" class="node-cell">
+                      <div class="unassigned-label">
+                        <span class="node-avatar is-warning" aria-hidden="true"><i class="bi bi-exclamation-triangle"></i></span>
+                        <div class="min-w-0">
+                          <div class="node-name-text">Unassigned</div>
+                          <div class="node-host">{{ pluralize(overview.unassigned_shards, 'shard') }}</div>
+                        </div>
+                      </div>
+                    </th>
+                    @for (cell of unassignedCells(); track cell.index.name) {
+                      <td class="shard-cell" [class.is-closed]="cell.index.closed">
+                        <div class="shards">
+                          @for (view of cell.shards; track view.key) {
+                            <cerebro-menu [triggerClass]="view.chipClass" [label]="view.label" [minWidth]="220">
+                              <span trigger>{{ view.shard.shard }}</span>
+                              <div class="menu-label">{{ view.heading }}</div>
+                              <a class="menu-item" routerLink="/allocation" [queryParams]="view.explainQuery">
+                                <i class="bi bi-signpost-split" aria-hidden="true"></i> Explain allocation
+                              </a>
+                            </cerebro-menu>
+                          }
+                        </div>
+                      </td>
+                    }
+                    @if (fillerColumn()) {
+                      <td class="map-filler" aria-hidden="true"></td>
+                    }
+                  </tr>
+                }
+                @for (row of rows(); track row.node.id) {
+                  <tr class="map-row">
+                    <th scope="row" class="node-cell">
+                      <div class="node-id">
+                        <span
+                          class="node-avatar"
+                          [class.is-master]="row.node.current_master"
+                          [title]="row.node.current_master ? 'Elected master' : 'Data node'"
+                          aria-hidden="true"
+                        >
+                          <i class="bi" [class.bi-star-fill]="row.node.current_master" [class.bi-hdd]="!row.node.current_master"></i>
+                        </span>
+                        <div class="node-id__text">
+                          <button
+                            type="button"
+                            class="node-name truncate"
+                            [title]="'View stats of ' + row.node.name"
+                            (click)="showNodeStats(row.node)"
+                          >
+                            {{ row.node.name }}
+                          </button>
+                          <div class="node-host">
+                            <span class="mono truncate" [title]="row.node.host ?? ''">{{ row.node.host || 'host unavailable' }}</span>
+                            <span class="node-roles">
+                              @for (role of row.roles; track role.key) {
+                                <i
+                                  class="bi"
+                                  [class]="'bi ' + role.icon"
+                                  [class.is-elected]="role.key === 'master' && row.node.current_master"
+                                  [title]="role.title"
+                                  role="img"
+                                  [attr.aria-label]="role.title"
+                                ></i>
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      @if (expanded()) {
+                        <div class="node-details">
+                          <span class="badge badge-outline">ES {{ row.node.es_version }}</span>
+                          @if (row.node.jvm_version) {
+                            <span class="badge badge-outline">JVM {{ row.node.jvm_version }}</span>
+                          }
+                          @for (attribute of row.attributes; track attribute[0]) {
+                            <span class="tag" [title]="attribute[0] + ': ' + attribute[1]">
+                              <span class="tag-key">{{ attribute[0] }}</span>
+                              <span>{{ attribute[1] }}</span>
+                            </span>
+                          }
+                        </div>
+                      }
+                      <div class="node-metrics">
+                        <div class="node-metric" [title]="'Heap: ' + bytes(row.node.heap.used) + ' of ' + bytes(row.node.heap.max)">
+                          <span class="node-metric__label">Heap</span>
+                          <span class="node-metric__value">{{ row.node.heap.used_percent }}%</span>
+                          <cerebro-meter [value]="row.node.heap.used_percent" [small]="true" label="Heap usage" />
+                        </div>
+                        <div class="node-metric" [title]="'Disk: ' + bytes(row.node.disk.available ?? row.node.disk.free) + ' available of ' + bytes(row.node.disk.total)">
+                          <span class="node-metric__label">Disk</span>
+                          <span class="node-metric__value">{{ row.node.disk.used_percent }}%</span>
+                          <cerebro-meter [value]="row.node.disk.used_percent" [warn]="85" [danger]="90" [small]="true" label="Disk usage" />
+                        </div>
+                        <div class="node-metric" [title]="'OS CPU (whole machine): ' + row.node.cpu_percent + '%'">
+                          <span class="node-metric__label">OS CPU</span>
+                          <span class="node-metric__value">{{ row.node.cpu_percent }}%</span>
+                          <cerebro-meter [value]="row.node.cpu_percent" [small]="true" label="OS CPU usage" />
+                        </div>
+                        <div
+                          class="node-metric"
+                          [title]="'Load average ' + row.node.load_average.toFixed(2) + ' on ' + row.node.available_processors + ' processors'"
+                        >
+                          <span class="node-metric__label">Load</span>
+                          <span class="node-metric__value">{{ row.node.load_average.toFixed(2) }}</span>
+                          <cerebro-meter [value]="row.load" [small]="true" label="Load relative to processors" />
+                        </div>
+                      </div>
+                    </th>
+                    @for (cell of row.cells; track cell.index.name) {
+                      <td class="shard-cell" [class.is-closed]="cell.index.closed" [class.is-target]="cell.target">
+                        <div class="shards">
+                          @for (view of cell.shards; track view.key) {
+                            <cerebro-menu [triggerClass]="view.chipClass" [label]="view.label" [minWidth]="220">
+                              <span trigger>{{ view.shard.shard }}</span>
+                              <div class="menu-label">{{ view.heading }}</div>
+                              @if (view.interactive) {
+                                <button type="button" class="menu-item" (click)="showShardStats(view.shard)">
+                                  <i class="bi bi-bar-chart-line" aria-hidden="true"></i> Shard stats
+                                </button>
+                                @if (view.selected) {
+                                  <button type="button" class="menu-item" (click)="cancelSelection()">
+                                    <i class="bi bi-x-circle" aria-hidden="true"></i> Cancel relocation
+                                  </button>
+                                } @else {
+                                  <button
+                                    type="button"
+                                    class="menu-item"
+                                    [disabled]="!view.started"
+                                    (click)="toggleSelection(view.shard)"
+                                  >
+                                    <i class="bi bi-arrows-move" aria-hidden="true"></i> Select for relocation
+                                  </button>
+                                }
+                                <div class="menu-separator"></div>
+                              }
+                              <a class="menu-item" routerLink="/allocation" [queryParams]="view.explainQuery">
+                                <i class="bi bi-signpost-split" aria-hidden="true"></i> Explain allocation
+                              </a>
+                            </cerebro-menu>
+                          }
+                          @if (cell.target) {
+                            <button
+                              type="button"
+                              class="shard-target"
+                              [attr.aria-label]="'Move shard ' + selected()?.shard + ' of ' + cell.index.name + ' to ' + row.node.name"
+                              [title]="'Move here (' + row.node.name + ')'"
+                              (click)="relocateTo(row.node)"
+                            >
+                              <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>
+                            </button>
+                          }
+                        </div>
+                      </td>
+                    }
+                    @if (fillerColumn()) {
+                      <td class="map-filler" aria-hidden="true"></td>
+                    }
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td [attr.colspan]="columns().length + 1 + (fillerColumn() ? 1 : 0)" class="map-empty-cell">
+                      <cerebro-empty
+                        icon="bi-hdd-stack"
+                        heading="No data nodes match"
+                        text="No data node name matches the node filter."
+                        [compact]="true"
+                      >
+                        <button type="button" class="btn btn-sm" (click)="setNodeName('')">Clear node filter</button>
+                      </cerebro-empty>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      @if (selected(); as shard) {
+        <div class="ov-relocation" role="status">
+          <span class="shard-chip is-started is-selected" [class.is-primary]="shard.primary" [class.is-replica]="!shard.primary" aria-hidden="true">{{ shard.shard }}</span>
+          <div class="ov-relocation__text">
+            Moving {{ shard.primary ? 'primary' : 'replica' }} shard <strong>{{ shard.shard }}</strong> of
+            <strong>{{ shard.index }}</strong> from <strong>{{ selectedNodeName() }}</strong>
+            <span class="ov-relocation__hint">
+              @if (relocating()) {
+                — starting relocation…
+              } @else if (!selectedOnPage()) {
+                — the index is not on this page
+              } @else if (targetCount() === 0) {
+                — no visible node can receive it
+              } @else {
+                — pick a target
+              }
+            </span>
+          </div>
+          @if (!relocating() && !selectedOnPage()) {
+            <button type="button" class="btn btn-sm btn-soft" (click)="showSelectedIndex()">Show index</button>
+          }
+          <button type="button" class="btn btn-sm" (click)="cancelSelection()">
+            Cancel <kbd class="ov-hide-narrow">Esc</kbd>
+          </button>
+        </div>
+      }
+
+      @if (filteredIndices().length > 0) {
+      <div class="card-footer card-footer--between ov-legend">
+        <ul class="ov-legend__items" aria-label="Legend">
+          <li><span class="shard-chip is-started is-primary is-static" aria-hidden="true">0</span> Primary</li>
+          <li><span class="shard-chip is-started is-replica is-static" aria-hidden="true">0</span> Replica</li>
+          <li><span class="shard-chip is-initializing is-replica is-static" aria-hidden="true">0</span> Initializing</li>
+          <li><span class="shard-chip is-relocating is-primary is-static" aria-hidden="true">0</span> Relocating</li>
+          <li><span class="shard-chip is-unassigned is-replica is-static" aria-hidden="true">0</span> Unassigned</li>
+          <li><span class="shard-chip is-closed is-primary is-static" aria-hidden="true">0</span> Closed</li>
+          <li><span class="shard-target is-static" aria-hidden="true"><i class="bi bi-box-arrow-in-down"></i></span> Relocation target</li>
+        </ul>
+        <span class="text-muted text-sm ov-legend__hint">
+          <i class="bi bi-info-circle" aria-hidden="true"></i>
+          Click a shard for its stats, to move it or to explain its allocation.
+        </span>
+      </div>
+      }
+    </div>
+  } @else if (failed()) {
+    <div class="card">
+      <cerebro-empty
+        icon="bi-exclamation-triangle"
+        heading="Could not load the cluster overview"
+        [text]="loadError() ?? 'The cluster did not answer the overview request. Check that it is reachable and try again.'"
+      >
+        <button type="button" class="btn btn-sm" (click)="retry()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
     </div>
   } @else {
-    <div class="empty-state border rounded" role="status">
-      @if (loading()) {
-        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
-        Loading cluster overview…
-      } @else {
-        No cluster overview is available.
-      }
+    <div class="ov-stats-wrap" aria-hidden="true">
+      <div class="stat-grid ov-stats">
+        @for (placeholder of skeletonStats; track placeholder) {
+          <div class="stat"><span class="skeleton ov-skeleton-stat"></span></div>
+        }
+      </div>
+    </div>
+    <div class="card ov-map-card" role="status" aria-label="Loading cluster overview">
+      <div class="card-header"><span class="skeleton ov-skeleton-bar"></span></div>
+      <div class="ov-skeleton-grid" aria-hidden="true">
+        @for (row of skeletonRows; track row) {
+          <div class="ov-skeleton-row">
+            <span class="skeleton ov-skeleton-node"></span>
+            @for (column of [1, 2, 3, 4]; track column) {
+              <span class="ov-skeleton-cell">
+                @for (chip of [1, 2, 3]; track chip) {
+                  <span class="skeleton ov-skeleton-chip"></span>
+                }
+              </span>
+            }
+          </div>
+        }
+      </div>
+      <div class="loading-block ov-loading"><span class="spinner"></span> Loading cluster overview…</div>
     </div>
   }
 </section>

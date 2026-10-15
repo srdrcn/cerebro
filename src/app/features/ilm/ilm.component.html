@@ -1,0 +1,809 @@
+<section class="page" aria-labelledby="ilm-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="ilm-title" class="page-title">Lifecycle policies</h1>
+      <p class="page-subtitle">
+        Index lifecycle management moves indices through the hot, warm, cold, frozen and delete phases as they age.
+      </p>
+    </div>
+  </header>
+
+  <div class="tabs ilm-tabs" role="tablist" aria-label="Lifecycle views" (keydown)="onTabKeydown($event)">
+    <button
+      type="button"
+      role="tab"
+      id="ilm-tab-policies"
+      aria-controls="ilm-panel-policies"
+      [attr.aria-selected]="tab() === 'policies'"
+      [attr.tabindex]="tab() === 'policies' ? 0 : -1"
+      (click)="setTab('policies')"
+    >
+      <i class="bi bi-hourglass-split" aria-hidden="true"></i> Policies
+    </button>
+    <button
+      type="button"
+      role="tab"
+      id="ilm-tab-status"
+      aria-controls="ilm-panel-status"
+      [attr.aria-selected]="tab() === 'status'"
+      [attr.tabindex]="tab() === 'status' ? 0 : -1"
+      (click)="setTab('status')"
+    >
+      <i class="bi bi-activity" aria-hidden="true"></i> Lifecycle status
+      @if (explainRows() && explainSummary().errors > 0) {
+        <span class="badge badge-red tabular" [attr.aria-label]="explainSummary().errors + ' failing'">{{ explainSummary().errors }}</span>
+      }
+    </button>
+  </div>
+
+  @if (tab() === 'policies') {
+    <div id="ilm-panel-policies" role="tabpanel" aria-labelledby="ilm-tab-policies" class="layout-sidebar-start">
+      <!-- ================= Policy list ================= -->
+      <div class="card list-card">
+        <div class="card-header">
+          <h2 class="card-title spacer"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Policies</h2>
+          @if (loading() && policies()) {
+            <span class="spinner" role="status" aria-label="Refreshing policies"></span>
+          }
+          @if (policies()) {
+            <span class="count-label">
+              @if (query().trim() && listTotal() > 0) {
+                <strong>{{ visiblePolicies().length | num }}</strong> of {{ listTotal() | num }} {{ listTotal() | plural: 'policy' : 'policies' }}
+              } @else {
+                <strong>{{ listTotal() | num }}</strong> {{ listTotal() | plural: 'policy' : 'policies' }}
+              }
+            </span>
+          }
+          <button
+            type="button"
+            class="btn btn-sm btn-soft"
+            [disabled]="saving()"
+            [attr.title]="saving() ? 'Wait for the policy to be saved' : null"
+            (click)="newPolicy()"
+          >
+            <i class="bi bi-plus-lg" aria-hidden="true"></i> New policy
+          </button>
+        </div>
+
+        @if (policies(); as all) {
+          <div class="list-card__toolbar">
+            <cerebro-search
+              [(value)]="query"
+              [small]="true"
+              placeholder="Filter by name or description"
+              ariaLabel="Filter policies by name or description"
+            />
+            @if (managedCount() > 0) {
+              <label class="switch list-card__switch">
+                <input
+                  #managedToggle
+                  type="checkbox"
+                  role="switch"
+                  [checked]="showManaged()"
+                  (change)="setShowManaged(managedToggle.checked)"
+                />
+                Show managed policies
+                <span class="count">{{ managedCount() }}</span>
+              </label>
+            }
+          </div>
+
+          <ul class="list list-card__list" aria-label="Lifecycle policies" [attr.aria-busy]="saving() ? true : null">
+            @for (policy of visiblePolicies(); track policy.name) {
+              <li>
+                <button
+                  type="button"
+                  class="list-item list-item--interactive policy-item"
+                  [class.is-selected]="selected() === policy.name"
+                  [attr.aria-current]="selected() === policy.name ? 'true' : null"
+                  [disabled]="saving()"
+                  (click)="select(policy)"
+                >
+                  <span class="list-item__icon" aria-hidden="true">
+                    <i class="bi" [class.bi-hourglass-split]="!policy.managed" [class.bi-gear-wide-connected]="policy.managed"></i>
+                  </span>
+                  <span class="list-item__body">
+                    <span class="list-item__title policy-item__name">
+                      <span class="truncate min-w-0">{{ policy.name }}</span>
+                      @if (policy.managed) {
+                        <span class="badge badge-blue policy-item__flag" title="Built-in policy managed by Elasticsearch">Managed</span>
+                      }
+                      @if (selected() === policy.name && dirty()) {
+                        <span class="dot dot-yellow dot-sm" title="Unsaved changes"></span>
+                        <span class="visually-hidden">(unsaved changes)</span>
+                      }
+                    </span>
+                    <span class="phase-strip">
+                      @for (phase of policy.phases; track phase.name; let last = $last) {
+                        <span class="phase-chip" [attr.data-tone]="phase.tone">
+                          <span class="phase-chip__dot" aria-hidden="true"></span>
+                          {{ phase.name }}
+                          @if (phase.minAge) {
+                            <span class="phase-chip__age">{{ phase.minAge }}</span>
+                          }
+                        </span>
+                        @if (!last) {
+                          <i class="bi bi-chevron-right phase-strip__sep" aria-hidden="true"></i>
+                        }
+                      } @empty {
+                        <span class="text-muted text-xs">No phases</span>
+                      }
+                    </span>
+                    <span class="list-item__meta policy-item__usage" [class.is-unused]="policy.usage.total === 0">
+                      <i class="bi" [class.bi-link-45deg]="policy.usage.total > 0" [class.bi-dash-circle]="policy.usage.total === 0" aria-hidden="true"></i>
+                      {{ usageLabel(policy.usage) }}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            } @empty {
+              <li>
+                @if (query().trim()) {
+                  <cerebro-empty
+                    icon="bi-funnel"
+                    heading="No matching policies"
+                    [text]="showManaged() || managedCount() === 0 ? 'No policy name or description matches this filter.' : 'No policy name or description matches this filter. Managed policies are hidden.'"
+                    [compact]="true"
+                  >
+                    <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+                    @if (!showManaged() && managedCount() > 0) {
+                      <button type="button" class="btn btn-sm btn-ghost" (click)="setShowManaged(true)">Show managed</button>
+                    }
+                  </cerebro-empty>
+                } @else {
+                  <cerebro-empty
+                    icon="bi-hourglass"
+                    heading="No custom policies"
+                    [text]="managedCount() > 0 ? 'Only built-in policies exist. Create your own or show the managed ones.' : 'Create a policy to roll over, shrink and delete indices automatically.'"
+                    [compact]="true"
+                  >
+                    @if (managedCount() > 0) {
+                      <button type="button" class="btn btn-sm" (click)="setShowManaged(true)">Show managed</button>
+                    }
+                  </cerebro-empty>
+                }
+              </li>
+            }
+          </ul>
+        } @else if (failed()) {
+          <cerebro-empty
+            icon="bi-exclamation-triangle"
+            heading="Could not load policies"
+            [text]="loadError() ?? 'The cluster did not answer the lifecycle policies request.'"
+          >
+            <button type="button" class="btn btn-sm" (click)="load()">
+              <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+            </button>
+          </cerebro-empty>
+        } @else {
+          <div class="list-skeleton" role="status" aria-label="Loading policies">
+            @for (placeholder of [1, 2, 3, 4, 5]; track placeholder) {
+              <div class="list-skeleton__row" aria-hidden="true">
+                <span class="skeleton" style="height: 12px; width: 58%"></span>
+                <span class="skeleton" style="height: 18px; width: 86%"></span>
+                <span class="skeleton" style="height: 10px; width: 40%"></span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- ================= Detail ================= -->
+      <div #detailColumn class="stack detail-column">
+        <div class="card" role="region" aria-labelledby="policy-detail-title">
+          <div class="card-header detail-header">
+            <div class="detail-header__heading min-w-0">
+              <span class="card-icon" aria-hidden="true">
+                <i class="bi" [class.bi-plus-lg]="selected() === null" [class.bi-hourglass-split]="selected() !== null"></i>
+              </span>
+              <div class="min-w-0">
+                <h2 id="policy-detail-title" class="card-title">
+                  @if (selected(); as current) {
+                    <span class="truncate">{{ current }}</span>
+                  } @else {
+                    New policy
+                  }
+                  @if (selectedPolicy()?.managed) {
+                    <span class="badge badge-blue" title="Built-in policy managed by Elasticsearch">Managed</span>
+                  }
+                  @if (selectedPolicy()?.deprecated) {
+                    <span class="badge badge-yellow">Deprecated</span>
+                  }
+                </h2>
+                <p class="card-subtitle truncate" [attr.title]="selectedPolicy()?.description ?? null">
+                  @if (selectedPolicy(); as policy) {
+                    {{ policy.description ?? 'No description' }}
+                    @if (policy.version !== null) {
+                      · version {{ policy.version }}
+                    }
+                    @if (policy.modifiedAt !== null) {
+                      · modified {{ formatDate(policy.modifiedAt) }}
+                    }
+                  } @else if (selected() === null) {
+                    Not saved yet — the timeline previews the JSON below
+                  } @else {
+                    No longer on the cluster
+                  }
+                </p>
+              </div>
+            </div>
+            @if (selectedPolicy(); as policy) {
+              <div class="row detail-header__actions">
+                <button type="button" class="btn btn-sm" (click)="viewJson()">
+                  <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-danger-soft"
+                  [class.is-loading]="deleting()"
+                  [disabled]="deleting() || saving()"
+                  (click)="remove()"
+                >
+                  <i class="bi bi-trash" aria-hidden="true"></i> Delete
+                </button>
+              </div>
+            }
+          </div>
+
+          <div class="card-body stack">
+            <div class="timeline-head">
+              <h3 class="section-title">Phases</h3>
+              @if (previewStale()) {
+                <span class="badge badge-red"><i class="bi bi-x-circle" aria-hidden="true"></i> JSON invalid — showing the saved version</span>
+              } @else if (dirty() && selected() !== null) {
+                <span class="badge badge-yellow"><span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Preview of unsaved changes</span>
+              }
+            </div>
+            @if (previewPhases().length > 0) {
+              <ol class="timeline" aria-label="Phases in execution order">
+                @for (phase of previewPhases(); track phase.name; let index = $index) {
+                  <li class="phase-card" [attr.data-tone]="phase.tone">
+                    <div class="phase-card__head">
+                      <span class="phase-card__name">
+                        <span class="phase-card__dot" aria-hidden="true"></span>
+                        {{ phase.label }}
+                      </span>
+                      <span class="phase-card__start" [title]="phase.minAge ? 'min_age ' + phase.minAge : 'min_age 0ms'">
+                        <i class="bi bi-clock" aria-hidden="true"></i> {{ phase.startLabel }}
+                      </span>
+                    </div>
+                    <ul class="phase-card__actions" [attr.aria-label]="phase.label + ' phase actions'">
+                      @for (action of phase.actions; track action.type) {
+                        <li class="phase-action" [class.is-delete]="action.type === 'delete'">
+                          <i class="bi" [class]="'bi ' + action.icon" aria-hidden="true"></i>
+                          <span class="min-w-0">
+                            <span class="phase-action__label">{{ action.label }}</span>
+                            @if (action.detail) {
+                              <span class="phase-action__detail">{{ action.detail }}</span>
+                            }
+                          </span>
+                        </li>
+                      } @empty {
+                        <li class="phase-action is-empty">No actions — indices just wait in this phase</li>
+                      }
+                    </ul>
+                  </li>
+                }
+              </ol>
+            } @else {
+              <p class="text-muted text-sm">This policy has no phases yet. Add some in the JSON below.</p>
+            }
+          </div>
+
+          @if (selectedPolicy(); as policy) {
+            <div class="usage-section">
+              <div class="usage-section__head">
+                <h3 class="section-title">In use by</h3>
+                <span class="text-sm text-muted">{{ usageLabel(policy.usage) }}</span>
+                <span class="spacer"></span>
+                @if (policy.usage.indices.length + policy.usage.dataStreams.length > 0) {
+                  <button type="button" class="btn btn-sm btn-soft" (click)="checkStatus(policy)">
+                    <i class="bi bi-activity" aria-hidden="true"></i> Check lifecycle status
+                  </button>
+                }
+              </div>
+              @if (policy.usage.total > 0) {
+                <div class="usage-grid">
+                  <div class="usage-group">
+                    <h4 class="usage-group__title"><i class="bi bi-box" aria-hidden="true"></i> Indices <span class="count">{{ policy.usage.indices.length }}</span></h4>
+                    <ul class="usage-links">
+                      @for (index of usageSlice('indices', policy.usage.indices); track index) {
+                        <li>
+                          <a class="usage-link mono" [routerLink]="['/index_detail']" [queryParams]="{ ...connection.hostQuery(), index }" [title]="index">{{ index }}</a>
+                        </li>
+                      } @empty {
+                        <li class="text-muted text-sm">None</li>
+                      }
+                    </ul>
+                    @if (policy.usage.indices.length > usagePreview) {
+                      <button type="button" class="link-button text-sm" (click)="toggleUsage('indices')" [attr.aria-expanded]="isUsageExpanded('indices')">
+                        {{ isUsageExpanded('indices') ? 'Show fewer' : 'Show all ' + policy.usage.indices.length }}
+                      </button>
+                    }
+                  </div>
+                  <div class="usage-group">
+                    <h4 class="usage-group__title"><i class="bi bi-water" aria-hidden="true"></i> Data streams <span class="count">{{ policy.usage.dataStreams.length }}</span></h4>
+                    <ul class="usage-links">
+                      @for (stream of usageSlice('streams', policy.usage.dataStreams); track stream) {
+                        <li>
+                          <a class="usage-link mono" [routerLink]="['/data_streams']" [queryParams]="{ ...connection.hostQuery(), name: stream }" [title]="stream">{{ stream }}</a>
+                        </li>
+                      } @empty {
+                        <li class="text-muted text-sm">None</li>
+                      }
+                    </ul>
+                    @if (policy.usage.dataStreams.length > usagePreview) {
+                      <button type="button" class="link-button text-sm" (click)="toggleUsage('streams')" [attr.aria-expanded]="isUsageExpanded('streams')">
+                        {{ isUsageExpanded('streams') ? 'Show fewer' : 'Show all ' + policy.usage.dataStreams.length }}
+                      </button>
+                    }
+                  </div>
+                  <div class="usage-group">
+                    <h4 class="usage-group__title"><i class="bi bi-layers" aria-hidden="true"></i> Index templates <span class="count">{{ policy.usage.templates.length }}</span></h4>
+                    <ul class="usage-links">
+                      @for (template of usageSlice('templates', policy.usage.templates); track template) {
+                        <li>
+                          <a class="usage-link mono" [routerLink]="['/index_templates']" [queryParams]="{ ...connection.hostQuery(), name: template }" [title]="template">{{ template }}</a>
+                        </li>
+                      } @empty {
+                        <li class="text-muted text-sm">None</li>
+                      }
+                    </ul>
+                    @if (policy.usage.templates.length > usagePreview) {
+                      <button type="button" class="link-button text-sm" (click)="toggleUsage('templates')" [attr.aria-expanded]="isUsageExpanded('templates')">
+                        {{ isUsageExpanded('templates') ? 'Show fewer' : 'Show all ' + policy.usage.templates.length }}
+                      </button>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <p class="text-sm text-muted usage-empty">
+                  No index, data stream or index template uses this policy. Set <span class="mono">index.lifecycle.name</span> on an index or template to apply it.
+                </p>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- ================= Editor ================= -->
+        <div class="card card--sticky-footer editor-card" role="region" aria-labelledby="policy-editor-title">
+          <div class="card-header">
+            <div class="min-w-0">
+              <h2 id="policy-editor-title" class="card-title">
+                <i class="bi bi-code-slash" aria-hidden="true"></i>
+                {{ selected() === null ? 'Policy definition' : 'Edit policy' }}
+              </h2>
+              <p class="card-subtitle">The object under <span class="mono">"policy"</span>: phases and optional <span class="mono">_meta</span>.</p>
+            </div>
+            @if (dirty()) {
+              <span class="badge badge-yellow" role="status">
+                <span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Unsaved changes
+              </span>
+            }
+          </div>
+
+          <div class="card-body stack">
+            @if (selectedMissing()) {
+              <div class="callout callout-warning">
+                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                <p><strong>{{ selected() }}</strong> no longer exists on the cluster. Saving creates it again.</p>
+              </div>
+            }
+            @if (selectedPolicy()?.managed) {
+              <div class="callout callout-info">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <p>This built-in policy is managed by Elasticsearch, which may overwrite your changes on upgrade. Save a copy under a new name instead.</p>
+              </div>
+            }
+
+            <div class="field name-field">
+              <label class="field-label" for="policy-name">Name</label>
+              <input
+                #nameInput
+                id="policy-name"
+                class="input input-mono"
+                [class.is-invalid]="nameError()"
+                [ngModel]="name()"
+                (ngModelChange)="name.set($event)"
+                (keydown.enter)="save()"
+                placeholder="e.g. logs-30-days"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                required
+                aria-required="true"
+                [attr.aria-invalid]="nameError() ? true : null"
+                [attr.aria-describedby]="nameError() ? 'policy-name-error' : 'policy-name-help'"
+              />
+              <div id="policy-name-help" aria-live="polite">
+                @if (nameError(); as error) {
+                  <p id="policy-name-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+                } @else {
+                  @switch (mode()) {
+                    @case ('overwrite') {
+                      <p class="field-hint text-warning">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                        A policy named <span class="mono">{{ name() }}</span> already exists. Saving overwrites it.
+                      </p>
+                    }
+                    @case ('copy') {
+                      <p class="field-hint">
+                        <i class="bi bi-copy" aria-hidden="true"></i>
+                        Saving creates <span class="mono">{{ name() }}</span>; <span class="mono">{{ selected() }}</span> stays unchanged.
+                      </p>
+                    }
+                    @case ('update') {
+                      <p class="field-hint">Rename to save a copy under a new name.</p>
+                    }
+                    @default {
+                      <p class="field-hint">No spaces, and not starting with an underscore.</p>
+                    }
+                  }
+                }
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="body-label">
+                <span class="field-label" id="policy-body-label">Policy JSON</span>
+                <span class="spacer"></span>
+                <button type="button" class="btn btn-sm btn-ghost" (click)="format()" title="Format JSON (Ctrl+Shift+F)">
+                  <i class="bi bi-text-indent-left" aria-hidden="true"></i> Format
+                </button>
+              </div>
+              <cerebro-code-editor
+                [value]="body()"
+                (valueChange)="body.set($event)"
+                [minLines]="18"
+                [maxLines]="60"
+                ariaLabel="Lifecycle policy JSON"
+                [invalid]="!!bodyError()"
+                [describedBy]="bodyError() ? 'ilm-body-error' : null"
+                (submit)="save()"
+              />
+              <!-- Only the coarse state is live: the details change on every keystroke. -->
+              <span class="visually-hidden" role="status">{{ bodyStatus() }}</span>
+              <div class="editor-status">
+                @if (bodyError(); as error) {
+                  <span class="badge badge-red"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> Invalid</span>
+                  <span id="ilm-body-error" class="editor-status__message text-danger">{{ error }}</span>
+                } @else if (bodyWarnings().length > 0) {
+                  <span class="badge badge-yellow"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> Check</span>
+                  <span class="editor-status__message">{{ bodyWarnings().join(' · ') }}</span>
+                } @else {
+                  <span class="badge badge-green"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Valid JSON</span>
+                  <span class="editor-status__message text-muted">
+                    {{ pluralize(previewPhases().length, 'phase') }}
+                  </span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer card-footer--between">
+            <span class="footer-keys"><kbd>Ctrl</kbd><kbd>Enter</kbd> to save</span>
+            <div class="row footer-buttons">
+              @if (dirty()) {
+                <button type="button" class="btn btn-ghost" (click)="discardChanges()" [disabled]="saving()">Discard changes</button>
+              }
+              <button
+                type="button"
+                class="btn btn-primary"
+                [class.is-loading]="saving()"
+                [disabled]="saving()"
+                [attr.aria-busy]="saving() ? true : null"
+                (click)="save()"
+              >
+                <i class="bi" [class.bi-floppy]="mode() === 'update' || mode() === 'overwrite'" [class.bi-plus-lg]="mode() === 'create' || mode() === 'copy'" aria-hidden="true"></i>
+                {{ saveLabel() }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <!-- ================= Lifecycle status ================= -->
+    <div id="ilm-panel-status" role="tabpanel" aria-labelledby="ilm-tab-status" class="stack">
+      <div class="card">
+        <form class="card-body explain-form" (submit)="$event.preventDefault(); submitExplain()">
+          <div class="field">
+            <label class="field-label" for="explain-target">Index, data stream or pattern</label>
+            <div class="explain-form__controls">
+              <div class="input-group explain-form__input">
+                <i class="bi bi-search" aria-hidden="true"></i>
+                <input
+                  #explainInput
+                  id="explain-target"
+                  class="input input-mono"
+                  [class.is-invalid]="explainTargetError()"
+                  [attr.aria-invalid]="explainTargetError() ? true : null"
+                  [ngModel]="explainTarget()"
+                  (ngModelChange)="explainTarget.set($event)"
+                  name="explainTarget"
+                  placeholder="e.g. logs-*, app-events-web"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  [attr.aria-describedby]="explainTargetError() ? 'explain-target-error explain-target-help' : 'explain-target-help'"
+                />
+              </div>
+              <button type="submit" class="btn btn-primary" [class.is-loading]="explainLoading() && !explainRows()" [disabled]="explainLoading() && !explainRows()">
+                <i class="bi bi-activity" aria-hidden="true"></i> Explain
+              </button>
+            </div>
+            <div aria-live="polite">
+              @if (explainTargetError(); as error) {
+                <p id="explain-target-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+              }
+            </div>
+            <p id="explain-target-help" class="field-hint">
+              Comma separated names and wildcards. Hidden backing indices need an explicit pattern such as
+              <button type="button" class="link-button mono" (click)="explainPreset('.ds-*')">.ds-*</button>; try
+              <button type="button" class="link-button mono" (click)="explainPreset('*')">*</button> for every visible index.
+            </p>
+          </div>
+        </form>
+      </div>
+
+      @if (explainRows(); as rows) {
+        <div class="stat-grid explain-stats">
+          <div class="stat">
+            <div class="stat__label"><i class="bi bi-box" aria-hidden="true"></i> Indices</div>
+            <div class="stat__value">{{ explainSummary().total }}</div>
+            <div class="stat__meta truncate" [title]="explainedTarget() ?? ''">matching <span class="mono">{{ explainedTarget() }}</span></div>
+          </div>
+          <div class="stat">
+            <div class="stat__label"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Managed by ILM</div>
+            <div class="stat__value">{{ explainSummary().managed }}</div>
+            <div class="stat__meta">{{ explainSummary().total - explainSummary().managed }} not managed</div>
+          </div>
+          <div class="stat">
+            <div class="stat__label"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i> Failing steps</div>
+            <div class="stat__value" [class.text-danger]="explainSummary().errors > 0">{{ explainSummary().errors }}</div>
+            <div class="stat__meta">
+              @if (explainSummary().errors === 0) {
+                all steps healthy
+              } @else if (explainSummary().retrying > 0) {
+                {{ explainSummary().retrying }} being retried automatically
+              } @else {
+                need attention
+              }
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat__label"><i class="bi bi-bar-chart-steps" aria-hidden="true"></i> By phase</div>
+            <div class="phase-counts">
+              @for (phase of explainSummary().phases; track phase.name) {
+                <span class="phase-chip" [attr.data-tone]="phase.tone">
+                  <span class="phase-chip__dot" aria-hidden="true"></span>
+                  {{ phase.name }} <strong class="tabular">{{ phase.count }}</strong>
+                </span>
+              } @empty {
+                <span class="text-muted text-sm">No managed index</span>
+              }
+            </div>
+          </div>
+        </div>
+
+        @if (explainError(); as error) {
+          <div class="callout callout-warning" role="status">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+            <p>Could not refresh the lifecycle status. Showing the last result. {{ error }}</p>
+          </div>
+        }
+
+        <div class="card">
+          <div class="card-header explain-toolbar">
+            <div class="toolbar">
+              <cerebro-search [(value)]="explainQuery" [small]="true" placeholder="Filter by index or policy" ariaLabel="Filter by index or policy" />
+              <div class="segmented segmented-sm" role="group" aria-label="Show">
+                <button type="button" [attr.aria-pressed]="explainFilter() === 'all'" (click)="explainFilter.set('all')">All</button>
+                <button type="button" [attr.aria-pressed]="explainFilter() === 'managed'" (click)="explainFilter.set('managed')">Managed</button>
+                <button type="button" [attr.aria-pressed]="explainFilter() === 'errors'" (click)="explainFilter.set('errors')">
+                  Failing @if (explainSummary().errors > 0) { <span class="badge badge-red tabular">{{ explainSummary().errors }}</span> }
+                </button>
+              </div>
+            </div>
+            <div class="row">
+              @if (explainLoading()) {
+                <span class="spinner" role="status" aria-label="Refreshing"></span>
+              }
+              @if (explainFilter() === 'errors' && retryableRows().length > 0) {
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  [class.is-loading]="retryingSteps()"
+                  [disabled]="retryingSteps()"
+                  [attr.aria-busy]="retryingSteps() ? true : null"
+                  (click)="retryListedSteps()"
+                >
+                  <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Retry {{ retryableRows().length | num }} failed
+                </button>
+              }
+              @if (explainFilter() !== 'all' || explainQuery().trim()) {
+                <span class="count-label"><strong>{{ visibleExplainRows().length | num }}</strong> of {{ rows.length | num }} {{ rows.length | plural: 'index' : 'indices' }}</span>
+              } @else {
+                <span class="count-label"><strong>{{ rows.length | num }}</strong> {{ rows.length | plural: 'index' : 'indices' }}</span>
+              }
+            </div>
+          </div>
+          <div class="table-wrap explain-wrap">
+            <table class="data-table explain-table">
+              <thead>
+                <tr>
+                  <th scope="col" [attr.aria-sort]="explainSort.ariaSort('index')">
+                    <button type="button" class="sort-button" [class.is-active]="explainSort.isActive('index')" (click)="explainSort.sortBy('index')">
+                      Index <i class="bi" [class]="'bi ' + explainSort.icon('index')" aria-hidden="true"></i>
+                    </button>
+                  </th>
+                  <th scope="col">Managed</th>
+                  <th scope="col" [attr.aria-sort]="explainSort.ariaSort('policy')">
+                    <button type="button" class="sort-button" [class.is-active]="explainSort.isActive('policy')" (click)="explainSort.sortBy('policy')">
+                      Policy <i class="bi" [class]="'bi ' + explainSort.icon('policy')" aria-hidden="true"></i>
+                    </button>
+                  </th>
+                  <th scope="col" [attr.aria-sort]="explainSort.ariaSort('phase')">
+                    <button type="button" class="sort-button" [class.is-active]="explainSort.isActive('phase')" (click)="explainSort.sortBy('phase')">
+                      Phase <i class="bi" [class]="'bi ' + explainSort.icon('phase')" aria-hidden="true"></i>
+                    </button>
+                  </th>
+                  <th scope="col">Action</th>
+                  <th scope="col">Step</th>
+                  <th scope="col" class="num" [attr.aria-sort]="explainSort.ariaSort('age')">
+                    <button type="button" class="sort-button" [class.is-active]="explainSort.isActive('age')" (click)="explainSort.sortBy('age')">
+                      Age <i class="bi" [class]="'bi ' + explainSort.icon('age')" aria-hidden="true"></i>
+                    </button>
+                  </th>
+                  <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of visibleExplainRows(); track row.index) {
+                  <tr
+                    [class.is-failed]="row.failed"
+                    [class.is-retrying]="row.retrying"
+                    [class.is-unmanaged]="!row.managed"
+                    [class.has-reason]="row.info !== null"
+                  >
+                    <th scope="row" class="explain-index">
+                      <a class="mono" [routerLink]="['/index_detail']" [queryParams]="{ ...connection.hostQuery(), index: row.index }" [title]="row.index">{{ row.index }}</a>
+                    </th>
+                    <td>
+                      @if (row.managed) {
+                        <span class="badge badge-green">Yes</span>
+                      } @else {
+                        <span class="badge">No</span>
+                      }
+                    </td>
+                    <td class="explain-policy">
+                      @if (row.policy; as policyName) {
+                        <button type="button" class="link-button mono" (click)="openPolicyByName(policyName)" [title]="'Open policy ' + policyName">{{ policyName }}</button>
+                      } @else {
+                        <span class="text-muted">–</span>
+                      }
+                    </td>
+                    <td>
+                      @if (row.phase; as phase) {
+                        <span class="phase-chip" [attr.data-tone]="row.phaseTone"><span class="phase-chip__dot" aria-hidden="true"></span>{{ phase }}</span>
+                      } @else {
+                        <span class="text-muted">–</span>
+                      }
+                    </td>
+                    <td>
+                      @if (row.action; as action) {
+                        <span class="mono text-sm">{{ action }}</span>
+                      } @else {
+                        <span class="text-muted">–</span>
+                      }
+                    </td>
+                    <td class="explain-step">
+                      @if (row.failed) {
+                        <span class="badge badge-red"><i class="bi bi-x-octagon" aria-hidden="true"></i> Failed</span>
+                        <span class="mono text-sm">{{ row.failedStep ?? row.step }}</span>
+                      } @else if (row.retrying) {
+                        <span class="badge badge-yellow" [title]="'The step failed and ILM retries it automatically (' + pluralize(row.retryCount ?? 0, 'retry', 'retries') + ' so far)'">
+                          <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Retrying ({{ row.retryCount }})
+                        </span>
+                        <span class="mono text-sm">{{ row.step ?? '–' }}</span>
+                      } @else if (row.step; as step) {
+                        <span class="mono text-sm">{{ step }}</span>
+                      } @else {
+                        <span class="text-muted">–</span>
+                      }
+                    </td>
+                    <td class="num tabular" [title]="row.age ?? ''">
+                      @if (row.age === null) {
+                        <span class="text-muted">–</span>
+                      } @else {
+                        {{ formatAge(row) }}
+                      }
+                    </td>
+                    <td class="actions">
+                      <cerebro-menu [label]="'Actions for ' + row.index" align="end">
+                        <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+                        <div class="menu-label">{{ row.index }}</div>
+                        @if (canRetryStep(row)) {
+                          <button type="button" class="menu-item" [disabled]="retryingSteps()" (click)="retryStep(row)">
+                            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Retry failed step
+                          </button>
+                          <div class="menu-separator"></div>
+                        }
+                        <a class="menu-item" [routerLink]="['/index_detail']" [queryParams]="{ ...connection.hostQuery(), index: row.index }">
+                          <i class="bi bi-box" aria-hidden="true"></i> Open index details
+                        </a>
+                        @if (row.policy; as policyName) {
+                          <button type="button" class="menu-item" (click)="openPolicyByName(policyName)">
+                            <i class="bi bi-hourglass-split" aria-hidden="true"></i> Open policy
+                          </button>
+                        }
+                        <button type="button" class="menu-item" (click)="showExplainJson(row)">
+                          <i class="bi bi-braces" aria-hidden="true"></i> View explain JSON
+                        </button>
+                      </cerebro-menu>
+                    </td>
+                  </tr>
+                  @if (row.info; as info) {
+                    <tr class="explain-reason" [class.is-failed]="row.failed" [class.is-retrying]="row.retrying">
+                      <td colspan="8">
+                        <p class="explain-reason__body">
+                          <i
+                            class="bi"
+                            [class.bi-x-octagon-fill]="row.failed"
+                            [class.bi-arrow-repeat]="row.retrying"
+                            [class.bi-info-circle]="!row.failed && !row.retrying"
+                            aria-hidden="true"
+                          ></i>
+                          <span>
+                            <span class="visually-hidden">{{ row.index }}: </span>
+                            {{ info }}
+                            @if (needsAttention(row) && row.retryCount !== null) {
+                              <span class="explain-reason__meta">· {{ row.retryable ? 'retried automatically' : 'not retryable' }}, {{ pluralize(row.retryCount, 'retry', 'retries') }}</span>
+                            }
+                          </span>
+                        </p>
+                      </td>
+                    </tr>
+                  }
+                } @empty {
+                  <tr>
+                    <td colspan="8">
+                      @if (rows.length === 0) {
+                        <cerebro-empty icon="bi-search" heading="No matching index" text="Nothing matches this pattern. Hidden indices (such as data stream backing indices) need an explicit pattern." [compact]="true" />
+                      } @else {
+                        <cerebro-empty icon="bi-funnel" heading="No index matches the filters" [compact]="true">
+                          <button type="button" class="btn btn-sm" (click)="explainFilter.set('all'); explainQuery.set('')">Clear filters</button>
+                        </cerebro-empty>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      } @else if (explainLoading()) {
+        <div class="card loading-block" role="status"><span class="spinner"></span> Asking Elasticsearch where each index is in its lifecycle…</div>
+      } @else if (explainError(); as error) {
+        <div class="card">
+          <cerebro-empty icon="bi-exclamation-triangle" heading="Could not explain the lifecycle" [text]="error">
+            <button type="button" class="btn btn-sm" (click)="retryExplain()">
+              <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+            </button>
+          </cerebro-empty>
+        </div>
+      } @else {
+        <div class="card">
+          <cerebro-empty
+            icon="bi-activity"
+            heading="Where is each index in its lifecycle?"
+            text="Enter an index, data stream or pattern to see its policy, current phase, action and step — and why a step failed."
+          >
+            <button type="button" class="btn btn-sm" (click)="explainPreset('*')">Explain all indices</button>
+            <button type="button" class="btn btn-sm" (click)="explainPreset('.ds-*')">Data stream backing indices</button>
+          </cerebro-empty>
+        </div>
+      }
+    </div>
+  }
+</section>

@@ -1,0 +1,603 @@
+<section class="page" aria-labelledby="allocation-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="allocation-title" class="page-title">Shard allocation</h1>
+      <p class="page-subtitle">Find out why a shard is unassigned, or why it sits on the node it does.</p>
+    </div>
+    <div class="page-header__actions">
+      <button type="button" class="btn" (click)="explainNext()" [disabled]="explaining() && state().kind === 'loading'">
+        <i class="bi bi-signpost-split" aria-hidden="true"></i> Explain next unassigned shard
+      </button>
+    </div>
+  </header>
+
+  <form class="card alloc-query" (submit)="submit($event)" aria-label="Shard to explain" novalidate>
+    <div class="alloc-query__fields">
+      <div class="field alloc-query__index">
+        <label class="field-label" for="alloc-index">Index</label>
+        <select
+          id="alloc-index"
+          name="index"
+          class="select"
+          [class.is-invalid]="submitted() && !formIndex()"
+          [attr.aria-invalid]="submitted() && !formIndex()"
+          [attr.aria-describedby]="submitted() && !formIndex() ? 'alloc-form-error' : null"
+          [ngModel]="formIndex()"
+          (ngModelChange)="selectIndex($event)"
+        >
+          <option value="" disabled>{{ indices() === undefined ? 'Loading indices…' : 'Choose an index' }}</option>
+          @for (name of indexOptions(); track name) {
+            <option [value]="name">{{ name }}</option>
+          }
+        </select>
+      </div>
+      <div class="field alloc-query__shard">
+        <label class="field-label" for="alloc-shard">Shard</label>
+        <input
+          id="alloc-shard"
+          name="shard"
+          class="input tabular"
+          type="number"
+          inputmode="numeric"
+          min="0"
+          step="1"
+          [attr.max]="formShardCount() > 0 ? formShardCount() - 1 : null"
+          [class.is-invalid]="submitted() && !!formIndex() && !!formError()"
+          [attr.aria-invalid]="submitted() && !!formIndex() && !!formError()"
+          [attr.aria-describedby]="submitted() && !!formIndex() && formError() ? 'alloc-form-error' : null"
+          [ngModel]="formShard()"
+          (ngModelChange)="setShard($event)"
+        />
+      </div>
+      <div class="field">
+        <span class="field-label" id="alloc-copy-label">Copy</span>
+        <div class="segmented" role="group" aria-labelledby="alloc-copy-label">
+          <button type="button" [attr.aria-pressed]="formPrimary()" (click)="formPrimary.set(true)">Primary</button>
+          <button type="button" [attr.aria-pressed]="!formPrimary()" (click)="formPrimary.set(false)">Replica</button>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary alloc-query__submit">
+        <i class="bi bi-search" aria-hidden="true"></i> Explain shard
+      </button>
+    </div>
+
+    @if (submitted() && formError(); as error) {
+      <p id="alloc-form-error" class="field-error alloc-query__error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+    }
+
+    @if (requestNodeName(); as node) {
+      <div class="alloc-node-filter">
+        <span class="tag" [title]="node === request()?.node ? node : node + ' (' + request()?.node + ')'">
+          <span class="tag-key">Node</span>
+          <span>{{ node }}</span>
+        </span>
+        <span class="text-xs text-muted">Only the copy on this node is explained.</span>
+        <button type="button" class="link-button text-sm" (click)="explainWithoutNode()" [attr.aria-label]="'Clear node ' + node + ' and explain again'">
+          <i class="bi bi-x-circle" aria-hidden="true"></i> Clear
+        </button>
+      </div>
+    }
+
+    @if (formCopies().length > 0) {
+      <div class="alloc-copies">
+        <span class="section-label" id="alloc-copies-label">Copies of shard {{ formShard() }}</span>
+        <div class="alloc-copies__list" role="group" aria-labelledby="alloc-copies-label">
+          @for (copy of formCopies(); track $index) {
+            <button
+              type="button"
+              class="copy-chip"
+              [class.is-unassigned]="copy.state === 'UNASSIGNED'"
+              [class.is-moving]="copy.state === 'INITIALIZING' || copy.state === 'RELOCATING'"
+              [attr.aria-pressed]="isCurrentCopy(copy)"
+              [attr.aria-label]="'Explain ' + copyLabel(copy)"
+              [title]="copyLabel(copy)"
+              (click)="explainCopy(copy)"
+            >
+              <span class="copy-chip__kind" [class.is-primary]="copy.primary" aria-hidden="true">{{ copy.primary ? 'P' : 'R' }}</span>
+              <span class="copy-chip__node">{{ copy.node ?? 'Unassigned' }}</span>
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </form>
+
+  <div class="layout-sidebar-end">
+    <div class="stack-lg min-w-0" [attr.aria-busy]="state().kind === 'loading'">
+      <p class="visually-hidden" role="status">{{ announcement() }}</p>
+      @switch (state().kind) {
+        @case ('done') {
+          @if (view(); as view) {
+            @if (explainStale(); as reason) {
+              <div class="callout callout-warning alloc-stale" role="alert">
+                <i class="bi bi-wifi-off" aria-hidden="true"></i>
+                <div class="min-w-0">
+                  <strong>Could not refresh the explanation.</strong>
+                  Showing data from {{ explainedAt() | date: 'HH:mm:ss' }}. {{ reason }}
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-sm alloc-stale__retry"
+                  [class.is-loading]="explaining()"
+                  [disabled]="explaining()"
+                  (click)="rerun()"
+                >
+                  <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                </button>
+              </div>
+            }
+            <article class="card" aria-labelledby="alloc-summary-title">
+              <div class="card-header alloc-summary__header">
+                <div class="alloc-identity">
+                  <span
+                    [class]="'alloc-shard tone-' + view.stateTone + (view.primary ? ' is-primary' : '')"
+                    aria-hidden="true"
+                  >{{ view.shard }}</span>
+                  <div class="min-w-0">
+                    <h2 id="alloc-summary-title" class="alloc-identity__index truncate" [title]="view.index">{{ view.index }}</h2>
+                    <div class="alloc-identity__meta">
+                      Shard {{ view.shard }} · {{ view.primary ? 'Primary' : 'Replica' }}
+                      <span class="badge" [class]="'badge badge-' + view.stateTone">{{ view.stateLabel }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="alloc-summary__actions">
+                  <span class="text-xs text-muted alloc-summary__time" [title]="'Explained at ' + formatTimestamp(explainedAt())">
+                    @if (explaining()) {
+                      <span class="spinner alloc-inline-spinner" aria-hidden="true"></span> Updating…
+                    } @else if (explainStale()) {
+                      <span class="dot dot-yellow" aria-hidden="true"></span> Last updated {{ formatRelative(explainedAt(), now()) }}
+                    } @else {
+                      Updated {{ formatRelative(explainedAt(), now()) }}
+                    }
+                  </span>
+                  <button type="button" class="btn btn-sm btn-ghost btn-icon" aria-label="Explain again" title="Explain again" (click)="rerun()">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                  </button>
+                  <button type="button" class="btn btn-sm" (click)="viewJson()">
+                    <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                  </button>
+                </div>
+              </div>
+
+              <div class="card-body stack">
+                <div class="verdict" [class]="'verdict tone-' + view.verdict.tone">
+                  <span class="verdict__icon" aria-hidden="true"><i class="bi" [class]="'bi ' + view.verdict.icon"></i></span>
+                  <div class="min-w-0">
+                    <p class="verdict__title">{{ view.verdict.title }}</p>
+                    <p class="verdict__text">{{ view.verdict.text }}</p>
+                  </div>
+                </div>
+
+                @if (showBlockerSummary()) {
+                  <section class="blockers" aria-labelledby="alloc-blockers-title">
+                    <h3 id="alloc-blockers-title" class="section-label">What is blocking it</h3>
+                    <ul class="blockers__list">
+                      @for (blocker of blockers(); track blocker.decider) {
+                        <li class="blocker">
+                          <span class="blocker__icon" aria-hidden="true"><i class="bi bi-slash-circle"></i></span>
+                          <div class="min-w-0">
+                            <div class="blocker__head">
+                              <strong>{{ blocker.label }}</strong>
+                              <span class="blocker__spread">{{ nodeSpread(blocker.nodes) }}</span>
+                            </div>
+                            @if (blocker.hint) {
+                              <p class="blocker__hint">{{ blocker.hint }}</p>
+                            }
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                  </section>
+                }
+
+                @if (view.note) {
+                  <div class="callout callout-info text-sm">
+                    <i class="bi bi-info-circle" aria-hidden="true"></i>
+                    <span>{{ view.note }}</span>
+                  </div>
+                }
+
+                @if (view.unassigned; as info) {
+                  <dl class="facts">
+                    <div class="fact fact--wide">
+                      <dt class="section-label">Why it is unassigned</dt>
+                      <dd>
+                        <strong>{{ info.reasonLabel }}</strong>
+                        @if (info.reasonText) {
+                          <span class="fact__note">{{ info.reasonText }}</span>
+                        }
+                      </dd>
+                    </div>
+                    <div class="fact">
+                      <dt class="section-label">Unassigned since</dt>
+                      <dd>
+                        @if (info.at !== null) {
+                          <strong>{{ formatRelative(info.at, now()) }}</strong>
+                          <span class="fact__note tabular">{{ formatTimestamp(info.at) }}</span>
+                        } @else {
+                          <strong>–</strong>
+                        }
+                      </dd>
+                    </div>
+                    @if (info.lastStatusLabel) {
+                      <div class="fact">
+                        <dt class="section-label">Last allocation attempt</dt>
+                        <dd><strong>{{ info.lastStatusLabel }}</strong></dd>
+                      </div>
+                    }
+                    <div class="fact">
+                      <dt class="section-label">Failed attempts</dt>
+                      <dd>
+                        <strong [class.text-danger]="info.failedAttempts > 0">{{ info.failedAttempts }}</strong>
+                        @if (info.delayed) {
+                          <span class="fact__note">Allocation is delayed on purpose</span>
+                        }
+                      </dd>
+                    </div>
+                    @if (info.lastNode) {
+                      <div class="fact">
+                        <dt class="section-label">Last node</dt>
+                        <dd><strong class="mono">{{ info.lastNode }}</strong></dd>
+                      </div>
+                    }
+                  </dl>
+                  @if (info.details) {
+                    <div class="alloc-details">
+                      <div class="section-label alloc-details__label">Details from Elasticsearch</div>
+                      <pre class="alloc-details__text">{{ info.details }}</pre>
+                    </div>
+                  }
+                }
+
+                @if (view.facts.length > 0) {
+                  <dl class="facts">
+                    @for (fact of view.facts; track fact.label) {
+                      <div class="fact">
+                        <dt class="section-label">{{ fact.label }}</dt>
+                        <dd><strong [title]="fact.title ?? ''">{{ fact.value }}</strong></dd>
+                      </div>
+                    }
+                  </dl>
+                }
+
+                @if (view.checks.length > 0) {
+                  <ul class="checks" aria-label="Allocation checks">
+                    @for (check of view.checks; track check.label) {
+                      <li class="check-row">
+                        <div class="check-row__head">
+                          <span class="check-row__icon" [class]="'check-row__icon tone-' + check.tone" aria-hidden="true">
+                            <i [class]="'bi ' + check.icon"></i>
+                          </span>
+                          <span class="check-row__label">{{ check.label }}</span>
+                          <span class="badge" [class]="'badge badge-' + check.tone">{{ check.decisionLabel }}</span>
+                        </div>
+                        @if (check.explanation) {
+                          <p class="check-row__text">{{ check.explanation }}</p>
+                        }
+                        @if (check.blockers.length > 0) {
+                          <ul class="decider-list decider-list--nested">
+                            @for (decider of check.blockers; track $index) {
+                              <li class="decider" [class.decider--muted]="check.tone === 'gray'">
+                                <div class="decider__head">
+                                  <strong>{{ decider.label }}</strong>
+                                  <code class="decider__name">{{ decider.decider }}</code>
+                                </div>
+                                <p class="decider__explanation">{{ decider.explanation }}</p>
+                                @if (decider.hint) {
+                                  <p class="decider__hint"><i class="bi bi-lightbulb" aria-hidden="true"></i> {{ decider.hint }}</p>
+                                }
+                              </li>
+                            }
+                          </ul>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+              <div class="card-footer card-footer--between alloc-summary__footer">
+                <span class="text-sm text-muted">See the shard in context on the cluster overview.</span>
+                <a class="btn btn-sm btn-ghost" routerLink="/overview" [queryParams]="stateQuery(view.index)">
+                  <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i> Open in overview
+                </a>
+              </div>
+            </article>
+
+            <section class="card" aria-labelledby="alloc-nodes-title">
+              <div class="card-header">
+                <div class="min-w-0">
+                  <h2 id="alloc-nodes-title" class="card-title"><i class="bi bi-hdd-network" aria-hidden="true"></i> Node decisions</h2>
+                  <p class="card-subtitle">
+                    @if (view.nodes.length > 0) {
+                      {{ decisionSummary() }}
+                    } @else {
+                      No other node was evaluated
+                    }
+                  </p>
+                </div>
+                @if (expandableCount() > 0) {
+                  <button type="button" class="btn btn-sm btn-ghost" (click)="toggleAll()">
+                    <i class="bi" [class.bi-arrows-collapse]="allExpanded()" [class.bi-arrows-expand]="!allExpanded()" aria-hidden="true"></i>
+                    {{ allExpanded() ? 'Collapse all' : 'Expand all' }}
+                  </button>
+                }
+              </div>
+
+              @if (view.nodes.length === 0) {
+                <cerebro-empty
+                  [compact]="true"
+                  icon="bi-hdd-stack"
+                  heading="No node decisions"
+                  [text]="view.assigned ? 'Elasticsearch did not evaluate other nodes for this shard, usually because it may stay where it is and rebalancing is not considered.' : 'Elasticsearch did not report a decision for any node.'"
+                />
+              } @else {
+                <div class="table-wrap">
+                  <table class="data-table alloc-nodes">
+                    <thead class="alloc-nodes__head">
+                      <tr>
+                        <th scope="col" [attr.aria-sort]="sort.ariaSort('name')">
+                          <button type="button" class="sort-button" [class.is-active]="sort.isActive('name')" (click)="sort.sortBy('name')">
+                            Node <i class="bi" [class]="'bi ' + sort.icon('name')" aria-hidden="true"></i>
+                          </button>
+                        </th>
+                        <th scope="col" [attr.aria-sort]="sort.ariaSort('decision')">
+                          <button type="button" class="sort-button" [class.is-active]="sort.isActive('decision')" (click)="sort.sortBy('decision')">
+                            Decision <i class="bi" [class]="'bi ' + sort.icon('decision')" aria-hidden="true"></i>
+                          </button>
+                        </th>
+                        @if (hasRanking()) {
+                        <th scope="col" class="alloc-nodes__weight" [attr.aria-sort]="sort.ariaSort('weight')">
+                          <button
+                            type="button"
+                            class="sort-button"
+                            [class.is-active]="sort.isActive('weight')"
+                            title="How well the node fits the shard according to the balancer (1st is best)"
+                            (click)="sort.sortBy('weight')"
+                          >
+                            Weight rank <i class="bi" [class]="'bi ' + sort.icon('weight')" aria-hidden="true"></i>
+                          </button>
+                        </th>
+                        }
+                        <th scope="col">Why</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (node of sortedNodes(); track node.id; let i = $index) {
+                        <tr [class.is-open]="expanded().has(node.id)">
+                          <th scope="row" class="alloc-node">
+                            <div class="alloc-node__name">{{ node.name }}</div>
+                            <div class="alloc-node__meta">
+                              @if (node.address) {
+                                <span class="mono">{{ node.address }}</span>
+                              }
+                              @for (attribute of node.attributes; track attribute[0]) {
+                                <span class="tag" [title]="attribute[0] + ': ' + attribute[1]">
+                                  <span class="tag-key">{{ attribute[0] }}</span>
+                                  <span>{{ attribute[1] }}</span>
+                                </span>
+                              }
+                            </div>
+                            @if (node.holdsCopy) {
+                              <div class="alloc-node__store"><i class="bi bi-files" aria-hidden="true"></i> Holds another copy of this shard</div>
+                            }
+                            @if (node.store) {
+                              <div class="alloc-node__store"><i class="bi bi-database" aria-hidden="true"></i> {{ node.store }}</div>
+                            }
+                          </th>
+                          <td>
+                            <span class="badge badge-lg" [class]="'badge badge-lg badge-' + node.tone">
+                              <i
+                                class="bi"
+                                [class.bi-check-lg]="node.decision === 'yes'"
+                                [class.bi-x-lg]="node.decision === 'no'"
+                                [class.bi-hourglass-split]="node.decision === 'throttled' || node.decision === 'throttle'"
+                                [class.bi-dash-lg]="node.decision !== 'yes' && node.decision !== 'no' && node.decision !== 'throttled' && node.decision !== 'throttle'"
+                                aria-hidden="true"
+                              ></i>
+                              {{ node.decisionLabel }}
+                            </span>
+                          </td>
+                          @if (hasRanking()) {
+                            <td class="alloc-nodes__weight tabular">
+                              {{ node.weightRanking === null ? '–' : ordinal(node.weightRanking) }}
+                            </td>
+                          }
+                          <td class="alloc-nodes__why">
+                            @if (node.blockers.length > 0) {
+                              <button
+                                type="button"
+                                class="link-button alloc-expand"
+                                [attr.aria-expanded]="expanded().has(node.id)"
+                                [attr.aria-controls]="'alloc-node-' + i"
+                                (click)="toggleNode(node)"
+                              >
+                                <i class="bi bi-chevron-right alloc-expand__chevron" aria-hidden="true"></i>
+                                {{ blockerSummary(node.blockers) }}
+                              </button>
+                            } @else {
+                              <span class="text-sm text-muted">No objections</span>
+                            }
+                          </td>
+                        </tr>
+                        @if (node.blockers.length > 0 && expanded().has(node.id)) {
+                          <tr class="alloc-deciders-row" [id]="'alloc-node-' + i">
+                            <td [attr.colspan]="hasRanking() ? 4 : 3">
+                              <ul class="decider-list" [attr.aria-label]="'Deciders that objected on ' + node.name">
+                                @for (decider of node.blockers; track $index) {
+                                  <li class="decider" [class.decider--muted]="view.assigned">
+                                    <div class="decider__head">
+                                      <span class="badge" [class]="'badge badge-' + decider.tone">{{ decider.decisionLabel }}</span>
+                                      <strong>{{ decider.label }}</strong>
+                                      <code class="decider__name">{{ decider.decider }}</code>
+                                    </div>
+                                    <p class="decider__explanation">{{ decider.explanation }}</p>
+                                    @if (decider.hint && !showBlockerSummary()) {
+                                      <p class="decider__hint"><i class="bi bi-lightbulb" aria-hidden="true"></i> {{ decider.hint }}</p>
+                                    }
+                                  </li>
+                                }
+                              </ul>
+                            </td>
+                          </tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </section>
+          }
+        }
+        @case ('all-assigned') {
+          <div class="card">
+            <cerebro-empty
+              tone="success"
+              icon="bi-check2-circle"
+              heading="All shards are assigned"
+              text="Every shard copy in the cluster has a node, so there is nothing to diagnose. Pick a shard above to see why it sits where it does."
+            >
+              <button type="button" class="btn btn-sm" (click)="rerun()">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Check again
+              </button>
+            </cerebro-empty>
+          </div>
+        }
+        @case ('error') {
+          @if (state(); as current) {
+            @if (current.kind === 'error') {
+              <div class="card">
+                <cerebro-empty icon="bi-exclamation-triangle" [heading]="current.failure.title" [text]="current.failure.message">
+                  @if (current.failure.unknownNode) {
+                    <button type="button" class="btn btn-sm btn-primary" (click)="explainWithoutNode()">
+                      <i class="bi bi-search" aria-hidden="true"></i> Explain without a node
+                    </button>
+                  } @else {
+                    <button type="button" class="btn btn-sm" (click)="rerun()">
+                      <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+                    </button>
+                  }
+                  @if (!current.failure.unreachable) {
+                    <button type="button" class="btn btn-sm btn-ghost" (click)="viewJson()">
+                      <i class="bi bi-braces" aria-hidden="true"></i> View response
+                    </button>
+                  }
+                </cerebro-empty>
+              </div>
+            }
+          }
+        }
+        @default {
+          <div class="card" role="status" aria-label="Explaining shard allocation">
+            <div class="card-header">
+              <span class="skeleton" style="width: 220px; height: 28px"></span>
+              <span class="skeleton" style="width: 120px; height: 28px"></span>
+            </div>
+            <div class="card-body stack">
+              <span class="skeleton" style="height: 72px"></span>
+              <span class="skeleton" style="height: 56px"></span>
+            </div>
+          </div>
+          <div class="card loading-block" aria-hidden="true">
+            <span class="spinner"></span> Asking Elasticsearch…
+          </div>
+        }
+      }
+    </div>
+
+    <section class="stack" aria-labelledby="alloc-status-title">
+      <h2 id="alloc-status-title" class="visually-hidden">Cluster allocation status</h2>
+      <section class="card" aria-labelledby="alloc-unassigned-title">
+        <div class="card-header">
+          <h2 id="alloc-unassigned-title" class="card-title">
+            <i class="bi bi-exclamation-diamond" aria-hidden="true"></i> Unassigned shards
+          </h2>
+          @if (copies() !== undefined) {
+            <span class="badge" [class.badge-yellow]="unassignedCount() > 0" [class.badge-green]="unassignedCount() === 0">
+              {{ unassignedCount() | num }}
+            </span>
+          }
+        </div>
+        @if (copies() === undefined) {
+          @if (copiesFailed()) {
+            <cerebro-empty [compact]="true" icon="bi-exclamation-triangle" heading="Could not load shards" [text]="copiesError() ?? 'The cluster did not answer the shard list request.'">
+              <button type="button" class="btn btn-sm" [class.is-loading]="loadingCopies()" [disabled]="loadingCopies()" (click)="loadClusterData()">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+              </button>
+            </cerebro-empty>
+          } @else {
+            <div class="loading-block" role="status"><span class="spinner"></span> Loading shards…</div>
+          }
+        } @else {
+          @if (copiesStale(); as reason) {
+            <div class="callout callout-warning alloc-copies-stale" role="status">
+              <i class="bi bi-wifi-off" aria-hidden="true"></i>
+              <div class="min-w-0">
+                <strong>Could not refresh the shard list.</strong>
+                Showing data from {{ copiesAt() | date: 'HH:mm:ss' }}. {{ reason }}
+                <button type="button" class="link-button" (click)="loadClusterData()">Try again</button>
+              </div>
+            </div>
+          }
+          @if (unassigned().length === 0) {
+            <cerebro-empty [compact]="true" tone="success" icon="bi-check2-all" heading="Nothing unassigned" text="Every shard copy is allocated to a node." />
+          } @else {
+            <p class="alloc-aside__hint">Choose a shard to see why Elasticsearch cannot place it.</p>
+            <ul class="list">
+              @for (group of visibleUnassigned(); track group.index) {
+                <li class="list-item alloc-unassigned__item">
+                  <div class="list-item__body">
+                    <div class="list-item__title truncate" [title]="group.index">{{ group.index }}</div>
+                    <div class="alloc-unassigned__chips">
+                      @for (copy of group.copies; track $index) {
+                        <button
+                          type="button"
+                          class="alloc-chip"
+                          [class.is-primary]="copy.primary"
+                          [attr.aria-pressed]="isCurrentCopy(copy)"
+                          [attr.aria-label]="'Explain unassigned ' + (copy.primary ? 'primary' : 'replica') + ' of shard ' + copy.shard + ' of ' + group.index"
+                          [title]="(copy.primary ? 'Primary' : 'Replica') + ' of shard ' + copy.shard"
+                          (click)="explainCopy(copy)"
+                        >{{ copy.shard }}</button>
+                      }
+                    </div>
+                  </div>
+                </li>
+              }
+            </ul>
+            @if (unassigned().length > unassignedLimit) {
+              <div class="card-footer text-sm text-muted">
+                and {{ pluralize(unassigned().length - unassignedLimit, 'more index', 'more indices') }} with unassigned shards
+              </div>
+            }
+          }
+        }
+      </section>
+
+      @if (view(); as view) {
+        @if (view.disks.length > 0) {
+          <section class="card" aria-labelledby="alloc-disk-title">
+            <div class="card-header">
+              <h2 id="alloc-disk-title" class="card-title"><i class="bi bi-device-hdd" aria-hidden="true"></i> Node disk usage</h2>
+            </div>
+            <ul class="list">
+              @for (disk of view.disks; track disk.id) {
+                <li class="list-item alloc-disk">
+                  <div class="list-item__body">
+                    <div class="alloc-disk__head">
+                      <span class="list-item__title truncate">{{ disk.name }}</span>
+                      <span class="alloc-disk__percent tabular">{{ disk.usedPercent }}%</span>
+                    </div>
+                    <cerebro-meter [value]="disk.usedPercent" [warn]="85" [danger]="90" [label]="'Disk usage of ' + disk.name" />
+                    <div class="list-item__meta tabular">{{ disk.freeBytes | bytes }} free of {{ disk.totalBytes | bytes }}</div>
+                  </div>
+                </li>
+              }
+            </ul>
+            <div class="card-footer text-xs text-muted">Least available data path per node, as seen by the disk watermark decider.</div>
+          </section>
+        }
+      }
+    </section>
+  </div>
+</section>

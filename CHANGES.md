@@ -331,18 +331,77 @@ First cerebro release.
 
 ### Unreleased
 
+#### New features
+
+- Live activity: the overview shows indexing and search rates, search latency, heap and CPU over the last minutes, and the nodes page adds per-node charts with thread pool queues and rejections (`/nodes?node=` opens a node).
+- Performance page: hot threads parsed into readable cards with the busiest pool explained, live thread pools with new rejections highlighted, the master's pending tasks, and a slow log threshold editor with presets that verifies what it applied.
+- Index operations wizard: shrink, split, clone, roll over and reindex with live preflight checks (write block, shard placement, disk, document limits, exact split counts), a review of the exact requests, and progress tracking with cancel and finishing actions; reachable from the Actions menu of index details.
+- Cluster doctor: a one click health check of the whole cluster. It finds unassigned shards, replicas that can never be allocated, indices without replicas, nodes above the disk watermarks (with headroom), read-only blocks, oversized and over-sharded indices, the shard limit, ILM errors, heap and old-generation memory pressure, garbage collection, tripped circuit breakers, disabled allocation, transient settings and upgrade deprecations, shows Elasticsearch's health report on 8.7+, explains each problem and offers a confirmed one-click fix or a link to the page that handles it.
+- Shard allocation explain: why a shard is unassigned or stays on its node, with every node's deciders, reachable from the overview's shard menus and the unassigned-shards warning.
+- Index details page with overview, settings, mappings, statistics, aliases, shards and lifecycle tabs.
+- Composable index templates and component templates: list, edit, delete and preview the settings, mappings and aliases a template resolves to.
+- Data streams (backing indices, generation, lifecycle, rollover, delete) and index lifecycle (ILM) policies with a phase timeline, a JSON editor and per-index lifecycle status (current phase, step and errors).
+- Ingest pipelines: list, edit, delete and simulate against sample documents, with per-processor results.
+- Tasks: running tasks with sub-tasks nested under their parent, details, and cancellation of cancellable tasks.
+- Recoveries: live progress of shard recoveries (files, bytes, translog, stage and source).
+- REST console saved requests: name, rename, duplicate and update favourites, with JSON export and import.
+
+#### User interface
+
+- Rebuild every screen from scratch on a dedicated design system (see `docs/FRONTEND.md`): sidebar navigation, light and dark themes that follow the operating system, bundled Inter / JetBrains Mono fonts and responsive layouts down to phone width.
+- New command palette (Ctrl/⌘ + K) to jump to any page, action or index.
+- Auto-refresh can be paused, remembers its interval and skips polling while the tab is hidden.
+- Repeated notifications are folded together, error notifications stay until they are dismissed, and hovering or focusing the notifications pauses their countdown.
+- Index creations and deletions made in cerebro are no longer announced a second time by the cluster change notifications.
+- Pausing and resuming auto-refresh from the command palette keeps the chosen interval.
+- Connect screen remembers recently used cluster addresses (never credentials).
+- JSON is edited and displayed with a themed, searchable code editor with folding.
+- Editors ask before in-app navigation discards unsaved changes.
+- Accessibility: visible focus ring, AA text contrast in both themes (including editor line numbers), Tab leaves the code editor (Ctrl + ] / [ indent), the page follows the editor caret, Ctrl/⌘ + K opens the command palette from an editor, keyboard-friendly menus and mobile navigation.
+- Drop Bootstrap CSS; feature pages are lazy loaded to keep the initial bundle small.
+
+#### Bug fixes
+
+- Snapshot creation now honours "ignore unavailable indices" and "include global state" (the options were sent with the wrong field names and ignored by Elasticsearch).
+- Aliases report their write index and hidden flags.
+- The overview computes disk usage from the space available to Elasticsearch, matching the nodes view and the disk allocation thresholds.
+- Repeated identical errors (for example while the cluster is unreachable) no longer flood the screen.
+- Disabling and enabling shard allocation from the overview writes the persistent setting and clears the transient one, so no leftover transient value overrides later persistent changes. Unknown allocation kinds are rejected.
+- Pipelines, ILM policies, templates and other resources whose name contains a space can be updated and deleted (the space was sent as "+").
+- Text responses (for example `GET _cat/health` in the REST console) no longer fail with a JSON parse error.
+- "Copy settings and mappings from" on create index copies the chosen index; for a data stream backing index it could pick a sibling backing index on 8.x.
+- Index lists ask Elasticsearch only for the columns they use (the analysis page also asks for the status, to offer open indices) and the index picker no longer reloads them on every refresh.
+- Bulk actions on the overview (close, open, refresh, flush, force merge, clear cache, delete) send long index lists in batches instead of failing with "An HTTP line is larger than 4096 bytes"; batches are measured as they are encoded in the URL.
+- The snapshot page and the REST history report the reason Elasticsearch or the history store gave (for example a 401 or 403) instead of an internal parsing error.
+- Index details opened through an alias read the routing shard count of the index behind it, so the index operations wizard checks split targets exactly.
+- The `?host=` of the URL now always decides which cluster is shown (Back/Forward, bookmarks, pasted links); a page opened for another cluster starts afresh instead of keeping the previous cluster's lists and editors, and the sidebar, breadcrumb and tab title drop the previous cluster's name until the new one answers.
+- Confirmation dialogs close when the page changes (Back/Forward included), so confirming can no longer act on a page that was left.
+- Notifications no longer stay paused after the hovered one is dismissed, and they rise above sticky Save / Apply bars instead of covering them.
+- Long error reasons and index names wrap instead of widening the page on phones.
+- Cancelling "Switch cluster" because of unsaved edits keeps the page connected.
+- Requests without a target host are answered with 400 "Missing required parameter host" instead of a 500.
+
+#### Maintenance
+
+- Remove the unused `zone.js` dependency, the legacy logo image and the obsolete Travis CI configuration (CI runs on GitHub Actions).
+- Remove the unused `/commons/nodes` endpoint, unused Elasticsearch client methods and the unused cluster health model.
+- CI runs on pushes and pull requests to `main`.
+- `public/js` is build output and no longer tracked in git; run `npm run build` before `sbt run` / `sbt stage`.
+- Docker examples and documentation use the in-repository image (`chosenwar/cerebro`).
+
 #### Security updates
 
 - Migrate the backend to Play 3.0.11, Pekko, Scala 2.13.18 and a Java 17 baseline.
-- Align Jackson 2.18.10, Logback 1.5.38 and SQLite JDBC 3.53.2.1 to patched releases.
-- Replace AngularJS, Bootstrap 3, Grunt, Karma and PhantomJS with Angular 22, Bootstrap 5 and Vitest.
+- Align Jackson 2.18.11, Logback 1.5.38 and SQLite JDBC 3.53.2.1 to patched releases.
+- Replace AngularJS, Bootstrap 3, Grunt, Karma and PhantomJS with Angular 22 and Vitest.
 - Restore Play CSRF, allowed-host and security-header filters; require a production application secret.
 - Harden session cookies, redirects and LDAP filter construction.
 - Add npm, staged-JAR and legacy-bundle security gates to CI.
-- Add a non-root Wolfi/OpenJDK 17 multiarch image and zero-finding container gates for amd64 and arm64.
-- Upgrade transitive `lz4-java` to 1.11.1 for CVE-2026-59949.
+- Add a non-root Wolfi/OpenJDK 17 multiarch image and zero-finding container gates for amd64 and arm64. The image upgrades its base packages at build time, so it picks up Wolfi's OS security fixes.
+- Upgrade transitive `lz4-java` to 1.11.4 (CVE-2026-59949 and CVE-2026-106449 to CVE-2026-106453).
+- Upgrade Angular to 22.2.3 (CLI and build 22.2.2) and refresh the npm lockfile for the October 2026 advisories (`@angular/router`, `piscina`, `undici`, `fast-uri`, `source-map-js`); drop the npm `overrides`, which no longer matched the dependency tree.
 
 #### Compatibility
 
-- Preserve the existing cluster endpoints, response envelopes, SQLite REST history and all 13 UI workflows.
+- Preserve the existing cluster endpoints (except the unused `/commons/nodes`), response envelopes, SQLite REST history and all 13 UI workflows.
 - Preserve legacy `#!/...` bookmarks by rewriting them to Angular hash routes before startup.

@@ -1,9 +1,24 @@
 Cerebro
 ------------
-[![Docker Pulls](https://img.shields.io/docker/pulls/lmenezes/cerebro.svg)](https://hub.docker.com/r/lmenezes/cerebro)
-[![build and security](https://github.com/lmenezes/cerebro/actions/workflows/scala.yml/badge.svg?branch=master)](https://github.com/lmenezes/cerebro/actions/workflows/scala.yml)
+[![Docker Pulls](https://img.shields.io/docker/pulls/chosenwar/cerebro.svg)](https://hub.docker.com/r/chosenwar/cerebro)
+[![build and security](https://github.com/srdrcn/cerebro/actions/workflows/scala.yml/badge.svg?branch=main)](https://github.com/srdrcn/cerebro/actions/workflows/scala.yml)
 
 cerebro is an open source (MIT License) Elasticsearch administration tool built with Scala, Play Framework and Angular.
+
+### Features
+
+- Cluster overview with the shard allocation map: open, close, refresh, flush, force merge and delete indices, relocate shards and toggle shard allocation, plus live indexing, search, latency, heap and CPU charts.
+- Cluster doctor: one click health check that finds disk watermark, shard, replica, read-only block, ILM, JVM, settings and upgrade deprecation problems, explains them and offers a fix (including Elasticsearch's own health report on 8.7+).
+- Nodes view with roles, versions, heap, disk, CPU and load usage, and live per-node activity charts with thread pool queues and rejections.
+- Performance: readable hot threads, live thread pools, the master's pending tasks and a slow log threshold editor with presets.
+- REST console with JSON editor, request history, saved requests (with export and import) and "copy as cURL".
+- Index details (settings, mappings, statistics, aliases, shards, lifecycle), index creation, aliases, cluster and index settings editors.
+- Index operations wizard: shrink, split, clone, roll over and reindex with live preflight checks, a review of the exact requests and progress tracking.
+- Composable index templates, component templates and legacy templates.
+- Data streams, index lifecycle (ILM) policies and ingest pipelines with simulation.
+- Shard allocation explain, live shard recoveries and a task manager with cancellation.
+- Snapshot and repository management, text analysis and CAT API browser.
+- Light and dark themes (following the operating system by default), a command palette (`Ctrl`/`⌘` + `K`) and layouts that work down to phone width.
 
 ### Requirements
 
@@ -20,7 +35,7 @@ sbt test
 sbt stage
 ```
 
-The Angular build writes the browser bundle to `public/js`; Play packages that output with the backend distribution.
+The Angular build writes the browser bundle to `public/js`; Play packages that output with the backend distribution. The bundle is build output and is not kept in git, so run `npm run build` (or `npm start` while developing) before `sbt run` or `sbt stage`. The frontend architecture and design system are described in [docs/FRONTEND.md](docs/FRONTEND.md).
 
 ### Installation
 - Download from [https://github.com/lmenezes/cerebro/releases](https://github.com/lmenezes/cerebro/releases)
@@ -54,7 +69,13 @@ docker run --rm \
 
 Both `linux/amd64` and `linux/arm64` are published. The final Wolfi/OpenJDK 17 image runs as UID/GID `65532`, includes SBOM/provenance attestations, and was scanned with Trivy 0.74.0 at all severities with zero known OS or Java-library findings on August 26, 2026.
 
-Visit [cerebro-docker](https://github.com/lmenezes/cerebro-docker) for further information. 
+To build the image yourself from this repository (the [Dockerfile](Dockerfile) builds the web application and the backend, and runs their tests):
+
+```sh
+docker build -t chosenwar/cerebro:0.9.4-secure .
+```
+
+The [examples folder](./examples) has Docker Compose files for basic auth and LDAP.
 
 ### Configuration
 
@@ -71,6 +92,9 @@ LDAP can be configured using environment variables. If you typically run cerebro
 you can pass a file with all the env vars. The file would look like:
 
 ```bash
+# Application secret, required by the Docker image
+CEREBRO_SECRET=replace-with-a-long-random-secret
+
 # Set it to ldap to activate ldap authorization
 AUTH_TYPE=ldap
 
@@ -114,7 +138,7 @@ LDAP_BIND_PWD=adminpass
 You can the pass this file as argument using:
 
 ```bash
- docker run -p 9000:9000 --env-file env-ldap  lmenezes/cerebro
+docker run -p 9000:9000 --env-file env-ldap chosenwar/cerebro:0.9.4-secure
 ```
 
 There are some examples of configuration in the [examples folder](./examples).

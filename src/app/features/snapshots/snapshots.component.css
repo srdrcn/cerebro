@@ -1,0 +1,261 @@
+:host {
+  display: block;
+}
+
+/* Stats ------------------------------------------------------------- */
+
+.snapshots-stats {
+  margin-bottom: var(--space-5);
+}
+
+.stat__value.is-danger {
+  color: var(--red-text);
+}
+
+.stat__value.is-warning {
+  color: var(--yellow-text);
+}
+
+.text-running {
+  color: var(--blue-text);
+}
+
+/* Snapshot list ----------------------------------------------------- */
+
+.snapshots-card {
+  /* The table adapts to the card, not the viewport: the card is narrow both
+     next to the create form and on small screens. */
+  container: snapshot-list / inline-size;
+}
+
+.snapshots-toolbar {
+  flex-wrap: wrap;
+}
+
+.snapshots-table tbody th,
+.snapshots-table tbody td {
+  height: auto;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.snapshots-table .snapshot-cell {
+  /* Takes what the sized columns leave (its long names can wrap anywhere). */
+  min-width: 0;
+  font-weight: 400;
+}
+
+.snapshots-table thead .snapshot-cell {
+  font-weight: 620;
+}
+
+.snapshots-table .actions {
+  padding-inline: 6px 10px;
+}
+
+.snapshot-identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.snapshot-avatar {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+.snapshot-avatar[data-tone="green"] {
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+  background: var(--green-soft);
+  color: var(--green-text);
+}
+
+.snapshot-avatar[data-tone="yellow"] {
+  border-color: color-mix(in srgb, var(--yellow) 35%, transparent);
+  background: var(--yellow-soft);
+  color: var(--yellow-text);
+}
+
+.snapshot-avatar[data-tone="red"] {
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+
+.snapshot-avatar[data-tone="blue"] {
+  border-color: color-mix(in srgb, var(--blue) 30%, transparent);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+
+.snapshot-name {
+  color: var(--text);
+  font-weight: 620;
+  overflow-wrap: anywhere;
+}
+
+.cell-main {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.cell-sub {
+  display: flex;
+  gap: 5px;
+  margin-top: 3px;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.cell-sub.truncate {
+  display: block;
+}
+
+.scope-hint {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.scope-hint .bi {
+  font-size: 11px;
+}
+
+.col-state {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.col-state .cell-sub {
+  margin-top: 5px;
+}
+
+.col-time {
+  width: 1%;
+}
+
+.col-indices {
+  /* A share of the width; the index list truncates inside it. */
+  width: 24%;
+  max-width: 0;
+}
+
+.col-indices .cell-sub {
+  font-size: 11.5px;
+}
+
+/* Folded copies of the columns, shown only on narrower cards. */
+.in-state,
+.in-meta {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 2px;
+  white-space: normal;
+}
+
+.in-state {
+  margin-top: 5px;
+}
+
+@container snapshot-list (max-width: 859px) {
+  .snapshots-table .col-state {
+    display: none;
+  }
+
+  .snapshots-table .in-state {
+    display: flex;
+  }
+}
+
+@container snapshot-list (max-width: 539px) {
+  .snapshots-table .col-time,
+  .snapshots-table .col-indices,
+  .snapshots-table .in-scope {
+    display: none;
+  }
+
+  .snapshots-table .in-meta {
+    display: flex;
+  }
+
+  .snapshots-table .snapshot-cell {
+    width: 100%;
+  }
+
+  .snapshots-table tbody th,
+  .snapshots-table tbody td {
+    padding-inline-start: 12px;
+  }
+
+  .snapshot-identity {
+    gap: 10px;
+  }
+}
+
+.spin {
+  display: inline-block;
+  animation: spin 1.2s linear infinite;
+}
+
+/* Create card -------------------------------------------------------- */
+
+.create-card {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-4));
+}
+
+.name-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.scope-toggle {
+  display: flex;
+}
+
+.scope-toggle > button {
+  flex: 1;
+  justify-content: center;
+}
+
+.checklist-option {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.create-options {
+  gap: var(--space-3);
+}
+
+.create-option {
+  align-items: flex-start;
+}
+
+.create-option input {
+  margin-top: 1px;
+}
+
+@media (max-width: 1180px) {
+  .create-card {
+    position: static;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}

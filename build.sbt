@@ -1,29 +1,18 @@
 name := "cerebro"
 
-maintainer := "Leonardo Menezes <leonardo.menezes@xing.com>"
+maintainer := "cerebro maintainers <https://github.com/srdrcn/cerebro>"
 
-packageSummary := "Elasticsearch web admin tool"
-
-packageDescription := """cerebro is an open source(MIT License) elasticsearch web admin tool built
-  using Scala, Play Framework and Angular."""
-
-version := "0.9.4"
+version := "0.10.0"
 
 scalaVersion := "2.13.18"
 
 val playVersion = "3.0.11"
 val playSlickVersion = "6.2.0"
-val jacksonVersion = "2.18.10"
+val jacksonVersion = "2.18.11"
 val logbackVersion = "1.5.38"
 
 javacOptions ++= Seq("--release", "17")
 scalacOptions += "-release:17"
-
-rpmVendor := "lmenezes"
-
-rpmLicense := Some("MIT")
-
-rpmUrl := Some("http://github.com/lmenezes/cerebro")
 
 libraryDependencies ++= Seq(
   "org.playframework" %% "play"                    % playVersion,
@@ -39,7 +28,7 @@ libraryDependencies ++= Seq(
 // Keep every Jackson module on the same patched line. Play 3.0.x otherwise
 // brings an older Jackson family transitively through Play and Pekko.
 dependencyOverrides ++= Seq(
-  "at.yawk.lz4"                       % "lz4-java"                     % "1.11.1",
+  "at.yawk.lz4"                       % "lz4-java"                     % "1.11.4",
   "com.fasterxml.jackson.core"       % "jackson-annotations"           % jacksonVersion,
   "com.fasterxml.jackson.core"       % "jackson-core"                  % jacksonVersion,
   "com.fasterxml.jackson.core"       % "jackson-databind"              % jacksonVersion,
@@ -57,17 +46,10 @@ libraryDependencies += ws
 libraryDependencies += guice
 
 lazy val root = (project in file(".")).
-  enablePlugins(PlayScala, BuildInfoPlugin, LauncherJarPlugin, JDebPackaging, RpmPlugin).
+  enablePlugins(PlayScala, BuildInfoPlugin, LauncherJarPlugin).
   settings(
-    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
+    buildInfoKeys := Seq[BuildInfoKey](version),
     buildInfoPackage := "models"
   )
 
 Compile / doc / sources := Seq.empty
-
-enablePlugins(JavaServerAppPackaging)
-enablePlugins(SystemdPlugin)
-
-Debian / systemdSuccessExitStatus += "143"
-Rpm / systemdSuccessExitStatus += "143"
-linuxPackageMappings += packageTemplateMapping(s"/var/lib/${packageName.value}")() withUser((Linux / daemonUser).value) withGroup((Linux / daemonGroup).value)

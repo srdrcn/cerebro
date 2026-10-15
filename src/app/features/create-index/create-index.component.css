@@ -1,0 +1,259 @@
+:host {
+  display: block;
+}
+
+.create-layout {
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+}
+
+/* ---- Basics ---- */
+
+.count-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.count-grid > .field {
+  align-content: start;
+}
+
+.count-grid .input:disabled {
+  color: var(--text-2);
+}
+
+.override-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.override-note > .bi {
+  color: var(--accent-text);
+}
+
+.override-note.is-invalid {
+  border-color: color-mix(in srgb, var(--yellow) 45%, transparent);
+  background: var(--yellow-soft);
+}
+
+.override-note.is-invalid > .bi {
+  color: var(--yellow-text);
+}
+
+.override-note .link-button {
+  margin-left: auto;
+}
+
+.copy-section {
+  border-top: 1px solid var(--border);
+}
+
+.copy-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy-status .spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.copy-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 6px 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.copy-result > .bi {
+  margin-top: 2px;
+  color: var(--accent-text);
+}
+
+.copy-result > div {
+  flex: 1;
+}
+
+.copy-result__title {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 580;
+  overflow-wrap: anywhere;
+}
+
+.copy-result__meta {
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.copy-result .btn {
+  margin-top: -3px;
+}
+
+/* ---- Editor ---- */
+
+.editor-card__header {
+  flex-wrap: wrap;
+}
+
+.editor-actions {
+  flex-wrap: wrap;
+}
+
+.callout p {
+  min-width: 0;
+}
+
+.editor-wrap {
+  position: relative;
+}
+
+.editor-wrap.is-busy cerebro-code-editor {
+  opacity: 0.55;
+}
+
+.editor-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: var(--radius);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  font-weight: 560;
+}
+
+.editor-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 22px;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.editor-status__message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.editor-status__message .link-button {
+  margin-left: 4px;
+}
+
+.editor-status__keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-xs);
+}
+
+.editor-status__keys kbd:last-of-type {
+  margin-right: 3px;
+}
+
+/* ---- Action bar ---- */
+
+/* Keyboard focus stays above this sticky bar through its html:has() rule in
+   components.css ("Sticky bars and keyboard focus"). */
+.create-actions {
+  position: sticky;
+  bottom: var(--space-4);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-5);
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-elevated) 90%, transparent);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: saturate(160%) blur(10px);
+}
+
+.create-actions__summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.create-actions__target {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.create-actions__target.is-placeholder {
+  color: var(--placeholder);
+  font-weight: 500;
+}
+
+.create-actions__meta {
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+.create-actions__buttons {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (max-width: 1180px) {
+  .create-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1181px) {
+  .basics-card {
+    position: sticky;
+    top: calc(var(--topbar-height) + var(--space-5));
+  }
+}
+
+@media (max-width: 760px) {
+  .create-actions {
+    flex-direction: column;
+    align-items: stretch;
+    bottom: var(--space-2);
+    padding: 10px 12px;
+  }
+
+  .create-actions__meta {
+    display: none;
+  }
+
+  .create-actions__buttons > * {
+    flex: 1;
+  }
+
+  .editor-status__keys {
+    display: none;
+  }
+
+  .editor-actions {
+    width: 100%;
+  }
+}

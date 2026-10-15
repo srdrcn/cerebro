@@ -1,0 +1,427 @@
+<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{{ announcement() }}</p>
+
+<div class="stack-lg">
+  <div class="callout callout-info">
+    <i class="bi bi-journal-text" aria-hidden="true"></i>
+    <div class="min-w-0">
+      <strong>Slow logs are written by the nodes, not shown here.</strong>
+      When a search phase or an indexing operation on a shard takes longer than a threshold, the node holding that shard writes an entry to its
+      slow log files (<span class="mono">&lt;cluster&gt;_index_search_slowlog.json</span> and
+      <span class="mono">&lt;cluster&gt;_index_indexing_slowlog.json</span> in its logs folder). This page sets the thresholds per index; it cannot
+      read the files.
+    </div>
+  </div>
+
+  @if (rows(); as list) {
+    @if (staleReason(); as reason) {
+      <div class="callout callout-warning" role="alert">
+        <i class="bi bi-wifi-off" aria-hidden="true"></i>
+        <div class="min-w-0">
+          <strong>Could not refresh the slow log settings.</strong>
+          Showing data from {{ loadedAt() | date: 'HH:mm:ss' }}. {{ reason }}
+        </div>
+      </div>
+    }
+
+    <section class="card" aria-labelledby="slowlog-table-title">
+      <div class="card-header slowlog-toolbar">
+        <div class="row min-w-0">
+          <span class="card-icon" aria-hidden="true"><i class="bi bi-stopwatch"></i></span>
+          <div class="min-w-0">
+            <h2 #tableTitle id="slowlog-table-title" class="card-title" tabindex="-1">Indices with slow log thresholds</h2>
+            <p class="card-subtitle">Only settings set on the index itself; every other index logs nothing.</p>
+          </div>
+        </div>
+        <div class="row-wrap slowlog-toolbar__end">
+          @if (list.length > 0) {
+            <cerebro-search [(value)]="query" [small]="true" placeholder="Filter indices" ariaLabel="Filter indices with slow log thresholds" />
+            <span class="count-label">
+              @if (query().trim()) {
+                <strong>{{ visibleRows().length | num }}</strong> of {{ list.length | num }} {{ list.length | plural: 'index' : 'indices' }}
+              } @else {
+                <strong>{{ list.length | num }}</strong> {{ list.length | plural: 'index' : 'indices' }}
+              }
+            </span>
+          }
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost"
+            [class.is-loading]="loading()"
+            [disabled]="loading()"
+            title="Read the slow log settings again (they are not refreshed automatically)"
+            (click)="reload()"
+          >
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Reload
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost" (click)="showAllJson()">
+            <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+          </button>
+        </div>
+      </div>
+
+      @if (list.length === 0) {
+        <cerebro-empty
+          icon="bi-stopwatch"
+          heading="No index has slow log thresholds"
+          text="Every index uses the default, which logs nothing. Choose indices below and pick a preset to start logging slow searches and slow indexing."
+        >
+          <button type="button" class="btn btn-sm" (click)="configureNew()">
+            <i class="bi bi-sliders" aria-hidden="true"></i> Configure slow logs
+          </button>
+        </cerebro-empty>
+      } @else {
+        <div class="table-wrap">
+          <table class="data-table slowlog-table" [attr.aria-busy]="loading()">
+            <caption class="visually-hidden">Slow log thresholds set on each index, from warn to trace.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Index</th>
+                @for (group of groups; track group.key) {
+                  <th scope="col" [title]="group.hint">{{ group.label }}</th>
+                }
+                <th scope="col">Other settings</th>
+                <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of visibleRows(); track row.index) {
+                <tr [class.is-selected]="isSelected(row.index) && selected().size === 1">
+                  <th scope="row" class="index-cell">
+                    <a class="index-link truncate" routerLink="/index_detail" [queryParams]="{ ...connection.hostQuery(), index: row.index }" [title]="row.index">{{ row.index }}</a>
+                    <div class="index-meta">
+                      @switch (row.preset) {
+                        @case ('moderate') {
+                          <span class="badge badge-blue">Moderate</span>
+                        }
+                        @case ('aggressive') {
+                          <span class="badge badge-yellow">Aggressive</span>
+                        }
+                        @case ('off') {
+                          <span class="badge badge-outline">Off</span>
+                        }
+                        @case ('custom') {
+                          <span class="badge">Custom</span>
+                        }
+                      }
+                      <span class="text-xs text-muted">{{ row.active | num }} of 12 levels logging</span>
+                    </div>
+                  </th>
+                  @for (group of groups; track group.key) {
+                    <td class="levels-cell" [attr.data-label]="group.label">
+                      @if (describeLevels(row.thresholds[group.key])) {
+                        <ul class="levels" [attr.aria-label]="group.label + ' thresholds'">
+                          @for (level of levels; track level) {
+                            @if (row.thresholds[group.key][level]; as value) {
+                              <li class="tag" [class.is-off]="value === '-1'">
+                                <span class="tag-key">{{ level }}</span>
+                                <span class="tabular">{{ value === '-1' ? 'off' : value }}</span>
+                              </li>
+                            }
+                          }
+                        </ul>
+                      } @else {
+                        <span class="text-muted" title="Not set: the default logs nothing">–</span>
+                      }
+                    </td>
+                  }
+                  <td class="other-cell" data-label="Other settings">
+                    @for (entry of row.other | keyvalue; track entry.key) {
+                      <div class="other-setting text-sm" [title]="entry.key">
+                        <span class="text-muted">{{ otherSettingLabel(entry.key) }}</span>
+                        <span class="mono">{{ entry.value }}</span>
+                      </div>
+                    } @empty {
+                      <span class="text-muted">–</span>
+                    }
+                  </td>
+                  <td class="actions">
+                    <div class="row slowlog-actions">
+                      <button type="button" class="btn btn-sm" [disabled]="busy()" (click)="edit(row)" [attr.aria-label]="'Edit the slow log of ' + row.index">
+                        <i class="bi bi-pencil" aria-hidden="true"></i> Edit
+                      </button>
+                      <cerebro-menu [label]="'More actions for ' + row.index" align="end">
+                        <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+                        <div class="menu-label">{{ row.index }}</div>
+                        <button type="button" class="menu-item" (click)="showJson(row)">
+                          <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                        </button>
+                        <button type="button" class="menu-item menu-item--danger" [disabled]="busy()" (click)="resetRow(row)">
+                          <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Reset to defaults
+                        </button>
+                      </cerebro-menu>
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="6">
+                    <cerebro-empty icon="bi-funnel" heading="No matching indices" text="No configured index matches the filter." [compact]="true">
+                      <button type="button" class="btn btn-sm" (click)="query.set('')">Clear filter</button>
+                    </cerebro-empty>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  } @else if (loadError(); as reason) {
+    <div class="card">
+      <cerebro-empty icon="bi-exclamation-triangle" heading="Could not load slow log settings" [text]="reason">
+        <button type="button" class="btn btn-sm" [class.is-loading]="loading()" [disabled]="loading()" (click)="retry()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
+    </div>
+  } @else {
+    <div class="card loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Loading slow log settings…</div>
+  }
+
+  <!-- ================= Editor ================= -->
+  @if (showEditor()) {
+    <form
+      #editorCard
+      class="card card--sticky-footer slowlog-editor"
+      novalidate
+      aria-labelledby="slowlog-editor-title"
+      (ngSubmit)="apply()"
+    >
+      <div class="card-header">
+        <div class="row min-w-0">
+          <span class="card-icon" aria-hidden="true"><i class="bi bi-sliders"></i></span>
+          <div class="min-w-0">
+            <h2 #editorTitle id="slowlog-editor-title" class="card-title" tabindex="-1">Configure slow logs</h2>
+            <p class="card-subtitle">Choose indices, then a preset or your own thresholds.</p>
+          </div>
+        </div>
+        @if (dirty()) {
+          <span class="badge badge-yellow"><span class="dot dot-yellow dot-sm" aria-hidden="true"></span> Unsaved changes</span>
+        }
+      </div>
+
+      <div class="card-body slowlog-editor__body">
+        <!-- Index selection -->
+        <fieldset class="slowlog-picker" [attr.aria-describedby]="submitted() && selectionError() ? 'slowlog-indices-error' : null">
+          <legend class="field-label slowlog-picker__legend">
+            Indices
+            <span class="text-muted slowlog-picker__count">{{ selected().size | num }} selected</span>
+          </legend>
+          <cerebro-search #pickerSearch [(value)]="pickerQuery" [small]="true" placeholder="Filter indices" ariaLabel="Filter the index list" />
+          @if (pickerGroups().regular.length > 0 || selected().size > 0 || hiddenSelected() > 0) {
+            <div class="row-wrap slowlog-picker__tools text-sm">
+              @if (pickerGroups().regular.length > 0) {
+                <button
+                  type="button"
+                  class="link-button"
+                  title="Regular indices only: system, hidden and backing indices are picked one by one"
+                  (click)="selectShown()"
+                >
+                  Select {{ pickerQuery().trim() ? 'matching' : 'all' }} ({{ pickerGroups().regular.length | num }})
+                </button>
+              }
+              @if (selected().size > 0) {
+                <button type="button" class="link-button" (click)="clearSelection()">Clear</button>
+              }
+              @if (hiddenSelected() > 0) {
+                <span class="text-muted">{{ hiddenSelected() | num }} selected outside the filter</span>
+              }
+            </div>
+          }
+          @if (selectedList().length > 0) {
+            <ul class="slowlog-chips" aria-label="Selected indices">
+              @for (name of selectedList().slice(0, chipLimit); track $index) {
+                <li>
+                  <button type="button" class="tag slowlog-chip" [attr.aria-label]="'Remove ' + name + ' from the selection'" [title]="name" (click)="toggleIndex(name)">
+                    <span class="truncate">{{ name }}</span> <i class="bi bi-x" aria-hidden="true"></i>
+                  </button>
+                </li>
+              }
+              @if (selectedList().length > chipLimit) {
+                <li class="text-xs text-muted slowlog-chips__more">and {{ selectedList().length - chipLimit | num }} more</li>
+              }
+            </ul>
+          }
+          <div class="slowlog-picker__list" role="group" aria-label="Indices to configure" [class.is-invalid]="submitted() && !!selectionError()">
+            @if (indexNames() === undefined) {
+              @if (indicesError(); as message) {
+                <p class="field-error slowlog-picker__note">
+                  <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ message }}
+                  <button type="button" class="link-button" (click)="loadIndices()">Try again</button>
+                </p>
+              } @else {
+                <p class="slowlog-picker__note text-muted"><span class="spinner" aria-hidden="true"></span> Loading indices…</p>
+              }
+            } @else if (pickerNames().length === 0) {
+              <p class="slowlog-picker__note text-muted">{{ (indexNames() ?? []).length === 0 ? 'The cluster has no index.' : 'No index matches the filter.' }}</p>
+            } @else {
+              @for (name of pickerGroups().regular; track $index) {
+                <label class="check slowlog-picker__item">
+                  <input type="checkbox" [checked]="isSelected(name)" (change)="toggleIndex(name)" />
+                  <span class="truncate" [title]="name">{{ name }}</span>
+                </label>
+              }
+              @if (pickerGroups().backing.length > 0) {
+                <p class="menu-label slowlog-picker__group" id="slowlog-backing-label">Data stream backing indices</p>
+                <p class="text-xs text-muted slowlog-picker__group-note" id="slowlog-backing-note">
+                  Applies to that backing index only: change the data stream’s index template so new backing indices get it too.
+                </p>
+                @for (name of pickerGroups().backing; track $index) {
+                  <label class="check slowlog-picker__item">
+                    <input type="checkbox" [checked]="isSelected(name)" (change)="toggleIndex(name)" aria-describedby="slowlog-backing-note" />
+                    <span class="truncate" [title]="name">{{ name }}</span>
+                  </label>
+                }
+              }
+              @if (pickerGroups().system.length > 0) {
+                <p class="menu-label slowlog-picker__group">System and hidden indices</p>
+                <p class="text-xs text-muted slowlog-picker__group-note" id="slowlog-system-note">
+                  Managed by Elasticsearch: writing their settings is deprecated and may be refused.
+                </p>
+                @for (name of pickerGroups().system; track $index) {
+                  <label class="check slowlog-picker__item">
+                    <input type="checkbox" [checked]="isSelected(name)" (change)="toggleIndex(name)" aria-describedby="slowlog-system-note" />
+                    <span class="truncate" [title]="name">{{ name }}</span>
+                  </label>
+                }
+              }
+            }
+          </div>
+          @if (submitted() && selectionError(); as message) {
+            <p class="field-error" id="slowlog-indices-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ message }}</p>
+          }
+        </fieldset>
+
+        <!-- Thresholds -->
+        <div class="slowlog-settings">
+          <div class="field">
+            <span class="field-label" id="slowlog-preset-label">Preset</span>
+            <div class="row-wrap">
+              <div class="segmented" role="group" aria-labelledby="slowlog-preset-label" aria-describedby="slowlog-preset-hint">
+                @for (option of presets; track option.key) {
+                  <button type="button" [attr.aria-pressed]="preset() === option.key" (click)="applyPreset(option.key)">{{ option.label }}</button>
+                }
+              </div>
+              @if (preset() === 'custom') {
+                <span class="badge">Custom</span>
+              }
+            </div>
+            <p class="field-hint" id="slowlog-preset-hint">{{ presetDescription() }}</p>
+          </div>
+
+          <div class="thresholds" role="group" aria-labelledby="slowlog-thresholds-label" aria-describedby="slowlog-thresholds-hint">
+            <span class="field-label" id="slowlog-thresholds-label">Thresholds</span>
+            <div class="thresholds__grid">
+              <span class="thresholds__corner" aria-hidden="true"></span>
+              @for (level of levels; track level) {
+                <span class="thresholds__level" aria-hidden="true">{{ level }}</span>
+              }
+              @for (group of groups; track group.key) {
+                <div class="thresholds__group">
+                  <span class="thresholds__name">{{ group.label }}</span>
+                  <span class="thresholds__hint text-xs text-muted">{{ group.hint }}</span>
+                </div>
+                @for (level of levels; track level) {
+                  <div class="thresholds__cell">
+                    <label class="thresholds__cell-label" [for]="fieldId(group.key, level)">
+                      <span class="visually-hidden">{{ group.label }}</span> {{ level }}
+                    </label>
+                    <input
+                      class="input input-sm input-mono"
+                      autocomplete="off"
+                      spellcheck="false"
+                      placeholder="not set"
+                      [id]="fieldId(group.key, level)"
+                      [name]="fieldId(group.key, level)"
+                      [ngModel]="threshold(group.key, level)"
+                      (ngModelChange)="setThreshold(group.key, level, $event)"
+                      [class.is-invalid]="!!fieldError(group.key, level)"
+                      [attr.aria-invalid]="!!fieldError(group.key, level)"
+                      [attr.aria-describedby]="fieldError(group.key, level) ? fieldId(group.key, level) + '-error' : null"
+                    />
+                  </div>
+                }
+                @if (rowErrors(group.key).length > 0 || orderWarning(group.key) || zeroWarnings(group.key).length > 0) {
+                  <div class="thresholds__messages">
+                    @for (error of rowErrors(group.key); track error.level) {
+                      <p class="field-error" [id]="error.id">
+                        <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ group.label }} {{ error.level }}: {{ error.message }}
+                      </p>
+                    }
+                    @if (orderWarning(group.key); as warning) {
+                      <p class="field-hint thresholds__warning"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ warning }}</p>
+                    }
+                    @for (level of zeroWarnings(group.key); track level) {
+                      <p class="field-hint thresholds__warning">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ group.label }} {{ level }} 0 logs every request, which writes very
+                        large slow log files
+                      </p>
+                    }
+                  </div>
+                }
+              }
+            </div>
+            <p class="field-hint" id="slowlog-thresholds-hint">
+              Times such as <span class="mono">500ms</span>, <span class="mono">5s</span> or <span class="mono">1m</span>.
+              <span class="mono">-1</span> turns a level off; an empty field uses the default (off). A request slower than several thresholds is
+              logged once, at the highest level.
+            </p>
+          </div>
+
+          <div class="grid-2 slowlog-options">
+            <div class="field">
+              <label class="field-label" for="slowlog-source">Indexing source</label>
+              <input
+                id="slowlog-source"
+                name="source"
+                class="input input-sm input-mono"
+                autocomplete="off"
+                placeholder="e.g. 1000"
+                [ngModel]="form().source"
+                (ngModelChange)="setSource($event)"
+                [class.is-invalid]="!!sourceError()"
+                [attr.aria-invalid]="!!sourceError()"
+                [attr.aria-describedby]="sourceError() ? 'slowlog-source-error' : 'slowlog-source-hint'"
+              />
+              @if (sourceError(); as message) {
+                <p class="field-error" id="slowlog-source-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ message }}</p>
+              } @else {
+                <p class="field-hint" id="slowlog-source-hint">Characters of the document logged: a number, true for all, false for none. Empty: 1000.</p>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label" for="slowlog-reformat">Reformat source</label>
+              <select id="slowlog-reformat" name="reformat" class="select select-sm" [ngModel]="form().reformat" (ngModelChange)="setReformat($event)" aria-describedby="slowlog-reformat-hint">
+                <option value="">Default (yes)</option>
+                <option value="true">Yes, on one line</option>
+                <option value="false">No, keep it as sent</option>
+              </select>
+              <p class="field-hint" id="slowlog-reformat-hint">Whether the logged document is rewritten on a single line.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-footer card-footer--between">
+        <span class="text-sm text-muted slowlog-footer__summary">
+          @if (selected().size === 0) {
+            No index selected
+          } @else {
+            Applies to {{ pluralize(selected().size, 'index', 'indices') }}
+          }
+        </span>
+        <div class="row-wrap slowlog-footer__buttons">
+          @if (dirty()) {
+            <button type="button" class="btn btn-ghost" [disabled]="busy()" (click)="discardChanges()">Discard changes</button>
+          }
+          <button type="button" class="btn btn-danger-soft" [class.is-loading]="resetting()" [disabled]="busy()" (click)="resetSelected()">
+            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Reset to defaults
+          </button>
+          <button type="submit" class="btn btn-primary" [class.is-loading]="applying()" [disabled]="busy()">
+            <i class="bi bi-check2" aria-hidden="true"></i> Apply settings
+          </button>
+        </div>
+      </div>
+    </form>
+  }
+</div>

@@ -1,0 +1,145 @@
+@if (target(); as target) {
+  <div class="ops-sections">
+    <section class="ops-section" aria-labelledby="ops-conditions-title">
+      <div class="ops-section__head">
+        <h3 id="ops-conditions-title" class="section-title"><i class="bi bi-funnel" aria-hidden="true"></i> Conditions</h3>
+      </div>
+      <p class="ops-section__hint">
+        All optional. With conditions, the rollover happens only when at least one is met (handy to test an ILM policy);
+        without any, it happens right away.
+        @if (store.writeFacts(); as facts) {
+          The current values are those of <span class="mono">{{ facts.index }}</span>.
+        }
+        @if (unsupported().length > 0) {
+          The connected Elasticsearch does not know {{ unsupported().join(' and ') }}.
+        }
+      </p>
+      <div class="ops-conditions">
+        @for (condition of definitions(); track condition.key) {
+          @let error = showError(condition.key);
+          @let state = met(condition.key);
+          <div class="field">
+            <div class="ops-condition-label">
+              <label class="field-label" [for]="'ops-cond-' + condition.key">{{ condition.label }}</label>
+              @if (state === true) {
+                <span class="badge badge-green"><i class="bi bi-check-lg" aria-hidden="true"></i> Met</span>
+              } @else if (state === false) {
+                <span class="badge badge-outline">Not met</span>
+              }
+            </div>
+            <input
+              class="input input-mono"
+              [id]="'ops-cond-' + condition.key"
+              autocomplete="off"
+              spellcheck="false"
+              [attr.inputmode]="condition.kind === 'count' ? 'numeric' : null"
+              [placeholder]="condition.placeholder"
+              [class.is-invalid]="!!error"
+              [attr.aria-invalid]="!!error"
+              [attr.aria-describedby]="'ops-cond-' + condition.key + (error ? '-error' : '-hint')"
+              [value]="store.conditions()[condition.key]"
+              (input)="setCondition(condition.key, $any($event.target).value)"
+            />
+            @if (error) {
+              <p [id]="'ops-cond-' + condition.key + '-error'" class="field-error">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+              </p>
+            } @else {
+              <p [id]="'ops-cond-' + condition.key + '-hint'" class="field-hint">
+                {{ condition.hint }}@if (current(condition.key); as now) {<span> · now <strong class="tabular">{{ now }}</strong></span>}
+              </p>
+            }
+          </div>
+        }
+      </div>
+    </section>
+
+    @if (target.kind === 'alias') {
+      <section class="ops-section" aria-labelledby="ops-new-index-title">
+        <div class="ops-section__head">
+          <h3 id="ops-new-index-title" class="section-title"><i class="bi bi-plus-square" aria-hidden="true"></i> New index</h3>
+        </div>
+        <div class="field ops-new-index">
+          <label class="field-label" for="ops-new-index">
+            Name <span class="optional">{{ store.generatedName() ? 'optional' : 'required' }}</span>
+          </label>
+          <input
+            id="ops-new-index"
+            class="input input-mono"
+            autocomplete="off"
+            spellcheck="false"
+            [placeholder]="store.generatedName() ? 'e.g. ' + store.generatedName() : 'e.g. ' + (target.writeIndex ?? 'logs') + '-000002'"
+            [class.is-invalid]="!!showError('newIndex')"
+            [attr.aria-invalid]="!!showError('newIndex')"
+            [attr.aria-describedby]="showError('newIndex') ? 'ops-new-index-error' : 'ops-new-index-hint'"
+            [value]="store.newIndex()"
+            (input)="setNewIndex($any($event.target).value)"
+          />
+          @if (showError('newIndex'); as error) {
+            <p id="ops-new-index-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+          } @else {
+            <p id="ops-new-index-hint" class="field-hint">
+              @if (store.generatedName(); as generated) {
+                Leave empty to let Elasticsearch call it {{ generated }}.
+              } @else {
+                {{ target.writeIndex }} does not end with "-" and a number, so Elasticsearch cannot name the next index itself.
+              }
+              Index templates matching the name apply to it.
+            </p>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="ops-section" aria-labelledby="ops-dry-run-title" [attr.aria-busy]="store.dryRun().state === 'loading'">
+      <div class="ops-section__head">
+        <h3 id="ops-dry-run-title" class="section-title"><i class="bi bi-eye" aria-hidden="true"></i> Dry run</h3>
+        @if (store.dryRun().state === 'loading') {
+          <span class="count-label"><span class="spinner ops-inline-spinner" aria-hidden="true"></span> Asking Elasticsearch…</span>
+        }
+      </div>
+      @if (preview(); as preview) {
+        <div class="ops-swap" [class.is-noop]="!preview.wouldRollOver">
+          <div class="ops-swap__index">
+            <span class="ops-swap__label">Write index now</span>
+            <span class="mono break-all">{{ preview.oldIndex }}</span>
+          </div>
+          <i class="bi bi-arrow-right ops-swap__arrow" aria-hidden="true"></i>
+          <div class="ops-swap__index">
+            <span class="ops-swap__label">{{ preview.wouldRollOver ? 'New write index' : 'Would be' }}</span>
+            <span class="mono break-all">{{ preview.newIndex }}</span>
+          </div>
+        </div>
+        <p class="text-sm" [class.text-secondary]="preview.wouldRollOver" [class.text-warning]="!preview.wouldRollOver">
+          @if (preview.conditions.length === 0) {
+            No conditions: running it rolls over unconditionally.
+          } @else if (preview.wouldRollOver) {
+            {{ preview.metCount }} of {{ preview.conditions.length }} conditions met: running it now rolls over.
+          } @else {
+            No condition is met yet: running it now leaves {{ preview.oldIndex }} as the write index.
+          }
+        </p>
+      } @else if (store.dryRun().state === 'error') {
+        @if (store.dryRun(); as dry) {
+          <div class="callout callout-danger" role="alert">
+            <i class="bi bi-x-circle" aria-hidden="true"></i>
+            <div><strong>Elasticsearch refused the dry run.</strong> {{ dry.state === 'error' ? dry.reason : '' }}</div>
+          </div>
+        }
+      } @else {
+        <p class="ops-section__hint">
+          The dry run starts once the conditions are valid{{ target.kind === 'alias' && !store.generatedName() ? ' and the new index has a name' : '' }}.
+        </p>
+      }
+    </section>
+
+    <cerebro-ops-checks [checks]="store.checks()" (fix)="onFix($event)" />
+  </div>
+} @else if (!store.catalogLoaded()) {
+  <div class="loading-block" role="status"><span class="spinner" aria-hidden="true"></span> Loading aliases and data streams…</div>
+} @else {
+  <div class="callout callout-danger" role="alert">
+    <i class="bi bi-question-circle" aria-hidden="true"></i>
+    <div><strong>Not found.</strong> No alias or data stream named “{{ store.source() }}” exists. Go back and choose another one.</div>
+  </div>
+}

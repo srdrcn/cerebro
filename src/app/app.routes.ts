@@ -1,32 +1,175 @@
-import { Routes } from '@angular/router';
-import { AliasesComponent } from './features/aliases/aliases.component';
-import { AnalysisComponent } from './features/analysis/analysis.component';
-import { CatComponent } from './features/cat/cat.component';
-import { ClusterSettingsComponent } from './features/cluster-settings/cluster-settings.component';
-import { ConnectComponent } from './features/connect/connect.component';
-import { CreateIndexComponent } from './features/create-index/create-index.component';
-import { IndexSettingsComponent } from './features/index-settings/index-settings.component';
-import { NodesComponent } from './features/nodes/nodes.component';
-import { OverviewComponent } from './features/overview/overview.component';
-import { RepositoriesComponent } from './features/repositories/repositories.component';
-import { RestComponent } from './features/rest/rest.component';
-import { SnapshotsComponent } from './features/snapshots/snapshots.component';
-import { TemplatesComponent } from './features/templates/templates.component';
+import { Route, Routes } from '@angular/router';
+import { CLUSTER_VIEW } from './core/cluster-route-reuse';
+import { hostOrParamsChange, requireConnection } from './core/connection.guard';
+import { confirmDiscardPendingChanges } from './core/pending-changes.guard';
+
+/**
+ * Paths are kept identical to the original AngularJS application so existing
+ * bookmarks (including legacy `#!/` URLs, see legacy-hashbang.ts) still work.
+ * Every feature is lazy loaded to keep the initial bundle small. Editor pages
+ * implement `PendingChangesAware` and ask before unsaved edits are dropped.
+ * Cluster views re-run their guards when only `?host=` changes, so the URL
+ * and the connected cluster never disagree (see `requireConnection`), and are
+ * then created again so no state of the previous cluster survives
+ * (`ClusterRouteReuseStrategy`).
+ */
+function clusterViews(views: Route[]): Route[] {
+  return views.map((view) => ({
+    ...view,
+    data: { ...view.data, [CLUSTER_VIEW]: true },
+    runGuardsAndResolvers: hostOrParamsChange,
+  }));
+}
 
 export const routes: Routes = [
-  { path: 'connect', component: ConnectComponent, title: 'cerebro - connect' },
-  { path: 'overview', component: OverviewComponent },
-  { path: 'nodes', component: NodesComponent },
-  { path: 'rest', component: RestComponent },
-  { path: 'aliases', component: AliasesComponent },
-  { path: 'create', component: CreateIndexComponent },
-  { path: 'analysis', component: AnalysisComponent },
-  { path: 'templates', component: TemplatesComponent },
-  { path: 'cluster_settings', component: ClusterSettingsComponent },
-  { path: 'index_settings', component: IndexSettingsComponent },
-  { path: 'snapshot', component: SnapshotsComponent },
-  { path: 'repository', component: RepositoriesComponent },
-  { path: 'cat', component: CatComponent },
+  {
+    path: 'connect',
+    loadComponent: () =>
+      import('./features/connect/connect.component').then((m) => m.ConnectComponent),
+  },
   { path: '', pathMatch: 'full', redirectTo: 'connect' },
+  {
+    path: '',
+    canActivateChild: [requireConnection],
+    children: clusterViews([
+      {
+        path: 'overview',
+        loadComponent: () =>
+          import('./features/overview/overview.component').then((m) => m.OverviewComponent),
+      },
+      {
+        path: 'doctor',
+        loadComponent: () =>
+          import('./features/doctor/doctor.component').then((m) => m.DoctorComponent),
+      },
+      {
+        path: 'nodes',
+        loadComponent: () =>
+          import('./features/nodes/nodes.component').then((m) => m.NodesComponent),
+      },
+      {
+        path: 'rest',
+        loadComponent: () =>
+          import('./features/rest/rest.component').then((m) => m.RestComponent),
+      },
+      {
+        path: 'aliases',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/aliases/aliases.component').then((m) => m.AliasesComponent),
+      },
+      {
+        path: 'create',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/create-index/create-index.component').then(
+            (m) => m.CreateIndexComponent,
+          ),
+      },
+      {
+        path: 'index_ops',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/index-ops/index-ops.component').then((m) => m.IndexOpsComponent),
+      },
+      {
+        path: 'analysis',
+        loadComponent: () =>
+          import('./features/analysis/analysis.component').then((m) => m.AnalysisComponent),
+      },
+      {
+        path: 'templates',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/templates/templates.component').then((m) => m.TemplatesComponent),
+      },
+      {
+        path: 'cluster_settings',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/cluster-settings/cluster-settings.component').then(
+            (m) => m.ClusterSettingsComponent,
+          ),
+      },
+      {
+        path: 'index_settings',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/index-settings/index-settings.component').then(
+            (m) => m.IndexSettingsComponent,
+          ),
+      },
+      {
+        path: 'snapshot',
+        loadComponent: () =>
+          import('./features/snapshots/snapshots.component').then((m) => m.SnapshotsComponent),
+      },
+      {
+        path: 'repository',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/repositories/repositories.component').then(
+            (m) => m.RepositoriesComponent,
+          ),
+      },
+      {
+        path: 'cat',
+        loadComponent: () => import('./features/cat/cat.component').then((m) => m.CatComponent),
+      },
+      {
+        path: 'allocation',
+        loadComponent: () =>
+          import('./features/allocation/allocation.component').then((m) => m.AllocationComponent),
+      },
+      {
+        path: 'tasks',
+        loadComponent: () => import('./features/tasks/tasks.component').then((m) => m.TasksComponent),
+      },
+      {
+        path: 'performance',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/performance/performance.component').then((m) => m.PerformanceComponent),
+      },
+      {
+        path: 'recovery',
+        loadComponent: () =>
+          import('./features/recovery/recovery.component').then((m) => m.RecoveryComponent),
+      },
+      {
+        path: 'index_detail',
+        loadComponent: () =>
+          import('./features/index-detail/index-detail.component').then(
+            (m) => m.IndexDetailComponent,
+          ),
+      },
+      {
+        path: 'index_templates',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/index-templates/index-templates.component').then(
+            (m) => m.IndexTemplatesComponent,
+          ),
+      },
+      {
+        path: 'data_streams',
+        loadComponent: () =>
+          import('./features/data-streams/data-streams.component').then(
+            (m) => m.DataStreamsComponent,
+          ),
+      },
+      {
+        path: 'ilm',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () => import('./features/ilm/ilm.component').then((m) => m.IlmComponent),
+      },
+      {
+        path: 'pipelines',
+        canDeactivate: [confirmDiscardPendingChanges],
+        loadComponent: () =>
+          import('./features/pipelines/pipelines.component').then((m) => m.PipelinesComponent),
+      },
+    ]),
+  },
   { path: '**', redirectTo: 'connect' },
 ];

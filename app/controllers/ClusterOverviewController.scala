@@ -3,9 +3,10 @@ package controllers
 import javax.inject.Inject
 
 import controllers.auth.AuthenticationModule
-import elastic.{ElasticClient, Error}
-import models.overview.ClusterOverview
-import models.{CerebroResponse, Hosts, ShardStats}
+import elastic.{ElasticClient, ElasticResponse, Error, HTTPElasticClient}
+import exceptions.{InvalidParamException, MissingRequiredParamException}
+import models.{CerebroRequest, CerebroResponse, Hosts, ShardStats}
+import play.api.mvc.Result
 import services.overview.OverviewDataService
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -22,6 +23,9 @@ class ClusterOverviewController @Inject()(val authentication: AuthenticationModu
 
   def disableShardAllocation = process { request =>
     val kind = request.get("kind")
+    if (!HTTPElasticClient.AllocationKinds.contains(kind)) {
+      throw InvalidParamException("kind", HTTPElasticClient.AllocationKinds)
+    }
     client.disableShardAllocation(request.target, kind).map { response =>
       CerebroResponse(response.status, response.body)
     }
@@ -34,45 +38,43 @@ class ClusterOverviewController @Inject()(val authentication: AuthenticationModu
   }
 
   def closeIndices = process { request =>
-    client.closeIndex(request.get("indices"), request.target).map { response =>
-      CerebroResponse(response.status, response.body)
-    }
+    inBatches(request)(batch => client.closeIndex(batch, request.target))
   }
 
   def openIndices = process { request =>
-    client.openIndex(request.get("indices"), request.target).map { response =>
-      CerebroResponse(response.status, response.body)
-    }
+    inBatches(request)(batch => client.openIndex(batch, request.target))
   }
 
   def forceMerge = process { request =>
-    client.forceMerge(request.get("indices"), request.target).map { response =>
-      CerebroResponse(response.status, response.body)
-    }
+    inBatches(request)(batch => client.forceMerge(batch, request.target))
   }
 
   def clearIndexCache = process { request =>
-    client.clearIndexCache(request.get("indices"), request.target).map { response =>
-      CerebroResponse(response.status, response.body)
-    }
+    inBatches(request)(batch => client.clearIndexCache(batch, request.target))
   }
 
   def refreshIndex = process { request =>
-    client.refreshIndex(request.get("indices"), request.target).map { response =>
-      CerebroResponse(response.status, response.body)
-    }
+    inBatches(request)(batch => client.refreshIndex(batch, request.target))
   }
 
   def flushIndex = process { request =>
-    client.flushIndex(request.get("indices"), request.target).map { response =>
-      CerebroResponse(response.status, response.body)
-    }
+    inBatches(request)(batch => client.flushIndex(batch, request.target))
   }
 
   def deleteIndex = process { request =>
-    client.deleteIndex(request.get("indices"), request.target).map { response =>
-      CerebroResponse(response.status, response.body)
-    }
+    inBatches(request)(batch => client.deleteIndex(batch, request.target))
+  }
+
+  /**
+    * `indices` is a comma separated list. Bulk actions on the overview can name
+    * hundreds of indices, which would not fit in one request line, so they are
+    * sent in batches (see IndexBatches); the answer is the last batch's, or the
+    * first error.
+    */
+  private def inBatches(request: CerebroRequest)(call: String => Future[ElasticResponse]): Future[Result] = {
+    val indices = request.get("indices").split(",").map(_.trim).filter(_.nonEmpty).toSeq
+    if (indices.isEmpty) throw MissingRequiredParamException("indices")
+    IndexBatches.run(indices)(call).map(response => CerebroResponse(response.status, response.body))
   }
 
   def getShardStats = process { request =>

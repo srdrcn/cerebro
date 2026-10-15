@@ -1,0 +1,506 @@
+<section class="page" aria-labelledby="snapshots-title">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 id="snapshots-title" class="page-title">Snapshots</h1>
+      <p class="page-subtitle">Back up indices to a repository and restore them when you need them.</p>
+    </div>
+    @if (repositories().length > 0) {
+      <div class="page-header__actions">
+        <div class="context-picker">
+          <label class="visually-hidden" for="snapshot-repository">Repository</label>
+          <i class="bi bi-database" aria-hidden="true"></i>
+          <select
+            id="snapshot-repository"
+            class="select"
+            title="Repository"
+            [ngModel]="repository()"
+            (ngModelChange)="selectRepository($event)"
+          >
+            @for (name of repositories(); track name) {
+              <option [value]="name">{{ name }}</option>
+            }
+          </select>
+        </div>
+        <a class="btn" routerLink="/repository" [queryParams]="repositoriesLink()">
+          <i class="bi bi-gear" aria-hidden="true"></i> Manage repositories
+        </a>
+      </div>
+    }
+  </header>
+
+  @if (landing(); as data) {
+    @if (data.repositories.length === 0) {
+      <div class="card">
+        <cerebro-empty
+          icon="bi-database-add"
+          heading="No snapshot repositories"
+          text="Snapshots are stored in a repository: a shared file system, S3, Google Cloud Storage, Azure or HDFS location. Register one to start taking snapshots."
+        >
+          <a class="btn btn-primary" routerLink="/repository" [queryParams]="connection.hostQuery()">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i> Register a repository
+          </a>
+        </cerebro-empty>
+      </div>
+    } @else {
+      @if (snapshots(); as list) {
+        <div class="stat-grid snapshots-stats">
+          <div class="stat">
+            <div class="stat__label"><i class="bi bi-camera" aria-hidden="true"></i> Snapshots</div>
+            <div class="stat__value">{{ summary().total }}</div>
+            <div class="stat__meta truncate" [title]="repository()">
+              in <span class="mono">{{ repository() }}</span>
+              @if (summary().running > 0) {
+                · <span class="text-running">{{ summary().running }} running</span>
+              }
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat__label"><i class="bi bi-check2-circle" aria-hidden="true"></i> Last successful</div>
+            @if (summary().lastSuccess; as last) {
+              <div class="stat__value stat__value--text">{{ formatRelative(snapshotStart(last), now()) }}</div>
+              <div class="stat__meta mono truncate" [title]="last.snapshot">{{ last.snapshot }}</div>
+            } @else {
+              <div class="stat__value stat__value--text text-muted">Never</div>
+              <div class="stat__meta">No successful snapshot yet</div>
+            }
+          </div>
+          <div class="stat">
+            <div class="stat__label"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i> Failed or partial</div>
+            <div
+              class="stat__value"
+              [class.is-danger]="stateCount('FAILED') > 0"
+              [class.is-warning]="stateCount('FAILED') === 0 && stateCount('PARTIAL') > 0"
+            >
+              {{ summary().problems }}
+            </div>
+            <div class="stat__meta">
+              @if (summary().problems === 0) {
+                {{ summary().total === 0 ? 'Nothing to report' : 'Every snapshot completed' }}
+              } @else {
+                {{ stateCount('FAILED') }} failed · {{ stateCount('PARTIAL') }} partial
+              }
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat__label"><i class="bi bi-collection" aria-hidden="true"></i> Indices covered</div>
+            <div class="stat__value">{{ summary().indices }}</div>
+            <div class="stat__meta">{{ pluralize(summary().shards, 'shard') }} across all snapshots</div>
+          </div>
+        </div>
+      } @else if (!snapshotsFailed()) {
+        <div class="stat-grid snapshots-stats" aria-hidden="true">
+          @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+            <div class="stat"><span class="skeleton" style="height: 62px"></span></div>
+          }
+        </div>
+      }
+
+      <div class="layout-sidebar-end">
+        <div #listCard class="card snapshots-card">
+          <div class="card-header snapshots-toolbar">
+            <div class="toolbar">
+              <cerebro-search
+                [value]="query()"
+                (valueChange)="setQuery($event)"
+                placeholder="Filter by snapshot or index"
+                ariaLabel="Filter snapshots by snapshot or index name"
+              />
+              @if (stateChips().length > 1) {
+                <div class="row-wrap" role="group" aria-label="Filter by state">
+                  @for (chip of stateChips(); track chip.state) {
+                    <button
+                      type="button"
+                      class="chip-toggle"
+                      [attr.aria-pressed]="!hiddenStates().has(chip.state)"
+                      (click)="toggleState(chip.state)"
+                    >
+                      {{ chip.label }}
+                      <span class="count">{{ chip.count }}</span>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+            <div class="row">
+              @if (snapshots(); as list) {
+                <span class="count-label">
+                  @if (filtersActive()) {
+                    <strong>{{ visible().length | num }}</strong> of {{ list.length | num }} {{ list.length | plural: 'snapshot' }}
+                  } @else {
+                    <strong>{{ list.length | num }}</strong> {{ list.length | plural: 'snapshot' }}
+                  }
+                </span>
+              }
+            </div>
+          </div>
+
+          @if (snapshots(); as list) {
+            @if (list.length === 0) {
+              <cerebro-empty
+                icon="bi-camera"
+                heading="No snapshots yet"
+                [text]="'Snapshots you take in ' + repository() + ' will be listed here.'"
+              >
+                <button type="button" class="btn btn-sm" (click)="focusCreate()">
+                  <i class="bi bi-plus-lg" aria-hidden="true"></i> Create the first snapshot
+                </button>
+              </cerebro-empty>
+            } @else {
+              <div class="table-wrap">
+                <table class="data-table snapshots-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="snapshot-cell" [attr.aria-sort]="sort.ariaSort('name')">
+                        <button type="button" class="sort-button" [class.is-active]="sort.isActive('name')" (click)="sort.sortBy('name')">
+                          Snapshot <i [class]="'bi ' + sort.icon('name')" aria-hidden="true"></i>
+                        </button>
+                      </th>
+                      <th scope="col" class="col-state">State</th>
+                      <th scope="col" class="col-time" [attr.aria-sort]="sort.ariaSort('start')">
+                        <button type="button" class="sort-button" [class.is-active]="sort.isActive('start')" (click)="sort.sortBy('start')">
+                          Started <i [class]="'bi ' + sort.icon('start')" aria-hidden="true"></i>
+                        </button>
+                      </th>
+                      <th scope="col" class="col-indices" [attr.aria-sort]="sort.ariaSort('indices')">
+                        <button type="button" class="sort-button" [class.is-active]="sort.isActive('indices')" (click)="sort.sortBy('indices')">
+                          Indices <i [class]="'bi ' + sort.icon('indices')" aria-hidden="true"></i>
+                        </button>
+                      </th>
+                      <th scope="col" class="actions"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of rows(); track row.key) {
+                      <tr [class.is-muted]="deleting().has(row.key)">
+                        <th scope="row" class="snapshot-cell">
+                          <div class="snapshot-identity">
+                            <span class="snapshot-avatar" [attr.data-tone]="row.state.tone" aria-hidden="true">
+                              <i class="bi bi-camera"></i>
+                            </span>
+                            <div class="min-w-0">
+                              <div class="snapshot-name" [title]="row.record.uuid ? 'UUID ' + row.record.uuid : row.record.snapshot">{{ row.record.snapshot }}</div>
+                              <!-- Narrower cards fold the State column into the name cell. -->
+                              <div class="cell-sub in-state">
+                                <span [class]="row.badgeClass">
+                                  <i [class]="'bi ' + row.state.icon" [class.spin]="row.running" aria-hidden="true"></i>
+                                  {{ row.state.label }}
+                                </span>
+                                @if (row.shardsFailed > 0) {
+                                  <span class="text-danger">{{ row.shardsFailed }} of {{ row.shardsTotal ?? '?' }} shards failed</span>
+                                }
+                              </div>
+                              <div class="cell-sub in-scope min-w-0">
+                                @if (row.record.include_global_state) {
+                                  <span class="scope-hint" title="Includes the cluster global state">
+                                    <i class="bi bi-globe2" aria-hidden="true"></i> Global state
+                                  </span>
+                                } @else {
+                                  <span class="scope-hint" title="Taken without the cluster global state">
+                                    <i class="bi bi-collection" aria-hidden="true"></i> Indices only
+                                  </span>
+                                }
+                                @if (row.record.version) {
+                                  <span aria-hidden="true">·</span>
+                                  <span class="truncate" [title]="'Elasticsearch ' + row.record.version">ES {{ row.record.version }}</span>
+                                }
+                              </div>
+                              <!-- The smallest cards also fold in the Started and Indices columns. -->
+                              <div class="cell-sub in-meta">
+                                <span [title]="row.started">{{ row.relative }}</span>
+                                <span aria-hidden="true">·</span>
+                                <span>{{ pluralize(row.indices.length, 'index', 'indices') }}</span>
+                                <span aria-hidden="true">·</span>
+                                <span>{{ row.record.include_global_state ? 'global state' : 'indices only' }}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </th>
+                        <td class="col-state">
+                          <span [class]="row.badgeClass">
+                            <i [class]="'bi ' + row.state.icon" [class.spin]="row.running" aria-hidden="true"></i>
+                            {{ row.state.label }}
+                          </span>
+                          <div class="cell-sub">
+                            @if (row.shardsFailed > 0) {
+                              <span class="text-danger">{{ row.shardsFailed }} of {{ row.shardsTotal ?? '?' }} shards failed</span>
+                            } @else if (row.shardsTotal !== null) {
+                              {{ pluralize(row.shardsTotal, 'shard') }}
+                            }
+                          </div>
+                        </td>
+                        <td class="col-time">
+                          <div class="cell-main tabular">{{ row.started }}</div>
+                          <div class="cell-sub tabular">
+                            {{ row.relative }}
+                            <span aria-hidden="true">·</span>
+                            @if (row.running) {
+                              running for {{ row.duration }}
+                            } @else {
+                              took {{ row.duration }}
+                            }
+                          </div>
+                        </td>
+                        <td class="col-indices">
+                          <div class="cell-main">{{ pluralize(row.indices.length, 'index', 'indices') }}</div>
+                          <div class="cell-sub truncate mono" [title]="row.indexPreview">{{ row.indexPreview || '–' }}</div>
+                        </td>
+                        <td class="actions">
+                          @if (deleting().has(row.key)) {
+                            <span class="spinner" role="status" [attr.aria-label]="'Deleting ' + row.record.snapshot"></span>
+                          } @else {
+                            <cerebro-menu [label]="'Actions for ' + row.record.snapshot" align="end">
+                              <i trigger class="bi bi-three-dots" aria-hidden="true"></i>
+                              <div class="menu-label">{{ row.record.snapshot }}</div>
+                              <button
+                                type="button"
+                                class="menu-item"
+                                [disabled]="!row.restorable"
+                                (click)="openRestore(row.record)"
+                              >
+                                <i class="bi bi-clock-history" aria-hidden="true"></i> Restore…
+                                @if (!row.restorable) {
+                                  <span class="menu-item__hint">{{ row.running ? 'running' : 'no data' }}</span>
+                                }
+                              </button>
+                              <button type="button" class="menu-item" (click)="view(row.record)">
+                                <i class="bi bi-braces" aria-hidden="true"></i> View JSON
+                              </button>
+                              <button type="button" class="menu-item" (click)="copyName(row.record)">
+                                <i class="bi bi-clipboard" aria-hidden="true"></i> Copy name
+                              </button>
+                              <div class="menu-separator" role="separator"></div>
+                              <button type="button" class="menu-item menu-item--danger" (click)="remove(row.record)">
+                                <i class="bi bi-trash" aria-hidden="true"></i>
+                                {{ row.running ? 'Abort and delete' : 'Delete' }}
+                              </button>
+                            </cerebro-menu>
+                          }
+                        </td>
+                      </tr>
+                    } @empty {
+                      <tr>
+                        <td colspan="5">
+                          <cerebro-empty icon="bi-funnel" heading="No matching snapshots" text="No snapshot matches the current filters.">
+                            <button type="button" class="btn btn-sm" (click)="resetFilters()">Clear filters</button>
+                          </cerebro-empty>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              @if (visible().length > pageSize) {
+                <div class="card-footer card-footer--between">
+                  <span class="text-muted text-sm">{{ sortDescription() }}</span>
+                  <cerebro-pager
+                    [page]="currentPage()"
+                    [pageSize]="pageSize"
+                    [total]="visible().length"
+                    noun="snapshots"
+                    (pageChange)="changePage($event, listCard)"
+                  />
+                </div>
+              }
+            }
+          } @else if (snapshotsFailed()) {
+            <cerebro-empty
+              icon="bi-exclamation-triangle"
+              heading="Could not load snapshots"
+              [text]="snapshotsError() ?? 'The cluster did not return the snapshots of ' + repository() + '. The repository may be unreachable from the nodes.'"
+            >
+              <button type="button" class="btn btn-sm" (click)="retrySnapshots()">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+              </button>
+            </cerebro-empty>
+          } @else {
+            <div class="loading-block" role="status"><span class="spinner"></span> Loading snapshots…</div>
+          }
+        </div>
+
+        <section class="card create-card" aria-labelledby="create-snapshot-title">
+          <div class="card-header">
+            <div class="row min-w-0">
+              <span class="card-icon" aria-hidden="true"><i class="bi bi-camera"></i></span>
+              <div class="min-w-0">
+                <h2 id="create-snapshot-title" class="card-title">Create snapshot</h2>
+                <p class="card-subtitle">Runs in the background and shows up in the list.</p>
+              </div>
+            </div>
+          </div>
+          <form novalidate (ngSubmit)="create()">
+            <div class="card-body stack">
+              <div class="field">
+                <label class="field-label" for="create-snapshot-repository">Repository</label>
+                <select
+                  id="create-snapshot-repository"
+                  name="repository"
+                  class="select"
+                  [class.is-invalid]="createSubmitted() && !!repositoryError()"
+                  [attr.aria-invalid]="createSubmitted() && repositoryError() ? true : null"
+                  [attr.aria-describedby]="createSubmitted() && repositoryError() ? 'create-repository-error' : null"
+                  [ngModel]="createRepository()"
+                  (ngModelChange)="createRepository.set($event)"
+                >
+                  @for (name of repositories(); track name) {
+                    <option [value]="name">{{ name }}</option>
+                  }
+                </select>
+                @if (createSubmitted() && repositoryError(); as error) {
+                  <p id="create-repository-error" class="field-error">
+                    <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+                  </p>
+                }
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="create-snapshot-name">Name</label>
+                <div class="name-row">
+                  <input
+                    id="create-snapshot-name"
+                    name="snapshot"
+                    class="input input-mono"
+                    placeholder="e.g. nightly-2026.10.14"
+                    autocomplete="off"
+                    spellcheck="false"
+                    [class.is-invalid]="showNameError()"
+                    [attr.aria-invalid]="showNameError() ? true : null"
+                    [attr.aria-describedby]="showNameError() ? 'create-name-error' : 'create-name-hint'"
+                    [ngModel]="createName()"
+                    (ngModelChange)="createName.set($event)"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-icon"
+                    aria-label="Suggest a new name"
+                    title="Suggest a new name"
+                    (click)="regenerateName()"
+                  >
+                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                  </button>
+                </div>
+                @if (showNameError()) {
+                  <p id="create-name-error" class="field-error">
+                    <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ nameError() }}
+                  </p>
+                } @else {
+                  <p id="create-name-hint" class="field-hint">Lowercase, unique in the repository. Date math like <code>&lt;nightly-&#123;now/d&#125;&gt;</code> works too.</p>
+                }
+              </div>
+
+              <div class="field">
+                <span class="field-label" id="create-scope-label">Indices</span>
+                <div class="segmented scope-toggle" role="group" aria-labelledby="create-scope-label">
+                  <button type="button" [attr.aria-pressed]="createScope() === 'all'" (click)="setScope('all')">
+                    <i class="bi bi-collection" aria-hidden="true"></i> All indices
+                  </button>
+                  <button type="button" [attr.aria-pressed]="createScope() === 'selected'" (click)="setScope('selected')">
+                    <i class="bi bi-ui-checks" aria-hidden="true"></i> Choose indices
+                  </button>
+                </div>
+                @if (createScope() === 'all') {
+                  <p class="field-hint">
+                    Every regular index and data stream ({{ pluralize(regularCount(), 'index', 'indices') }} right now).
+                  </p>
+                } @else {
+                  <cerebro-index-checklist
+                    [options]="indexOptions()"
+                    [(selected)]="createSelected"
+                    label="Indices to include in the snapshot"
+                    emptyText="The cluster has no indices."
+                    [errorId]="createSubmitted() && selectionError() ? 'create-selection-error' : null"
+                  >
+                    @if (specialCount() > 0) {
+                      <div class="checklist-option">
+                        <label class="switch text-sm">
+                          <input
+                            type="checkbox"
+                            name="showSpecial"
+                            [ngModel]="showSpecial()"
+                            (ngModelChange)="showSpecial.set($event)"
+                          />
+                          Show special indices
+                          <span class="count">{{ specialCount() }}</span>
+                        </label>
+                      </div>
+                    }
+                  </cerebro-index-checklist>
+                  @if (createSubmitted() && selectionError(); as error) {
+                    <p id="create-selection-error" class="field-error" role="alert">
+                      <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+                    </p>
+                  }
+                }
+              </div>
+
+              <div class="stack-sm create-options">
+                <label class="switch create-option">
+                  <input
+                    type="checkbox"
+                    name="includeGlobalState"
+                    [ngModel]="createIncludeGlobalState()"
+                    (ngModelChange)="createIncludeGlobalState.set($event)"
+                  />
+                  <span>
+                    Include global state
+                    <span class="check-description">Persistent settings, templates and pipelines.</span>
+                  </span>
+                </label>
+                <label class="switch create-option">
+                  <input
+                    type="checkbox"
+                    name="ignoreUnavailable"
+                    [ngModel]="createIgnoreUnavailable()"
+                    (ngModelChange)="createIgnoreUnavailable.set($event)"
+                  />
+                  <span>
+                    Ignore unavailable indices
+                    <span class="check-description">Skip missing or closed indices instead of failing.</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div class="card-footer">
+              <button
+                type="submit"
+                class="btn btn-primary"
+                [class.is-loading]="creating()"
+                [disabled]="creating()"
+              >
+                <i class="bi bi-camera" aria-hidden="true"></i> Create snapshot
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+    }
+  } @else if (landingFailed()) {
+    <div class="card">
+      <cerebro-empty
+        icon="bi-exclamation-triangle"
+        heading="Could not load snapshot repositories"
+        [text]="landingError() ?? 'The cluster did not answer the repositories request.'"
+      >
+        <button type="button" class="btn btn-sm" (click)="load()">
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
+        </button>
+      </cerebro-empty>
+    </div>
+  } @else {
+    <div class="stat-grid snapshots-stats" aria-hidden="true">
+      @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+        <div class="stat"><span class="skeleton" style="height: 62px"></span></div>
+      }
+    </div>
+    <div class="card loading-block" role="status"><span class="spinner"></span> Loading snapshots…</div>
+  }
+
+  @if (restoreTarget(); as target) {
+    <cerebro-snapshot-restore
+      [repository]="target.repository"
+      [snapshot]="target.snapshot"
+      [clusterIndices]="clusterIndexNames()"
+      (closed)="restoreTarget.set(undefined)"
+      (restored)="onRestored()"
+    />
+  }
+</section>

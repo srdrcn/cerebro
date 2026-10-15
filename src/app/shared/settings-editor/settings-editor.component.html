@@ -1,0 +1,448 @@
+<div class="settings-layout" [attr.aria-label]="label()" role="group">
+  <div class="settings-main">
+    <div class="card settings-toolbar">
+      <div class="toolbar settings-toolbar__filters">
+        <cerebro-search
+          class="settings-search"
+          [(value)]="query"
+          placeholder="Filter settings"
+          ariaLabel="Filter settings by name"
+        />
+        <div class="settings-toolbar__toggles">
+          <label class="switch">
+            <input
+              #staticToggle
+              type="checkbox"
+              role="switch"
+              [checked]="showStatic()"
+              (change)="setShowStatic(staticToggle.checked)"
+            />
+            Show static settings
+            <span class="count">{{ counts().static }}</span>
+          </label>
+          <label class="switch">
+            <input
+              #overriddenToggle
+              type="checkbox"
+              role="switch"
+              [checked]="onlyOverridden()"
+              (change)="setOnlyOverridden(overriddenToggle.checked)"
+            />
+            Only overridden
+            <span class="count">{{ counts().overridden }}</span>
+          </label>
+        </div>
+      </div>
+      <div class="settings-toolbar__end">
+        <span class="count-label" aria-live="polite">
+          @if (filtering()) {
+            <strong>{{ visibleRows().length | num }}</strong> of {{ counts().total | num }} {{ counts().total | plural: 'setting' }}
+          } @else {
+            <strong>{{ visibleRows().length | num }}</strong> {{ visibleRows().length | plural: 'setting' }}
+          }
+        </span>
+        <button
+          #addButton
+          type="button"
+          class="btn btn-sm settings-toolbar__add"
+          title="Add a setting that is not listed"
+          [attr.aria-expanded]="adding()"
+          [attr.aria-controls]="adding() ? id + '-add' : null"
+          (click)="openAdd()"
+        >
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> Add setting
+        </button>
+      </div>
+    </div>
+
+    @if (adding()) {
+      <form
+        #addForm
+        class="card add-setting"
+        novalidate
+        [id]="id + '-add'"
+        [attr.aria-labelledby]="id + '-add-title'"
+        (submit)="submitAdd($event)"
+        (keydown.escape)="cancelAdd(addButton)"
+      >
+        <header class="card-header">
+          <div class="min-w-0">
+            <h2 class="card-title" [id]="id + '-add-title'">Add a setting</h2>
+            <p class="card-subtitle">{{ addDescription() }}</p>
+          </div>
+          <button
+            type="button"
+            class="btn btn-ghost btn-icon btn-sm"
+            title="Close"
+            aria-label="Close the add setting form"
+            (click)="cancelAdd(addButton)"
+          >
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </header>
+        <div class="card-body add-setting__body">
+          <div class="field">
+            <label class="field-label" [for]="id + '-add-name'">Name</label>
+            <input
+              #newNameField
+              type="text"
+              class="input input-mono"
+              [id]="id + '-add-name'"
+              [class.is-invalid]="addAttempted() && !!newNameError()"
+              [attr.list]="suggestions().length > 0 ? id + '-add-suggestions' : null"
+              [value]="newName()"
+              [placeholder]="addPlaceholder()"
+              [attr.aria-invalid]="addAttempted() && newNameError() ? true : null"
+              [attr.aria-describedby]="addAttempted() && newNameError() ? id + '-add-name-error' : id + '-add-name-hint'"
+              autocomplete="off"
+              spellcheck="false"
+              (input)="newName.set(newNameField.value)"
+            />
+            @if (addAttempted() && newNameError(); as error) {
+              <p class="field-error" [id]="id + '-add-name-error'">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+              </p>
+            } @else if (newNameMatch(); as match) {
+              <p class="field-hint" [id]="id + '-add-name-hint'">
+                Already listed, currently <code>{{ match.value || '""' }}</code>: adding edits it.
+              </p>
+            } @else if (newName().trim() && newSettingName() !== newName().trim()) {
+              <p class="field-hint" [id]="id + '-add-name-hint'">Saved as <code>{{ newSettingName() }}</code></p>
+            } @else {
+              <p class="field-hint" [id]="id + '-add-name-hint'">Elasticsearch rejects names it does not know when you save.</p>
+            }
+          </div>
+          <div class="field">
+            <label class="field-label" [for]="id + '-add-value'">Value</label>
+            <input
+              #newValueField
+              type="text"
+              class="input input-mono"
+              [id]="id + '-add-value'"
+              [class.is-invalid]="addAttempted() && !!newValueError()"
+              [value]="newValue()"
+              [attr.aria-invalid]="addAttempted() && newValueError() ? true : null"
+              [attr.aria-describedby]="addAttempted() && newValueError() ? id + '-add-value-error' : null"
+              autocomplete="off"
+              spellcheck="false"
+              (input)="newValue.set(newValueField.value)"
+            />
+            @if (addAttempted() && newValueError(); as error) {
+              <p class="field-error" [id]="id + '-add-value-error'">
+                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}
+              </p>
+            }
+          </div>
+          <div class="add-setting__actions">
+            <button type="button" class="btn btn-ghost" (click)="cancelAdd(addButton)">Cancel</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-plus-lg" aria-hidden="true"></i> Add change
+            </button>
+          </div>
+        </div>
+        @if (suggestions().length > 0) {
+          <datalist [id]="id + '-add-suggestions'">
+            @for (name of suggestions(); track name) {
+              <option [value]="name"></option>
+            }
+          </datalist>
+        }
+      </form>
+    }
+
+    @for (entry of groups(); track entry.group.key) {
+      <section
+        #section
+        class="card settings-group"
+        [id]="entry.id"
+        [attr.data-group-key]="entry.group.key"
+        [attr.aria-labelledby]="entry.id + '-title'"
+      >
+        <header class="card-header settings-group__header">
+          <div class="min-w-0">
+            <h2 class="card-title" [id]="entry.id + '-title'" tabindex="-1">{{ entry.group.title }}</h2>
+            @if (entry.group.description) {
+              <p class="card-subtitle">{{ entry.group.description }}</p>
+            } @else if (entry.group.prefix) {
+              <p class="card-subtitle mono">{{ entry.group.prefix }}*</p>
+            }
+          </div>
+          <div class="row">
+            @if (entry.pending > 0) {
+              <span class="badge badge-accent">{{ entry.pending }} modified</span>
+            }
+            <span class="count-label">{{ pluralize(entry.items.length, 'setting') }}</span>
+          </div>
+        </header>
+
+        <ul class="setting-list" role="list">
+          @for (item of entry.items; track item.row.name) {
+            <li
+              class="setting"
+              [class.is-modified]="item.change"
+              [class.is-locked]="!item.row.editable"
+              [class.is-invalid]="item.error"
+            >
+              <div class="setting__key">
+                <label class="setting__name" [for]="item.inputId">
+                  @if (item.namePrefix) {
+                    <span class="setting__prefix">{{ item.namePrefix }}</span>
+                  }
+                  @for (part of item.nameParts; track $index) {<span>{{ part }}</span><wbr />}
+                </label>
+                @if (!item.row.editable || item.row.origin !== 'default' || item.row.custom) {
+                  <div class="setting__meta">
+                    @if (item.row.custom) {
+                      <span class="badge badge-accent" title="Not listed by Elasticsearch, added by name">New</span>
+                    }
+                    @if (!item.row.editable) {
+                      <span class="badge badge-outline setting__lock" [title]="item.row.lockReason ?? ''">
+                        <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                        {{ item.row.lockLabel ?? 'Read-only' }}
+                      </span>
+                    }
+                    @switch (item.row.origin) {
+                      @case ('persistent') {
+                        <span class="badge badge-blue" title="Explicitly set as a persistent cluster setting">Persistent</span>
+                      }
+                      @case ('transient') {
+                        <span class="badge badge-purple" title="Explicitly set as a transient cluster setting">Transient</span>
+                        @if (item.row.persistent !== undefined) {
+                          <span class="setting__shadowed">
+                            overrides persistent <code>{{ item.row.persistent || '""' }}</code>
+                          </span>
+                        }
+                        @if (scoped() && !item.draft) {
+                          <button
+                            type="button"
+                            class="link-button setting__move"
+                            [attr.aria-label]="'Make ' + item.row.name + ' persistent'"
+                            [disabled]="saving()"
+                            (click)="makePersistent(item.row)"
+                          >
+                            Make persistent
+                          </button>
+                        }
+                      }
+                      @case ('index') {
+                        <span class="badge badge-accent" title="Explicitly set on this index">Overridden</span>
+                      }
+                    }
+                  </div>
+                }
+              </div>
+
+              <div class="setting__value">
+                <input
+                  #field
+                  type="text"
+                  class="input input-sm input-mono"
+                  [class.is-invalid]="item.error"
+                  [id]="item.inputId"
+                  [value]="item.display"
+                  [readOnly]="!item.row.editable"
+                  [attr.aria-readonly]="item.row.editable ? null : true"
+                  [disabled]="saving()"
+                  [placeholder]="item.draft && item.draft.value === '' ? (item.row.custom ? 'Value' : 'Default value') : ''"
+                  [attr.aria-invalid]="item.error ? true : null"
+                  [attr.aria-describedby]="item.error || !item.row.editable ? item.inputId + '-hint' : null"
+                  autocomplete="off"
+                  spellcheck="false"
+                  (input)="edit(item.row, field.value)"
+                  (blur)="settle(item.row)"
+                  (keydown)="onFieldKeydown($event, item.row)"
+                />
+                @if (item.error) {
+                  <p class="field-error setting__error" [id]="item.inputId + '-hint'">
+                    <i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ item.error }}
+                  </p>
+                } @else if (!item.row.editable) {
+                  <span class="visually-hidden" [id]="item.inputId + '-hint'">{{ item.row.lockReason }}</span>
+                }
+                @if (item.showScope || item.change) {
+                  <div class="setting__change">
+                    @if (item.showScope) {
+                      <div
+                        class="segmented segmented-sm"
+                        role="radiogroup"
+                        [attr.aria-label]="'Save ' + item.row.name + ' as'"
+                        (keydown)="onScopeKeydown($event, item.row, item.scope)"
+                      >
+                        <button
+                          type="button"
+                          role="radio"
+                          [attr.aria-checked]="item.scope === 'persistent'"
+                          [attr.tabindex]="item.scope === 'persistent' ? 0 : -1"
+                          [disabled]="saving()"
+                          (click)="setScope(item.row, 'persistent')"
+                        >
+                          Persistent
+                        </button>
+                        <button
+                          type="button"
+                          role="radio"
+                          [attr.aria-checked]="item.scope === 'transient'"
+                          [attr.tabindex]="item.scope === 'transient' ? 0 : -1"
+                          [disabled]="saving()"
+                          (click)="setScope(item.row, 'transient')"
+                        >
+                          Transient
+                        </button>
+                      </div>
+                    }
+                    @if (item.change; as change) {
+                      @if (change.to === null) {
+                        <span class="setting__hint"><i class="bi bi-arrow-return-left" aria-hidden="true"></i> Resets to the default value</span>
+                      } @else if (item.row.custom) {
+                        <span class="setting__hint"><i class="bi bi-plus-circle" aria-hidden="true"></i> New setting</span>
+                      } @else if (item.moves && change.to === change.from) {
+                        <span class="setting__hint"><i class="bi bi-arrow-right" aria-hidden="true"></i> Moves from transient to persistent</span>
+                      } @else {
+                        <span class="setting__hint">
+                          was <code>{{ change.from || '""' }}</code>
+                        </span>
+                      }
+                    }
+                  </div>
+                  @if (scoped() && item.change && item.change.to !== null) {
+                    @if (item.moves) {
+                      @if (item.change.to !== item.change.from) {
+                        <p class="setting__note">Saving also clears the transient value.</p>
+                      }
+                    } @else if (item.change.scope === 'transient') {
+                      <p class="setting__note">Transient settings are deprecated and lost on a full cluster restart.</p>
+                    }
+                  }
+                }
+              </div>
+
+              <div class="setting__actions">
+                @if (item.draft) {
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-icon btn-sm"
+                    [title]="item.row.custom ? 'Remove added setting' : 'Undo change'"
+                    [attr.aria-label]="(item.row.custom ? 'Remove ' : 'Undo change to ') + item.row.name"
+                    [disabled]="saving()"
+                    (click)="revert(item.row, field)"
+                  >
+                    <i
+                      class="bi"
+                      [class.bi-x-lg]="item.row.custom"
+                      [class.bi-arrow-counterclockwise]="!item.row.custom"
+                      aria-hidden="true"
+                    ></i>
+                  </button>
+                } @else if (item.row.editable && item.row.origin !== 'default') {
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm"
+                    title="Reset to the default value"
+                    [attr.aria-label]="'Reset ' + item.row.name + ' to its default value'"
+                    [disabled]="saving()"
+                    (click)="resetToDefault(item.row)"
+                  >
+                    Reset
+                  </button>
+                }
+              </div>
+            </li>
+          }
+        </ul>
+      </section>
+    } @empty {
+      <div class="card">
+        @if (onlyOverridden() && counts().overridden === 0 && !query()) {
+          <cerebro-empty icon="bi-check2-circle" heading="Nothing is overridden" [text]="noOverridesText()">
+            <button type="button" class="btn btn-sm" (click)="setOnlyOverridden(false)">Show all settings</button>
+          </cerebro-empty>
+        } @else {
+          <cerebro-empty
+            icon="bi-search"
+            heading="No matching settings"
+            [text]="
+              hiddenStaticMatches() > 0
+                ? 'Only static settings match “' + query() + '” and they are hidden.'
+                : query()
+                  ? 'No setting matches “' + query() + '” with the current filters.'
+                  : 'No setting matches the current filters.'
+            "
+          >
+            @if (hiddenStaticMatches() > 0) {
+              <button type="button" class="btn btn-sm" (click)="setShowStatic(true)">
+                <i class="bi bi-lock" aria-hidden="true"></i> Show {{ pluralize(hiddenStaticMatches(), 'static setting') }}
+              </button>
+            }
+            <button type="button" class="btn btn-sm" (click)="clearFilters()">Clear filters</button>
+          </cerebro-empty>
+        }
+      </div>
+    }
+
+    @if (pending().length > 0) {
+      <div class="settings-actionbar" role="region" aria-label="Pending changes">
+        <span class="settings-actionbar__icon" aria-hidden="true"><i class="bi bi-pencil-square"></i></span>
+        <div class="settings-actionbar__text min-w-0" aria-live="polite">
+          <strong>{{ pluralize(pending().length, 'pending change') }}</strong>
+          <span class="settings-actionbar__detail">
+            @if (scoped()) {
+              @if (scopeSummary().persistent) {
+                <span>{{ scopeSummary().persistent }} persistent</span>
+              }
+              @if (scopeSummary().transient) {
+                <span>{{ scopeSummary().transient }} transient</span>
+              }
+            } @else if (pending().length - scopeSummary().resets > 0) {
+              <span>{{ pending().length - scopeSummary().resets }} updated</span>
+            }
+            @if (scopeSummary().resets) {
+              <span>{{ scopeSummary().resets }} reset to default</span>
+            }
+          </span>
+        </div>
+        <div class="settings-actionbar__actions">
+          <button type="button" class="btn btn-ghost" [disabled]="saving()" (click)="discard()">Discard</button>
+          <button type="button" class="btn" (click)="requestReview()">
+            <i class="bi bi-braces" aria-hidden="true"></i> Review
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            title="Save changes (Ctrl+S)"
+            [class.is-loading]="saving()"
+            [disabled]="saving()"
+            (click)="requestSave()"
+          >
+            <i class="bi bi-check2" aria-hidden="true"></i> Save changes
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+
+  @if (groups().length > 1) {
+    <nav #toc class="settings-toc" [attr.aria-label]="label() + ' groups'">
+      <p class="section-label settings-toc__title">On this page</p>
+      <ul class="settings-toc__list" role="list">
+        @for (entry of groups(); track entry.group.key) {
+          <li>
+            <button
+              type="button"
+              class="settings-toc__link"
+              [class.is-child]="entry.group.depth > 0"
+              [class.is-active]="activeGroup() === entry.group.key"
+              [attr.aria-current]="activeGroup() === entry.group.key ? 'location' : null"
+              (click)="jumpTo(entry)"
+            >
+              <span class="truncate">{{ entry.group.shortTitle }}</span>
+              @if (entry.pending > 0) {
+                <span class="dot dot-accent dot-sm" [title]="pluralize(entry.pending, 'pending change')"></span>
+              }
+              <span class="settings-toc__count">{{ entry.items.length }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+    </nav>
+  }
+</div>

@@ -1,0 +1,239 @@
+<div class="ops-sections">
+  <section class="ops-section" aria-labelledby="ops-dest-title">
+    <div class="ops-section__head">
+      <h3 id="ops-dest-title" class="section-title"><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i> Destination</h3>
+    </div>
+    <div class="ops-fields">
+      <div class="field col-span-all ops-dest-field">
+        <label class="field-label" for="ops-dest">Index</label>
+        <input
+          id="ops-dest"
+          class="input input-mono"
+          list="ops-dest-options"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="e.g. logs-reindexed"
+          [class.is-invalid]="!!showError('dest')"
+          [attr.aria-invalid]="!!showError('dest')"
+          [attr.aria-describedby]="showError('dest') ? 'ops-dest-error' : 'ops-dest-hint'"
+          [value]="options().dest"
+          (input)="update('dest', $any($event.target).value, 'dest')"
+        />
+        <datalist id="ops-dest-options">
+          @for (name of suggestions(); track name) {
+            <option [value]="name"></option>
+          }
+        </datalist>
+        @if (showError('dest'); as error) {
+          <p id="ops-dest-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+        } @else {
+          <p id="ops-dest-hint" class="field-hint">
+            @switch (store.destLookup().state) {
+              @case ('missing') {
+                Does not exist yet: it gets dynamic mappings.
+                <a routerLink="/create" [queryParams]="createParams()" target="_blank" rel="noopener">Create it first<span class="visually-hidden"> (opens in a new tab)</span></a>
+                <i class="bi bi-box-arrow-up-right ops-external" aria-hidden="true"></i>
+                @if (firstSource(); as source) {
+                  (“Copy settings and mappings from” <span class="mono">{{ source }}</span>); this page checks again when you come back.
+                }
+              }
+              @case ('ready') {
+                {{ store.destIsDataStream() ? 'A data stream: documents are added with op_type create.' : 'Exists: its mappings are used.' }}
+              }
+              @default {
+                An existing index, a data stream, or a new index name.
+              }
+            }
+          </p>
+        }
+      </div>
+
+      <div class="field">
+        <span class="field-label" id="ops-existing-label">Documents the destination already has</span>
+        @if (store.destIsDataStream()) {
+          <p class="ops-fixed text-sm">Kept: a data stream only accepts new documents (op_type create).</p>
+        } @else {
+          <div class="segmented" role="group" aria-labelledby="ops-existing-label" aria-describedby="ops-existing-hint">
+            <button type="button" [attr.aria-pressed]="options().existing === 'overwrite'" (click)="update('existing', 'overwrite')">Overwrite</button>
+            <button type="button" [attr.aria-pressed]="options().existing === 'skip'" (click)="update('existing', 'skip')">Keep</button>
+          </div>
+          <p id="ops-existing-hint" class="field-hint">
+            {{ options().existing === 'overwrite' ? 'A source document replaces the one with the same id.' : 'Only missing documents are created (op_type create); the others are version conflicts.' }}
+          </p>
+        }
+      </div>
+
+      <div class="field">
+        <span class="field-label" id="ops-conflicts-label">On version conflicts</span>
+        <div class="segmented" role="group" aria-labelledby="ops-conflicts-label" aria-describedby="ops-conflicts-hint">
+          <button type="button" [attr.aria-pressed]="options().conflicts === 'abort'" (click)="setConflicts('abort')">Abort</button>
+          <button type="button" [attr.aria-pressed]="options().conflicts === 'proceed'" (click)="setConflicts('proceed')">Proceed</button>
+        </div>
+        <p id="ops-conflicts-hint" class="field-hint">
+          {{ options().conflicts === 'abort' ? 'The first conflict stops the reindex.' : 'Conflicts are counted and the reindex goes on.' }}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="ops-section" aria-labelledby="ops-query-title">
+    <div class="ops-section__head">
+      <h3 id="ops-query-title" class="section-title"><i class="bi bi-filter" aria-hidden="true"></i> Documents</h3>
+    </div>
+    <div class="ops-fields">
+      <div class="field col-span-all">
+        <span class="field-label" id="ops-query-label">Query <span class="optional">optional</span></span>
+        <cerebro-code-editor
+          id="ops-query"
+          [value]="options().query"
+          (valueChange)="update('query', $event, 'query')"
+          [minLines]="4"
+          [maxLines]="16"
+          placeholder='{ "range": { "@timestamp": { "gte": "now-7d" } } }'
+          ariaLabel="Query JSON"
+          [invalid]="!!showError('query')"
+          [describedBy]="showError('query') ? 'ops-query-error' : 'ops-query-hint'"
+        />
+        @if (showError('query'); as error) {
+          <p id="ops-query-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+        } @else {
+          <p id="ops-query-hint" class="field-hint">Only documents matching this query are copied. Empty copies every document.</p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="ops-max-docs">Maximum documents <span class="optional">optional</span></label>
+        <input
+          id="ops-max-docs"
+          class="input"
+          type="number"
+          min="1"
+          inputmode="numeric"
+          placeholder="All"
+          [class.is-invalid]="!!showError('maxDocs')"
+          [attr.aria-invalid]="!!showError('maxDocs')"
+          [attr.aria-describedby]="showError('maxDocs') ? 'ops-max-docs-error' : 'ops-max-docs-hint'"
+          [value]="options().maxDocs"
+          (input)="update('maxDocs', $any($event.target).value, 'maxDocs')"
+        />
+        @if (showError('maxDocs'); as error) {
+          <p id="ops-max-docs-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+        } @else {
+          <p id="ops-max-docs-hint" class="field-hint">Stops after this many documents (max_docs).</p>
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="ops-section" aria-labelledby="ops-speed-title">
+    <div class="ops-section__head">
+      <h3 id="ops-speed-title" class="section-title"><i class="bi bi-speedometer2" aria-hidden="true"></i> Speed</h3>
+    </div>
+    <div class="ops-fields">
+      <div class="field">
+        <span class="field-label" id="ops-slices-label">Slices</span>
+        <div class="ops-inline">
+          <div class="segmented" role="group" aria-labelledby="ops-slices-label" aria-describedby="ops-slices-hint">
+            <button type="button" [attr.aria-pressed]="options().slicesMode === 'none'" (click)="setSlices('none')">None</button>
+            <button type="button" [attr.aria-pressed]="options().slicesMode === 'auto'" (click)="setSlices('auto')">Auto</button>
+            <button type="button" [attr.aria-pressed]="options().slicesMode === 'custom'" (click)="setSlices('custom')">Custom</button>
+          </div>
+          @if (options().slicesMode === 'custom') {
+            <label class="visually-hidden" for="ops-slices">Number of slices</label>
+            <input
+              id="ops-slices"
+              class="input input-sm"
+              type="number"
+              min="2"
+              max="1024"
+              inputmode="numeric"
+              placeholder="e.g. 4"
+              [class.is-invalid]="!!showError('slices')"
+              [attr.aria-invalid]="!!showError('slices')"
+              [attr.aria-describedby]="showError('slices') ? 'ops-slices-error' : 'ops-slices-hint'"
+              [value]="options().slices"
+              (input)="update('slices', $any($event.target).value, 'slices')"
+            />
+          }
+        </div>
+        @if (showError('slices'); as error) {
+          <p id="ops-slices-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+        } @else {
+          <p id="ops-slices-hint" class="field-hint">Slices copy in parallel. Auto: one slice per shard, based on the source with the fewest shards (at most 20).</p>
+        }
+      </div>
+
+      <div class="field">
+        <span class="field-label">Throttle</span>
+        <div class="ops-inline">
+          <label class="switch">
+            <input type="checkbox" [checked]="options().throttled" (change)="update('throttled', $any($event.target).checked)" />
+            <span>Limit the rate</span>
+          </label>
+          @if (options().throttled) {
+            <label class="visually-hidden" for="ops-rps">Documents per second</label>
+            <input
+              id="ops-rps"
+              class="input input-sm"
+              type="number"
+              min="1"
+              inputmode="decimal"
+              placeholder="e.g. 500"
+              [class.is-invalid]="!!showError('requestsPerSecond')"
+              [attr.aria-invalid]="!!showError('requestsPerSecond')"
+              [attr.aria-describedby]="showError('requestsPerSecond') ? 'ops-rps-error' : 'ops-rps-hint'"
+              [value]="options().requestsPerSecond"
+              (input)="update('requestsPerSecond', $any($event.target).value, 'requestsPerSecond')"
+            />
+            <span class="text-sm text-secondary">documents per second</span>
+          }
+        </div>
+        @if (showError('requestsPerSecond'); as error) {
+          <p id="ops-rps-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
+        } @else {
+          <p id="ops-rps-hint" class="field-hint">Spares a busy cluster (requests_per_second).</p>
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="ops-section" aria-labelledby="ops-script-title">
+    <div class="ops-section__head">
+      <h3 id="ops-script-title" class="section-title"><i class="bi bi-code-slash" aria-hidden="true"></i> Script</h3>
+      <button
+        type="button"
+        class="link-button text-sm ops-section__aside"
+        [attr.aria-expanded]="showAdvanced()"
+        aria-controls="ops-script-body"
+        (click)="showAdvanced.set(!showAdvanced())"
+      >
+        {{ showAdvanced() ? 'Hide' : options().script.trim() ? 'Show script' : 'Add a script' }}
+      </button>
+    </div>
+    @if (showAdvanced()) {
+      <div id="ops-script-body" class="field">
+        <span class="field-label">Painless script <span class="optional">optional</span></span>
+        <cerebro-code-editor
+          id="ops-script"
+          mode="text"
+          [value]="options().script"
+          (valueChange)="update('script', $event)"
+          [minLines]="4"
+          [maxLines]="16"
+          placeholder="ctx._source.migrated = true"
+          ariaLabel="Painless script"
+          describedBy="ops-script-hint"
+        />
+        <p id="ops-script-hint" class="field-hint">
+          Runs on every document (<span class="mono">ctx._source</span>, <span class="mono">ctx._id</span>, <span class="mono">ctx.op</span>).
+        </p>
+      </div>
+    } @else if (options().script.trim()) {
+      <p id="ops-script-body" class="ops-section__hint">A script is set: it runs on every document while it is copied.</p>
+    } @else {
+      <p id="ops-script-body" class="ops-section__hint">Transform documents while they are copied, for example to rename a field.</p>
+    }
+  </section>
+
+  <cerebro-ops-checks [checks]="store.checks()" (fix)="onFix($event)" />
+</div>

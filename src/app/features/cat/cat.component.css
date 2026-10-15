@@ -1,0 +1,270 @@
+:host {
+  display: block;
+}
+
+/* ---- Endpoint list ---------------------------------------------------- */
+
+.cat-apis {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-5));
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100svh - var(--topbar-height) - var(--space-5) * 2);
+  overflow: hidden;
+}
+
+.cat-apis > .card-header {
+  flex: none;
+}
+
+.cat-apis__picker {
+  display: none;
+  padding: var(--space-4);
+}
+
+.cat-apis__list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cat-apis__list > li:last-child > .list-item {
+  border-bottom: 0;
+}
+
+/* Compact two-line items: all sixteen endpoints fit a 900px tall viewport
+   without a scrollbar of their own (the list still scrolls on shorter ones).
+   Only the padding shrinks: the icon keeps the design system size, which the
+   two text lines are taller than anyway. */
+.cat-api {
+  gap: 10px;
+  padding: 4px var(--space-4);
+  text-decoration: none;
+}
+
+.cat-api:hover {
+  text-decoration: none;
+}
+
+.cat-api:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.cat-api .list-item__title,
+.cat-api .list-item__meta {
+  display: block;
+  line-height: 1.3;
+}
+
+.cat-api.is-selected .list-item__title {
+  color: var(--accent-text);
+}
+
+.cat-api.is-selected:focus-visible {
+  box-shadow:
+    inset 2px 0 0 var(--accent),
+    inset 0 0 0 2px var(--accent);
+}
+
+/* ---- Result card ------------------------------------------------------ */
+
+.cat-result {
+  overflow: hidden;
+}
+
+.cat-result__header {
+  flex-wrap: wrap;
+  min-height: 64px;
+}
+
+.cat-result__heading .card-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+}
+
+.cat-result__heading .method {
+  min-width: 0;
+  padding: 1px 5px;
+  font-size: 10px;
+}
+
+.cat-result__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.cat-result__toolbar {
+  min-height: 48px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  background: var(--surface-2);
+}
+
+.cat-result__toolbar cerebro-search {
+  width: min(320px, 100%);
+}
+
+.cat-callout {
+  margin: var(--space-3) var(--space-5) 0;
+}
+
+.cat-callout__reason {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+}
+
+/* ---- Table ------------------------------------------------------------ */
+
+.cat-table-wrap {
+  max-height: max(320px, calc(100svh - var(--topbar-height) - 250px));
+  overscroll-behavior: contain;
+}
+
+.cat-table th,
+.cat-table td {
+  white-space: nowrap;
+}
+
+.cat-table tbody td {
+  max-width: 30rem;
+  overflow: hidden;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+}
+
+.cat-table tbody td:first-child {
+  color: var(--text);
+  font-weight: 560;
+}
+
+.cat-table thead th {
+  /* The table already sits in its own card; keep headers on top of tones. */
+  z-index: 2;
+}
+
+.cat-table td.num {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.cat-table tbody tr:hover td {
+  color: var(--text);
+}
+
+.cat-table__empty {
+  white-space: normal;
+}
+
+.cat-table tbody tr:has(> .cat-table__empty):hover {
+  background: transparent;
+}
+
+/* ---- Single row record ---------------------------------------------- */
+
+.cat-record {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  /* Outer item borders slide under the card edge (the card clips them). */
+  margin: 0 -1px -1px 0;
+}
+
+.cat-record__item {
+  min-width: 0;
+  padding: 14px var(--space-5);
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.cat-record__key {
+  /* Names break after "_" or "." (<wbr>); break-word is a last resort. */
+  overflow-wrap: break-word;
+}
+
+.cat-record__value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Responsive ------------------------------------------------------- */
+
+@media (max-width: 1180px) {
+  .cat-apis {
+    position: static;
+    max-height: none;
+  }
+
+  .cat-apis__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    overflow: visible;
+  }
+
+  /* Compact grid: the descriptions stay available as tooltips. */
+  .cat-api {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .cat-api .list-item__meta {
+    display: none;
+  }
+
+  .cat-apis__list > li > .list-item {
+    height: 100%;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .cat-table-wrap {
+    max-height: max(360px, calc(100svh - var(--topbar-height) - 140px));
+  }
+}
+
+@media (max-width: 760px) {
+  .cat-apis > .card-header,
+  .cat-apis__list {
+    display: none;
+  }
+
+  .cat-apis__picker {
+    display: grid;
+  }
+
+  .cat-result__actions {
+    width: 100%;
+  }
+
+  .cat-result__actions > .btn {
+    flex: 1;
+  }
+
+  .cat-result__toolbar cerebro-search {
+    width: 100%;
+  }
+
+  .cat-record {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cat-record__item {
+    padding: 12px var(--space-4);
+  }
+
+  .cat-callout {
+    margin-right: var(--space-4);
+    margin-left: var(--space-4);
+  }
+}
