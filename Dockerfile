@@ -60,12 +60,15 @@ LABEL org.opencontainers.image.title="Cerebro" \
 
 ENV JAVA_HOME=/usr/lib/jvm/default-jvm \
     PATH=/usr/lib/jvm/default-jvm/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    HOME=/tmp \
-    CEREBRO_PORT=9000
+    HOME=/tmp
 
 VOLUME ["/var/lib/cerebro"]
 EXPOSE 9000
 STOPSIGNAL SIGTERM
 USER 65532:65532
 
-ENTRYPOINT ["/usr/lib/jvm/default-jvm/bin/java", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "-Dfile.encoding=UTF-8", "-Duser.timezone=UTC", "-Duser.dir=/opt/cerebro", "-Dapplication.home=/opt/cerebro", "-Ddata.path=/var/lib/cerebro/cerebro.db", "-Dorg.sqlite.tmpdir=/tmp/sqlite", "-Dpidfile.path=/dev/null", "-jar", "/opt/cerebro/lib/cerebro-launcher.jar"]
+# JVM options from $JAVA_OPTS (split at spaces) and the arguments after the
+# image name come after the image's defaults, so they can override them, for
+# example -Ddata.path, -Dconfig.file, -Dhttp.port or -Dhosts.0.host. exec keeps
+# java as PID 1, so docker stop's SIGTERM reaches it.
+ENTRYPOINT ["/bin/sh", "-c", "exec /usr/lib/jvm/default-jvm/bin/java -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8 -Duser.timezone=UTC -Duser.dir=/opt/cerebro -Dapplication.home=/opt/cerebro -Ddata.path=/var/lib/cerebro/cerebro.db -Dorg.sqlite.tmpdir=/tmp/sqlite -Dpidfile.path=/dev/null $JAVA_OPTS \"$@\" -jar /opt/cerebro/lib/cerebro-launcher.jar", "cerebro"]

@@ -305,10 +305,39 @@ This version can replace the original cerebro from
 changed:
 
 - **Application secret.** The configuration files of the original project set
-  the secret with the key `secret`. This version does not read that key. Set
-  `CEREBRO_SECRET` (or `-Dplay.http.secret.key`). Without it, the release
-  packages and the Docker image do not start, even with an old configuration
-  file that sets `secret`.
+  the secret with the key `secret`. This version reads that key, but refuses to
+  start with the value published in the original `conf/application.conf`:
+  anyone who knows it can sign a session cookie and get past the sign-in. Set
+  your own random value in `secret`, `CEREBRO_SECRET` or
+  `-Dplay.http.secret.key` (the last two take precedence over `secret`).
+  Without a secret, the release packages and the Docker image do not start.
+- **Secret length.** The secret must be at least 32 characters long, because
+  Play 3 signs the session cookie with HS256. A shorter secret, including an
+  old `secret`, stops the start. Generate one with `openssl rand -base64 48`.
+  Changing the secret signs everyone out once.
+- **Allowed hosts.** Requests for any host other than `localhost`,
+  `127.0.0.1` or a `.local` name are answered with HTTP 400. Set
+  `CEREBRO_ALLOWED_HOST` to the host name or IP address people use, or list
+  several in `play.filters.hosts.allowed` in the configuration file.
+  `play.filters.hosts.allowed = ["."]` allows every host, as the original
+  did.
+- **Scripts.** Play's CSRF filter protects cerebro's own POST endpoints (for
+  example `/rest/request`). A POST that carries any cookie or an
+  `Authorization` header, such as the basic auth of a reverse proxy, is
+  answered with HTTP 403 unless it also sends the `Csrf-Token` header. Load a
+  cerebro page with a cookie jar (for example `curl -c jar -b jar`) and send
+  the value of its `csrf-token` meta tag as `Csrf-Token`, with the cookies
+  from the jar. The token only works with the session cookie it was issued
+  with, and signing in replaces that cookie, so load the page after signing
+  in. Requests with neither cookies nor an `Authorization` header are not
+  checked.
+- **Frames.** Responses carry `X-Frame-Options: DENY`, so cerebro cannot be
+  shown in a frame. To embed it in a page of the same origin, set
+  `play.filters.headers.frameOptions = "SAMEORIGIN"` in the configuration
+  file.
+- **Akka settings.** The server runs on Play 3 with Pekko instead of Akka.
+  Settings under `akka.`, `play.akka.` and `play.server.akka.` are ignored;
+  rename them to `pekko.`, `play.pekko.` and `play.server.pekko.`.
 - **Configuration file.** Start from the new
   [conf/application.conf](conf/application.conf) and copy over your `hosts`
   list, your `auth` settings if you set them in the file, and any other
@@ -316,10 +345,26 @@ changed:
   [Environment variables](#environment-variables).
 - **Docker image.** The image is
   [chosenwar/cerebro](https://hub.docker.com/r/chosenwar/cerebro). It runs as
-  UID/GID `65532` and keeps the REST console history in the volume
-  `/var/lib/cerebro` (`/var/lib/cerebro/cerebro.db`). Files that you mount
-  must be readable by that user, and a host directory mounted at
-  `/var/lib/cerebro` must be writable by it.
+  UID/GID `65532` instead of `1000` and keeps the REST console history in the
+  volume `/var/lib/cerebro` (`/var/lib/cerebro/cerebro.db`). Files that you
+  mount must be readable by that user, and a host directory mounted at
+  `/var/lib/cerebro` must be writable by it. Options after the image name and
+  in `JAVA_OPTS` are passed to Java as before, for example
+  `-Dhosts.0.host=http://es:9200`, `-Dconfig.file=...` or `-Dhttp.port=...`;
+  the `-J` prefix of the original start script is not supported (write
+  `-Xmx1g`, not `-J-Xmx1g`). The image sets
+  `-Ddata.path=/var/lib/cerebro/cerebro.db`, which takes precedence over a
+  `data.path` in a mounted configuration file. To keep your history, move
+  the old `cerebro.db` into the volume as `/var/lib/cerebro/cerebro.db` and
+  `chown 65532:65532` it, or pass `-Ddata.path=...` after the image name.
+- **LDAP method.** The original always made a simple bind with the user's
+  password, whatever `auth.settings.method` (`LDAP_METHOD`) said. This version
+  passes the method to Java's LDAP client (JNDI). `none`, `anonymous` and an
+  empty value still mean a simple bind. Besides `simple`, only SASL
+  mechanisms that check the user's password are accepted: `DIGEST-MD5`,
+  `CRAM-MD5` and `PLAIN`. Any other value, such as `EXTERNAL` or `GSSAPI`,
+  stops the start, because these mechanisms authenticate cerebro's own
+  certificate or Kerberos ticket and would accept any password.
 - **Packages.** Releases publish the `.zip` and `.tgz` packages and the Docker
   image only. There are no Debian, RPM or Chocolatey packages of this version.
   The packages need Java 17 or newer.
@@ -398,7 +443,7 @@ Defaults that also apply when you use a configuration file of your own are in
 | `BASIC_AUTH_PWD` | | Password for `basic`. Required for `basic`. |
 | `LDAP_URL` | | LDAP server, for example `ldap://ldap.example.com:389`. Required for `ldap`. |
 | `LDAP_BASE_DN` | | Base DN of the users. It is the second `%s` in `LDAP_USER_TEMPLATE`. Required for `ldap`. |
-| `LDAP_METHOD` | | Authentication method, usually `simple`; otherwise the SASL mechanisms to try. Required for `ldap`. |
+| `LDAP_METHOD` | | Authentication method, usually `simple`; otherwise the SASL mechanisms to try, out of `DIGEST-MD5`, `CRAM-MD5` and `PLAIN` (other mechanisms stop the start). `none` and `anonymous` also mean `simple`. Required for `ldap`. |
 | `LDAP_USER_TEMPLATE` | | Turns the user name typed at sign-in into the name cerebro binds with. The first `%s` is the user name, the second `LDAP_BASE_DN`. Examples: `%s`, `%s@example.com`, `uid=%s,%s`. Required for `ldap`. |
 | `LDAP_BIND_DN` | | Account that searches for group membership. Required when `LDAP_GROUP` is set. |
 | `LDAP_BIND_PWD` | | Password of `LDAP_BIND_DN`. Required when `LDAP_GROUP` is set. |
@@ -416,8 +461,7 @@ cerebro listens on `0.0.0.0:9000` by default. Change the port with
 bin/cerebro -Dhttp.port=1234 -Dhttp.address=127.0.0.1
 ```
 
-`CEREBRO_PORT` takes precedence over `-Dhttp.port`. The Docker image sets
-`CEREBRO_PORT=9000`.
+`CEREBRO_PORT` takes precedence over `-Dhttp.port`.
 
 ### Other settings
 
@@ -427,7 +471,7 @@ These keys are set in `conf/application.conf`:
 | --- | --- | --- |
 | `hosts` | `[]` | Configured clusters. See [Configured clusters](#configured-clusters). |
 | `basePath` | `"/"` | Path under which cerebro is served. See [Base path](#base-path). |
-| `data.path` | `"./cerebro.db"` | SQLite database that stores the REST console history. The Docker image uses `/var/lib/cerebro/cerebro.db`. |
+| `data.path` | `"./cerebro.db"` | SQLite database that stores the REST console history. The Docker image passes `-Ddata.path=/var/lib/cerebro/cerebro.db`, which takes precedence over this key; pass `-Ddata.path` after the image name to change it. |
 | `rest.history.size` | `50` | Number of REST console history entries kept per user. |
 | `es.gzip` | `true` | Ask Elasticsearch for compressed responses (`play.ws.compressionEnabled`). `conf/reference.conf` sets `false`; `conf/application.conf` sets `true`. |
 | `pidfile.path` | `/dev/null` | Where to write the process ID file. `/dev/null` writes none. |
@@ -444,17 +488,18 @@ applies (application secret, cookie flags, allowed host, database and base
 path). Start from a copy of `conf/application.conf` so that the environment
 variables keep working.
 
-With the Docker image, mount the file and pass the option through
-`JAVA_TOOL_OPTIONS`:
+With the Docker image, mount the file and pass the option after the image
+name. The image passes these arguments, and the options in `JAVA_OPTS`, to
+Java:
 
 ```sh
 docker run -d --name cerebro \
   -p 9000:9000 \
   -v cerebro-data:/var/lib/cerebro \
   -v "$PWD/application.conf:/etc/cerebro/application.conf:ro" \
-  -e JAVA_TOOL_OPTIONS="-Dconfig.file=/etc/cerebro/application.conf" \
   -e CEREBRO_SECRET \
-  chosenwar/cerebro:latest
+  chosenwar/cerebro:latest \
+  -Dconfig.file=/etc/cerebro/application.conf
 ```
 
 `-e CEREBRO_SECRET` without a value passes the variable from your shell, so
