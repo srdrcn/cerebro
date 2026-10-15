@@ -28,7 +28,7 @@ libraryDependencies ++= Seq(
 // Keep every Jackson module on the same patched line. Play 3.0.x otherwise
 // brings an older Jackson family transitively through Play and Pekko.
 dependencyOverrides ++= Seq(
-  "at.yawk.lz4"                       % "lz4-java"                     % "1.11.4",
+  "at.yawk.lz4"                       % "lz4-java"                     % "1.12.0",
   "com.fasterxml.jackson.core"       % "jackson-annotations"           % jacksonVersion,
   "com.fasterxml.jackson.core"       % "jackson-core"                  % jacksonVersion,
   "com.fasterxml.jackson.core"       % "jackson-databind"              % jacksonVersion,
