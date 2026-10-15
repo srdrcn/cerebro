@@ -416,8 +416,8 @@ export function unavailableReason(input: DoctorInput, source: DoctorSource): str
   if (source === 'health_report' && input.version && !versionAtLeast(input.version, 8, 7)) {
     return 'Available from Elasticsearch 8.7';
   }
-  if (source === 'deprecations' && input.version && input.version.major < 6) {
-    return 'Available from Elasticsearch 6.0';
+  if (source === 'deprecations' && input.version && input.version.major < 7) {
+    return 'Available from Elasticsearch 7.0';
   }
   if (!entry) {
     return `Elasticsearch did not return the ${SOURCE_LABELS[source]}`;
@@ -434,7 +434,7 @@ export function unavailableReason(input: DoctorInput, source: DoctorSource): str
 /**
  * Whether a source is missing because the feature does not exist on this
  * cluster (rather than because of privileges or an error): the health report
- * before 8.7, the deprecation API before 6.0, ILM and deprecations without
+ * before 8.7, the deprecation API before 7.0, ILM and deprecations without
  * X-Pack (the endpoint is unknown: 400/404/405).
  */
 export function isUnsupportedSource(input: DoctorInput, source: DoctorSource): boolean {
@@ -442,7 +442,7 @@ export function isUnsupportedSource(input: DoctorInput, source: DoctorSource): b
   if (source === 'health_report') {
     return input.version ? !versionAtLeast(input.version, 8, 7) : status === 400 || status === 404;
   }
-  if (source === 'deprecations' && input.version && input.version.major < 6) {
+  if (source === 'deprecations' && input.version && input.version.major < 7) {
     return true;
   }
   return (source === 'ilm' || source === 'deprecations') && (status === 400 || status === 404 || status === 405);

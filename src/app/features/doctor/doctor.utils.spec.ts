@@ -9,6 +9,7 @@ import {
   indicatorLabel,
   isDataNode,
   isFrozenOnly,
+  isUnsupportedSource,
   parseByteSize,
   parseCategoryParam,
   parseDoctorInput,
@@ -202,6 +203,9 @@ describe('unavailableReason', () => {
 
   it('explains version and feature gaps', () => {
     expect(unavailableReason(input({ health_report: { status: 400, error: {} } }, '8.6.0'), 'health_report')).toBe('Available from Elasticsearch 8.7');
+    // 6.x only has /_xpack/migration/deprecations; /_migration/deprecations arrived in 7.0.
+    expect(unavailableReason(input({ deprecations: { status: 400, error: {} } }, '6.8.23'), 'deprecations')).toBe('Available from Elasticsearch 7.0');
+    expect(isUnsupportedSource(input({ deprecations: { status: 400, error: {} } }, '6.8.23'), 'deprecations')).toBe(true);
     expect(unavailableReason(input({ ilm: { status: 400, error: { error: 'no handler found' } } }), 'ilm')).toBe(
       'Index lifecycle management is not available on this cluster (400)',
     );
