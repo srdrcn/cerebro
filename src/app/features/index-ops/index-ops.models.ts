@@ -1,5 +1,7 @@
 /** Raw and view models of the index operations wizard. */
 
+import { HealthTone } from '../../core/health';
+
 export type JsonObject = Readonly<Record<string, unknown>>;
 
 export type OperationKind = 'shrink' | 'split' | 'clone' | 'rollover' | 'reindex';
@@ -200,8 +202,6 @@ export interface ShardCopy {
   readonly size: number | null;
 }
 
-export type HealthColor = 'green' | 'yellow' | 'red' | 'gray';
-
 /**
  * Where the routing shards came from: the cluster state (`metadata`, exact),
  * the explicit setting, or an estimate (`default`, `resized`) when the
@@ -224,7 +224,7 @@ export interface SourceIndex {
   readonly deletedDocs: number | null;
   readonly primarySize: number | null;
   readonly totalSize: number | null;
-  readonly health: HealthColor;
+  readonly health: HealthTone;
   /** `null` when Elasticsearch did not say (no statistics). */
   readonly open: boolean | null;
   /** `index.blocks.write` (writes refused, metadata changes allowed). */
@@ -375,7 +375,7 @@ export interface TargetRecovery {
   /** Shard numbers whose primary is unassigned. */
   readonly unassignedPrimaries: readonly number[];
   readonly percent: number;
-  readonly health: HealthColor;
+  readonly health: HealthTone;
   readonly done: boolean;
 }
 
@@ -469,13 +469,6 @@ export interface ReindexOptions {
   readonly throttled: boolean;
   readonly requestsPerSecond: string;
   readonly script: string;
-}
-
-/** What a source expression resolves to. */
-export interface SourceResolution {
-  readonly indices: readonly string[];
-  /** Expressions that match nothing. */
-  readonly unmatched: readonly string[];
 }
 
 export interface ReindexFailure {

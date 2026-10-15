@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, inject, signal } from '@angular/core';
-import { formatBytes, formatDuration, formatNumber } from '../../../core/format';
+import { formatBytes, formatDuration, pluralize } from '../../../core/format';
 import { CheckFix, RolloverConditionKey } from '../index-ops.models';
 import { IndexOpsStore } from '../index-ops.store';
 import { ROLLOVER_CONDITIONS, conditionCurrent, conditionSupported } from '../index-ops.utils';
@@ -29,7 +29,6 @@ export class OpsRolloverOptionsComponent {
     const dry = this.store.dryRun();
     return dry.state === 'ready' ? dry.preview : null;
   });
-  readonly anyCondition = computed(() => Object.values(this.store.conditions()).some((value) => value.trim() !== ''));
 
   showError(field: string): string | undefined {
     const error = this.store.fieldErrors()[field];
@@ -79,7 +78,7 @@ export class OpsRolloverOptionsComponent {
       case 'size':
         return formatBytes(value);
       default:
-        return `${formatNumber(value)} ${value === 1 ? 'document' : 'documents'}`;
+        return pluralize(value, 'document');
     }
   }
 

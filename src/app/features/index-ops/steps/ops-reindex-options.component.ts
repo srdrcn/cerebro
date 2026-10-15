@@ -26,7 +26,8 @@ export class OpsReindexOptionsComponent {
   private readonly touched = signal<ReadonlySet<ReindexField>>(new Set());
 
   readonly options = this.store.reindex;
-  readonly showAdvanced = signal(false);
+  /** The script editor is open; a script set earlier (restored, or back from the review) opens it. */
+  readonly showAdvanced = signal(!!this.store.reindex().script.trim());
   /** Destinations offered while typing: existing indices and data streams. */
   readonly suggestions = computed(() => {
     const names = [...(this.store.indices() ?? []).filter((name) => !name.startsWith('.')), ...this.store.taken().dataStreams];

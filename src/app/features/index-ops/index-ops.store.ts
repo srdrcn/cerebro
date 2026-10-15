@@ -7,6 +7,7 @@ import { ConnectionService } from '../../core/connection.service';
 import { DialogService } from '../../core/dialog.service';
 import { failureMessage, readableReason } from '../../core/errors';
 import { formatBytes, pluralize } from '../../core/format';
+import { isRecord } from '../../core/json';
 import { RefreshService } from '../../core/refresh.service';
 import {
   Check,
@@ -54,6 +55,7 @@ import {
   describedReindex,
   diskWatermarks,
   explicitWriteIndexRequest,
+  indexNameFormatError,
   interpretRollover,
   minNodeVersion,
   needsSliceChildren,
@@ -85,6 +87,7 @@ import {
   suggestTargetName,
   suggestedShrinkNode,
   summarizeChecks,
+  targetAliasesError,
   targetRecovery,
   withBlocks,
   writeBlockRequest,
@@ -224,7 +227,6 @@ export class IndexOpsStore {
   /** The oldest node version (decides which rollover conditions exist). */
   readonly clusterVersion = computed(() => minNodeVersion(this.nodes()));
   readonly catalogError = signal<string | undefined>(undefined);
-  readonly catalogLoading = signal(false);
   /** The aliases, data streams and nodes were asked for at least once. */
   readonly catalogLoaded = signal(false);
 
@@ -335,7 +337,7 @@ export class IndexOpsStore {
       target: newIndexNameError(this.target().trim(), this.taken()) ?? undefined,
       shards: compatibility.ok ? undefined : (compatibility.reason ?? undefined),
       replicas: replicasText === '' || /^\d+$/.test(replicasText) ? undefined : 'Enter a whole number, 0 or more',
-      aliases: parseAliasList(this.aliasesText()).error ?? undefined,
+      aliases: targetAliasesError(this.aliasesText(), this.taken(), this.target().trim()) ?? undefined,
     };
   });
 
@@ -500,6 +502,7 @@ export class IndexOpsStore {
   /** Whether the checks of the options step passed at the last look (for the announcement). */
   private checksPassed: boolean | null = null;
   private catalogSequence = 0;
+  private nodesSequence = 0;
   private sourceSequence = 0;
   private factsSequence = 0;
   private dryRunSequence = 0;
@@ -517,20 +520,32 @@ export class IndexOpsStore {
       this.taskPoller.stop();
     });
 
-    // Catalog: on load, on refresh and when the cluster changes.
+    // Catalog: on load and when the cluster changes (not on every refresh:
+    // listing indices makes every node compute index statistics). The
+    // wizard reloads it after its own changes; Try again after a failure.
     effect(() => {
-      this.refreshService.tick();
       const host = this.connection.host();
       untracked(() => {
         if (host !== this.host) {
           this.host = host;
+          this.nodesSequence++;
           this.indices.set(undefined);
           this.watermarks.set(null);
           this.catalogLoaded.set(false);
         }
         if (host) {
           void this.loadCatalog();
-          this.now.set(Date.now());
+        }
+      });
+    });
+
+    // The nodes' disk usage and shard counts are live: refreshed on every tick.
+    effect(() => {
+      this.refreshService.tick();
+      untracked(() => {
+        this.now.set(Date.now());
+        if (this.host && this.catalogLoaded()) {
+          void this.loadNodes();
         }
       });
     });
@@ -614,8 +629,8 @@ export class IndexOpsStore {
     effect((onCleanup) => {
       this.step();
       const dest = this.operation() === 'reindex' ? this.reindex().dest.trim() : '';
-      const format = this.reindexFieldErrors().dest;
-      if (!dest || (format && format !== 'The destination cannot be one of the sources')) {
+      // Any well-formed name is looked up, even one of the sources (its checks say more).
+      if (!dest || indexNameFormatError(dest)) {
         untracked(() => {
           this.destSequence++;
           this.destLookup.set({ state: 'idle' });
@@ -647,7 +662,6 @@ export class IndexOpsStore {
 
   async loadCatalog(): Promise<void> {
     const sequence = ++this.catalogSequence;
-    this.catalogLoading.set(true);
     const settle = <T>(promise: Promise<T>) =>
       promise.then((value) => ({ ok: true as const, value })).catch((error: unknown) => ({ ok: false as const, error }));
     const firstLoad = !this.catalogLoaded();
@@ -662,14 +676,13 @@ export class IndexOpsStore {
     if (sequence !== this.catalogSequence) {
       return;
     }
-    this.catalogLoading.set(false);
     this.catalogLoaded.set(true);
     if (indices.ok) {
       this.indices.set(Array.isArray(indices.value) ? indices.value : []);
       this.catalogError.set(undefined);
     } else if (this.indices() === undefined) {
       this.catalogError.set(readableReason(indices.error) ?? 'The cluster did not answer the request for its index list.');
-      this.alerts.error(failureMessage('Could not load indices', indices.error), indices.error);
+      this.alerts.error(failureMessage('Could not load the index list', indices.error), indices.error);
     }
     // The other lists are best effort: they refine names and choices.
     if (aliases.ok && Array.isArray(aliases.value)) {
@@ -679,10 +692,23 @@ export class IndexOpsStore {
       this.dataStreamList.set(streams.value);
     }
     if (nodes.ok && Array.isArray(nodes.value)) {
+      this.nodesSequence++;
       this.nodes.set(nodes.value);
     }
     if (settings?.ok) {
       this.watermarks.set(diskWatermarks(settings.value));
+    }
+  }
+
+  private async loadNodes(): Promise<void> {
+    const sequence = ++this.nodesSequence;
+    try {
+      const nodes = await this.api.post<readonly RawNode[]>('nodes');
+      if (sequence === this.nodesSequence && Array.isArray(nodes)) {
+        this.nodes.set(nodes);
+      }
+    } catch {
+      // Best effort: the last answer stays, the next refresh tries again.
     }
   }
 
@@ -691,7 +717,7 @@ export class IndexOpsStore {
     void this.loadCatalog();
   }
 
-  /** Loads the resize source; returns whether polling should go on. */
+  /** Loads the resize source; returns it, or `null` when it is missing, ambiguous or the answer is stale. */
   async loadSource(name: string, quiet = false): Promise<SourceIndex | null> {
     const sequence = ++this.sourceSequence;
     if (!quiet && this.sourceLookup().state !== 'ready') {
@@ -979,8 +1005,7 @@ export class IndexOpsStore {
     this.step.set(step);
     const position = WIZARD_STEPS.findIndex((entry) => entry.key === step);
     this.furthest.update((furthest) => Math.max(furthest, position));
-    const label = { operation: 'Operation', source: 'Source', options: 'Options', review: 'Review', run: 'Run' }[step];
-    this.announcement.set(`Step ${label}`);
+    this.announcement.set(`Step ${WIZARD_STEPS[position]?.label ?? step}`);
   }
 
   /**
@@ -1078,17 +1103,17 @@ export class IndexOpsStore {
     try {
       const raw = globalThis.sessionStorage?.getItem(CHANGES_KEY);
       const parsed: unknown = raw ? JSON.parse(raw) : null;
-      if (!parsed || typeof parsed !== 'object') {
+      if (!isRecord(parsed) || parsed['host'] !== (this.connection.host() ?? null)) {
         return null;
       }
-      const { host, changes } = parsed as { host?: unknown; changes?: Partial<WizardChanges> };
-      if (host !== (this.connection.host() ?? null) || !changes || changes.index !== index) {
+      const changes = parsed['changes'];
+      if (!isRecord(changes) || changes['index'] !== index) {
         return null;
       }
       return {
         index,
-        writeBlock: changes.writeBlock === true,
-        requiredNode: typeof changes.requiredNode === 'string' ? changes.requiredNode : null,
+        writeBlock: changes['writeBlock'] === true,
+        requiredNode: typeof changes['requiredNode'] === 'string' ? changes['requiredNode'] : null,
       };
     } catch {
       return null;
@@ -1300,10 +1325,13 @@ export class IndexOpsStore {
     try {
       await this.api.post<ResizeResponse>(request.endpoint, request.payload);
       this.finishedSource.set(source);
+      void this.loadCatalog();
       this.updateRun('resize', { phase: 'recovering' });
       this.announcement.set(`${target} created; waiting for its shards to start`);
       this.watchTarget(target);
     } catch (error: unknown) {
+      // The run step still offers to lift what the wizard set on the source before running.
+      this.finishedSource.set(source);
       this.updateRun('resize', { phase: 'failed', error: readableReason(error) ?? 'Elasticsearch refused the request.' });
       this.alerts.error(failureMessage(`Could not ${OPERATIONS[operation].label.toLowerCase()} ${source.name}`, error), error);
       this.announcement.set('The operation failed');
@@ -1603,7 +1631,9 @@ export class IndexOpsStore {
       cancelLabel: 'Keep running',
       tone: 'danger',
     });
-    if (!confirmed) {
+    // The run may have ended (or another started) while the dialog was open.
+    const current = this.run();
+    if (!confirmed || current.kind !== 'reindex' || current.taskId !== run.taskId || current.phase !== 'running' || current.cancelling) {
       return;
     }
     this.updateRun('reindex', { cancelling: true });
@@ -1632,6 +1662,10 @@ export class IndexOpsStore {
       this.alerts.success(`${source.name} accepts writes again`);
       this.announcement.set(`${source.name} accepts writes again`);
       await this.refreshFinishedSource();
+      // After a refused run the options step may come back: its checks read the loaded source.
+      if (this.sourceIndex()?.name === source.name) {
+        await this.loadSource(source.name, true);
+      }
       return true;
     } catch (error: unknown) {
       this.alerts.error(failureMessage(`Could not update the settings of ${source.name}`, error), error);

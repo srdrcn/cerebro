@@ -1,6 +1,6 @@
 import { elasticsearchReason } from '../../core/errors';
 import { formatBytes, formatNumber, humanize, pluralize, sentence } from '../../core/format';
-import { healthTone } from '../../core/health';
+import { HealthTone, healthTone } from '../../core/health';
 import { isRecord } from '../../core/json';
 import { INVALID_INDEX_NAME_CHARACTERS, invalidCharacters } from '../../core/names';
 import {
@@ -14,7 +14,6 @@ import {
   DiskLevel,
   DiskWatermarks,
   FailureGroup,
-  HealthColor,
   IndexDetailResponse,
   JsonObject,
   LookupIndexRow,
@@ -236,7 +235,7 @@ export function shardCopies(rows: readonly CatShardRow[] | null | undefined): Sh
   });
 }
 
-function healthFromCopies(copies: readonly ShardCopy[]): HealthColor {
+function healthFromCopies(copies: readonly ShardCopy[]): HealthTone {
   if (copies.length === 0) {
     return 'gray';
   }
@@ -1149,6 +1148,30 @@ export function parseAliasList(value: string): { readonly names: string[]; reado
     }
   }
   return { names, error: null };
+}
+
+/**
+ * The first error of the new index's alias list: a malformed name, or one
+ * that an index, a data stream or the new index itself already uses
+ * (Elasticsearch refuses those only after the source was prepared).
+ */
+export function targetAliasesError(value: string, taken: TakenNames, target: string): string | null {
+  const { names, error } = parseAliasList(value);
+  if (error) {
+    return error;
+  }
+  for (const name of names) {
+    if (name === target) {
+      return `"${name}" is the name of the new index: an alias cannot use it`;
+    }
+    if (taken.indices.includes(name)) {
+      return `"${name}" is an index: an alias cannot use its name`;
+    }
+    if (taken.dataStreams.includes(name)) {
+      return `"${name}" is a data stream: an alias cannot use its name`;
+    }
+  }
+  return null;
 }
 
 /** A default target name that is not taken: `logs-shrink`, `logs-shrink-2`, … */
@@ -2111,12 +2134,17 @@ export function rolloverChecks(input: RolloverCheckInput): Check[] {
       break;
     case 'ready': {
       const preview = input.dryRun.preview;
+      const single = preview.conditions.length === 1;
       const conditionText =
         preview.conditions.length === 0
           ? 'No conditions: the rollover happens unconditionally.'
           : preview.wouldRollOver
-            ? `${formatNumber(preview.metCount)} of ${pluralize(preview.conditions.length, 'condition')} met: it would roll over now.`
-            : `None of the ${pluralize(preview.conditions.length, 'condition')} is met yet: running it now changes nothing.`;
+            ? single
+              ? 'The condition is met: it would roll over now.'
+              : `${formatNumber(preview.metCount)} of ${pluralize(preview.conditions.length, 'condition')} met: it would roll over now.`
+            : single
+              ? 'The condition is not met yet: running it now changes nothing.'
+              : `None of the ${pluralize(preview.conditions.length, 'condition')} is met yet: running it now changes nothing.`;
       checks.push({
         id: 'dry-run',
         status: preview.wouldRollOver ? 'pass' : 'warn',

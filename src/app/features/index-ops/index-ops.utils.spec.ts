@@ -89,6 +89,7 @@ import {
   nextRolloverName,
   nodeOptions,
   parseAliasList,
+  targetAliasesError,
   parseCount,
   parseIndices,
   parseQuery,
@@ -415,6 +416,16 @@ describe('names', () => {
   it('parses alias lists', () => {
     expect(parseAliasList(' a, b ,a,')).toEqual({ names: ['a', 'b'], error: null });
     expect(parseAliasList('ok, Bad').error).toBe('Alias names must be lowercase (Bad)');
+  });
+
+  it('refuses target aliases named like an index, a data stream or the new index', () => {
+    const taken = { indices: ['products'], aliases: ['catalog'], dataStreams: ['events'] };
+    expect(targetAliasesError('fresh, products', taken, 'copy')).toBe('"products" is an index: an alias cannot use its name');
+    expect(targetAliasesError('events', taken, 'copy')).toBe('"events" is a data stream: an alias cannot use its name');
+    expect(targetAliasesError('copy', taken, 'copy')).toBe('"copy" is the name of the new index: an alias cannot use it');
+    expect(targetAliasesError('Bad', taken, 'copy')).toBe('Alias names must be lowercase (Bad)');
+    // Joining an existing alias is fine.
+    expect(targetAliasesError('catalog, fresh', taken, 'copy')).toBeNull();
   });
 
   it('suggests a free target name', () => {
@@ -777,6 +788,22 @@ describe('rollover', () => {
     ]);
     expect(ready[1]?.detail).toBe('Elasticsearch names the new index tmp-index-ops-roll-000002.');
     expect(ready[2]?.detail).toBe('1 of 5 conditions met: it would roll over now.');
+
+    // A single condition reads "the condition", not "1 of 1 condition".
+    const preview = interpretRollover(ROLLOVER_DRY_RUN);
+    const single = (met: boolean) =>
+      rolloverChecks({
+        target: roll,
+        newIndex: '',
+        newIndexError: null,
+        conditionsValid: true,
+        dryRun: {
+          state: 'ready',
+          preview: { ...preview, conditions: [{ key: 'max_docs', label: 'Maximum documents', value: '10', met }], metCount: met ? 1 : 0, wouldRollOver: met },
+        },
+      })[2]?.detail;
+    expect(single(true)).toBe('The condition is met: it would roll over now.');
+    expect(single(false)).toBe('The condition is not met yet: running it now changes nothing.');
 
     // orders-v2 is the only index of orders, without is_write_index: the alias moves; the name is missing, so no dry run yet.
     const unnamed = rolloverChecks({ target: orders, newIndex: '', newIndexError: null, conditionsValid: true, dryRun: { state: 'idle' } });

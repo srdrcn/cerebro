@@ -11,11 +11,10 @@
     </div>
   </header>
 
-  <div class="layout-sidebar-start repositories-layout">
-    <!-- Registered repositories -->
+  <div class="layout-sidebar-start">
     <div class="card list-card">
       <div class="card-header">
-        <h2 class="card-title spacer"><i class="bi bi-database" aria-hidden="true"></i> Registered</h2>
+        <h2 class="card-title spacer"><i class="bi bi-database" aria-hidden="true"></i> Repositories</h2>
         @if (repositories(); as all) {
           <span class="count-label">
             @if (query().trim() && all.length > filterThreshold) {
@@ -25,12 +24,7 @@
             }
           </span>
         }
-        <button
-          type="button"
-          class="btn btn-sm btn-soft"
-          [disabled]="saving() || blankForm()"
-          (click)="startNew()"
-        >
+        <button type="button" class="btn btn-sm btn-soft" [disabled]="saving()" (click)="startNew()">
           <i class="bi bi-plus-lg" aria-hidden="true"></i> New repository
         </button>
       </div>
@@ -146,23 +140,18 @@
               @if (updateMode()) {
                 <span class="truncate">Edit <span class="mono">{{ name().trim() }}</span></span>
               } @else {
-                Register repository
+                New repository
               }
             </h2>
             <p class="card-subtitle">
               @if (updateMode()) {
                 Saving re-registers the repository with the settings below.
               } @else {
-                Elasticsearch verifies that every node can reach the location.
+                Not saved yet
               }
             </p>
           </div>
         </div>
-        @if (updateMode()) {
-          <span class="badge badge-blue">Existing</span>
-        } @else {
-          <span class="badge badge-accent">New</span>
-        }
       </div>
 
       <form novalidate (ngSubmit)="save()">

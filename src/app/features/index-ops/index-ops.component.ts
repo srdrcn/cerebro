@@ -21,7 +21,6 @@ import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { PluralPipe } from '../../shared/format.pipes';
 import { OperationKind, WIZARD_STEPS, WizardStep, isOperationKind, isResizeKind } from './index-ops.models';
 import { IndexOpsStore } from './index-ops.store';
-import { OPERATIONS } from './index-ops.utils';
 import { OpsOperationStepComponent } from './steps/ops-operation-step.component';
 import { OpsReindexOptionsComponent } from './steps/ops-reindex-options.component';
 import { OpsResizeOptionsComponent } from './steps/ops-resize-options.component';
@@ -90,14 +89,12 @@ export class IndexOpsComponent implements PendingChangesAware {
   private readonly injector = inject(Injector);
 
   readonly steps = WIZARD_STEPS;
-  readonly operations = OPERATIONS;
-  readonly healthLabel = healthLabel;
-  readonly isResizeKind = isResizeKind;
 
   /** `op|index|task|target` of the URL, to tell links from the wizard's own URL updates. */
   private urlKey: string | null = null;
+  /** Counts links followed, so a link that waited for a dialog yields to a later one. */
+  private linkSequence = 0;
 
-  /** Why Continue did not move on (shown above the footer). */
   /** The step whose Continue was refused; the message follows the live state. */
   private readonly attempted = signal<WizardStep | null>(null);
   readonly blocked = computed<string | undefined>(() => {
@@ -311,45 +308,76 @@ export class IndexOpsComponent implements PendingChangesAware {
         return;
       }
       this.urlKey = key;
-      untracked(() => {
-        if (this.store.running()) {
-          return;
-        }
-        // A reload during (or after) a run follows it again instead of offering to start another one.
-        if (task) {
-          this.store.resumeReindex(task, index);
-        } else if (target && isResizeKind(kind)) {
-          void this.store.resumeResize(kind, index, target);
-        } else {
-          this.store.applyParams(kind, index);
-        }
-      });
+      untracked(() => void this.followLink(kind, index, task, target));
     });
     inject(DestroyRef).onDestroy(() => subscription.unsubscribe());
 
     // Keep the URL in step with the wizard (bookmarks, reloads), written
     // when the operation, the source or the step changes.
     effect(() => {
-      const op = this.store.operation();
-      const source = this.store.source();
-      const { task, target } = this.runParams();
+      this.store.operation();
+      this.store.source();
+      this.runParams();
       this.store.step();
-      untracked(() => {
-        const index = op === 'reindex' ? this.store.reindex().sources.trim() : source;
-        const key = `${op ?? ''}|${op ? index : ''}|${task ?? ''}|${target ?? ''}`;
-        if (key === this.urlKey) {
-          return;
-        }
-        this.urlKey = key;
-        void this.router.navigate([], {
-          relativeTo: this.route,
-          queryParams: { op: op ?? null, index: op && index ? index : null, task, target },
-          queryParamsHandling: 'merge',
-          replaceUrl: true,
-        });
-      });
+      untracked(() => this.writeUrl());
     });
+  }
 
+  /**
+   * A link followed while on the page (sidebar, command palette, Back and
+   * Forward). One without an operation, or with the operation and source
+   * already open, keeps the wizard; another one asks before it drops edits or
+   * forgets a block, and a declined one puts the wizard's URL back.
+   */
+  private async followLink(kind: OperationKind | null, index: string, task: string | null, target: string | null): Promise<void> {
+    const sequence = ++this.linkSequence;
+    const store = this.store;
+    const open = store.operation() !== null;
+    const same = kind === store.operation() && index === store.currentSourceParam() && !task && !target;
+    if (store.running() || (open && (!kind || same))) {
+      this.writeUrl(true);
+      return;
+    }
+    if (store.dirty()) {
+      const discard = await this.confirmDiscard();
+      if (sequence !== this.linkSequence) {
+        return;
+      }
+      if (!discard) {
+        this.writeUrl(true);
+        return;
+      }
+      if (store.sourceChanged()?.index !== index) {
+        // The user chose to leave the block in place: stop reminding.
+        store.forgetChanges();
+      }
+    }
+    // A reload during (or after) a run follows it again instead of offering to start another one.
+    if (task) {
+      store.resumeReindex(task, index);
+    } else if (target && isResizeKind(kind)) {
+      void store.resumeResize(kind, index, target);
+    } else {
+      store.applyParams(kind, index);
+    }
+  }
+
+  /** Writes the wizard's state to the URL (`force`: also when it matches the last URL seen). */
+  private writeUrl(force = false): void {
+    const op = this.store.operation();
+    const { task, target } = this.runParams();
+    const index = op === 'reindex' ? this.store.reindex().sources.trim() : this.store.source();
+    const key = `${op ?? ''}|${op ? index : ''}|${task ?? ''}|${target ?? ''}`;
+    if (key === this.urlKey && !force) {
+      return;
+    }
+    this.urlKey = key;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { op: op ?? null, index: op && index ? index : null, task, target },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   /* ---- Navigation ------------------------------------------------------------- */

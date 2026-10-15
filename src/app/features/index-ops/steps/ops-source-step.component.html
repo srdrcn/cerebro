@@ -10,7 +10,7 @@
         data-source-field
         aria-describedby="ops-source-hint"
         [value]="store.source()"
-        (change)="pickIndex($any($event.target).value)"
+        (change)="pickSource($any($event.target).value)"
       >
         <option value="" [selected]="!store.source()">Choose an index…</option>
         @if (store.source() && !groups().regular.includes(store.source()) && !groups().system.includes(store.source())) {
@@ -53,7 +53,7 @@
                 <strong>{{ store.sourceCandidates().length > 0 ? 'Pick an index.' : 'Could not load ' + store.source() + '.' }}</strong> {{ lookup.state === 'error' ? lookup.reason : '' }}
                 <div class="ops-callout-actions row-wrap">
                   @for (name of store.sourceCandidates(); track name) {
-                    <button type="button" class="chip-toggle mono" (click)="pickIndex(name)">{{ name }}</button>
+                    <button type="button" class="chip-toggle mono" (click)="pickSource(name)">{{ name }}</button>
                   } @empty {
                     <button type="button" class="btn btn-sm" (click)="store.retrySource()">
                       <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Try again
@@ -111,7 +111,7 @@
         <p class="ops-section__hint">Or jump to one of these:</p>
         <div class="ops-quick">
           @for (name of groups().regular.slice(0, 10); track name) {
-            <button type="button" class="chip-toggle mono" (click)="pickIndex(name)">{{ name }}</button>
+            <button type="button" class="chip-toggle mono" (click)="pickSource(name)">{{ name }}</button>
           }
         </div>
       </div>
@@ -140,7 +140,7 @@
           data-source-field
           aria-describedby="ops-target-hint"
           [value]="store.source()"
-          (change)="pickTarget($any($event.target).value)"
+          (change)="pickSource($any($event.target).value)"
         >
           <option value="" [selected]="!store.source()">Choose an alias or a data stream…</option>
           @if (store.source() && !store.rolloverTarget()) {

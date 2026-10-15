@@ -228,7 +228,7 @@ export class CreateIndexComponent implements PendingChangesAware {
     } catch (error: unknown) {
       if (sequence === this.indicesSequence && this.indices() === undefined) {
         this.indicesFailed.set(true);
-        this.alerts.error(failureMessage('Could not load the list of indices', error), error);
+        this.alerts.error(failureMessage('Could not load the index list', error), error);
       }
     }
   }

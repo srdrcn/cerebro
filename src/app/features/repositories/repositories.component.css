@@ -4,11 +4,6 @@
 
 /* Repository list ---------------------------------------------------- */
 
-/* Room for the list card header: title, count and "New repository". */
-.repositories-layout {
-  grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
-}
-
 .repo-item {
   position: relative;
   gap: var(--space-2);
@@ -283,12 +278,6 @@
   border-radius: var(--radius);
   color: var(--text-3);
   font-size: var(--text-sm);
-}
-
-@media (max-width: 1180px) {
-  .repositories-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 900px) {

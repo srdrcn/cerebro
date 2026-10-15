@@ -150,10 +150,6 @@ export class RepositoriesComponent implements PendingChangesAware {
     (this.repositories() ?? []).find((repository) => repository.name === this.name().trim()),
   );
   readonly updateMode = computed(() => this.original() !== undefined);
-  /** The form is already an empty "Register repository" form. */
-  readonly blankForm = computed(
-    () => this.editing() === null && !this.name() && !this.type() && this.extras().length === 0,
-  );
 
   /** What the form held when it was last opened or saved. */
   private readonly baseline = signal(formState('', '', {}, []));

@@ -11,7 +11,7 @@ const STATUS: Readonly<Record<CheckStatus, { readonly tone: string; readonly ico
 };
 
 const FIX_LABELS: Readonly<Record<CheckFix, string>> = {
-  'write-block': 'Block writes…',
+  'write-block': 'Block writes',
   prepare: 'Prepare source',
   'create-destination': 'Create index',
   'open-index': 'Open index',

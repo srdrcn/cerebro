@@ -6,9 +6,14 @@
         Legacy templates (<span class="mono">_template</span>) apply settings, mappings and aliases to new indices whose name matches their patterns.
       </p>
     </div>
+    <div class="page-header__actions">
+      <a class="btn" routerLink="/index_templates" [queryParams]="connection.hostQuery()">
+        <i class="bi bi-layers" aria-hidden="true"></i> Index templates
+      </a>
+    </div>
   </header>
 
-  <div class="layout-sidebar-start templates-layout">
+  <div class="layout-sidebar-start">
     <div class="card list-card">
       <div class="card-header">
         <h2 class="card-title spacer"><i class="bi bi-files" aria-hidden="true"></i> Templates</h2>

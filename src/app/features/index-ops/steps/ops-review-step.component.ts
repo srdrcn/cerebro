@@ -173,8 +173,12 @@ export class OpsReviewStepComponent {
       if (conditions === 0) {
         return `${what}, right away.${target?.implicitWrite ? ' The alias then points only to the new index.' : ''}`;
       }
-      const met = dry.state === 'ready' ? `${dry.preview.metCount === 0 ? 'none is' : `${formatNumber(dry.preview.metCount)} ${dry.preview.metCount === 1 ? 'is' : 'are'}`} at the dry run` : 'checked when it runs';
       const moves = target?.implicitWrite ? ` The alias then points only to the new index.` : '';
+      if (conditions === 1) {
+        const met = dry.state === 'ready' ? `it ${dry.preview.metCount > 0 ? 'is' : 'is not'} at the dry run` : 'checked when it runs';
+        return `${what} if the condition is met (${met}).${moves}`;
+      }
+      const met = dry.state === 'ready' ? `${dry.preview.metCount === 0 ? 'none is' : `${formatNumber(dry.preview.metCount)} ${dry.preview.metCount === 1 ? 'is' : 'are'}`} at the dry run` : 'checked when it runs';
       return `${what} if one of the ${pluralize(conditions, 'condition')} is met (${met}).${moves}`;
     }
     if (operation === 'reindex') {

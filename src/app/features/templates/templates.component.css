@@ -2,10 +2,6 @@
   display: block;
 }
 
-.templates-layout {
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-}
-
 /* ---- Template list ---- */
 
 .template-item {
@@ -122,12 +118,6 @@
 
 .footer-buttons {
   margin-left: auto;
-}
-
-@media (max-width: 1180px) {
-  .templates-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 760px) {

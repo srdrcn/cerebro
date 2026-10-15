@@ -79,8 +79,7 @@ import { OPERATIONS } from '../index-ops.utils';
     }
 
     .ops-operation:has(.ops-operation__button:focus-visible) {
-      outline: var(--focus-ring);
-      outline-offset: 2px;
+      box-shadow: var(--focus-ring);
     }
 
     .ops-operation__head {

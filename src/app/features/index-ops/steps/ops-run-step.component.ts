@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, inject } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ClipboardService } from '../../../core/clipboard.service';
 import { ConnectionService } from '../../../core/connection.service';
 import { DialogService } from '../../../core/dialog.service';
-import { formatCompact, formatDuration, formatNumber, pluralize, sentence } from '../../../core/format';
+import { formatCompact, formatDuration, formatNumber, sentence } from '../../../core/format';
 import { BytesPipe, DurationPipe, NumberPipe, PluralPipe } from '../../../shared/format.pipes';
 import { MeterComponent } from '../../../shared/meter.component';
 import { ReindexProgress, TaskOutcome } from '../index-ops.models';
@@ -21,7 +22,7 @@ const OUTCOMES: Readonly<Record<TaskOutcome, { readonly tone: string; readonly i
 /** Step 5: progress, result and finishing actions. */
 @Component({
   selector: 'cerebro-ops-run-step',
-  imports: [BytesPipe, DurationPipe, MeterComponent, NumberPipe, PluralPipe, RouterLink],
+  imports: [BytesPipe, DurationPipe, MeterComponent, NgTemplateOutlet, NumberPipe, PluralPipe, RouterLink],
   templateUrl: './ops-run-step.component.html',
   styleUrls: ['./ops-steps.css', './ops-run-step.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -169,6 +170,5 @@ export class OpsRunStepComponent {
     );
   }
 
-  readonly pluralize = pluralize;
   readonly sentence = sentence;
 }

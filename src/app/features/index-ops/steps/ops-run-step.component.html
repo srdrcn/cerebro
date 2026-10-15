@@ -9,6 +9,16 @@
           <i class="bi bi-x-circle" aria-hidden="true"></i>
           <div><strong>Elasticsearch refused the {{ resizeLabel() }}.</strong> {{ run.error }}</div>
         </div>
+        @if (store.finishedSource() && !store.sourceDeleted()) {
+          <section class="ops-section" aria-labelledby="ops-finish-title">
+            <div class="ops-section__head">
+              <h3 id="ops-finish-title" class="section-title" tabindex="-1"><i class="bi bi-database" aria-hidden="true"></i> Source</h3>
+            </div>
+            <ul class="ops-finish">
+              <ng-container *ngTemplateOutlet="sourceState; context: { $implicit: run.source.name }" />
+            </ul>
+          </section>
+        }
       }
       @default {
         @let stuck = stuckShard();
@@ -78,36 +88,7 @@
                 <span class="ops-finish__text"><span class="mono">{{ run.source.name }}</span> was deleted.</span>
               </li>
             } @else {
-              <li class="ops-finish__item">
-                <i class="bi" [class]="releaseRequest() ? 'bi bi-unlock' : 'bi bi-check-circle text-success'" aria-hidden="true"></i>
-                <span class="ops-finish__text">
-                  @if (releaseRequest()) {
-                    <span class="mono">{{ run.source.name }}</span> still {{ sourceChanges() }} (set by this wizard).
-                  } @else if (otherRestrictions().length === 0) {
-                    <span class="mono">{{ run.source.name }}</span> accepts writes and has no node requirement.
-                  } @else {
-                    Nothing this wizard set on <span class="mono">{{ run.source.name }}</span> is left.
-                  }
-                </span>
-                @if (releaseRequest()) {
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    [class.is-loading]="store.finishBusy() === 'release'"
-                    [disabled]="store.finishBusy() !== null"
-                    (click)="release()"
-                  >
-                    Allow writes again
-                  </button>
-                }
-              </li>
-              @for (note of otherRestrictions(); track note) {
-                <li class="ops-finish__item">
-                  <i class="bi bi-info-circle" aria-hidden="true"></i>
-                  <span class="ops-finish__text">{{ note }}</span>
-                  <a class="btn btn-sm" routerLink="/index_settings" [queryParams]="linkTo({ index: run.source.name })">Index settings</a>
-                </li>
-              }
+              <ng-container *ngTemplateOutlet="sourceState; context: { $implicit: run.source.name }" />
               @if (run.source.dataStream) {
                 <li class="ops-finish__item">
                   <i class="bi bi-water" aria-hidden="true"></i>
@@ -453,3 +434,37 @@
     }
   </div>
 }
+
+<!-- What the wizard left on the source (after the run, or after a refused run). -->
+<ng-template #sourceState let-name>
+  <li class="ops-finish__item">
+    <i class="bi" [class]="releaseRequest() ? 'bi bi-unlock' : 'bi bi-check-circle text-success'" aria-hidden="true"></i>
+    <span class="ops-finish__text">
+      @if (releaseRequest()) {
+        <span class="mono">{{ name }}</span> still {{ sourceChanges() }} (set by this wizard).
+      } @else if (otherRestrictions().length === 0) {
+        <span class="mono">{{ name }}</span> accepts writes and has no node requirement.
+      } @else {
+        Nothing this wizard set on <span class="mono">{{ name }}</span> is left.
+      }
+    </span>
+    @if (releaseRequest()) {
+      <button
+        type="button"
+        class="btn btn-sm"
+        [class.is-loading]="store.finishBusy() === 'release'"
+        [disabled]="store.finishBusy() !== null"
+        (click)="release()"
+      >
+        Allow writes again
+      </button>
+    }
+  </li>
+  @for (note of otherRestrictions(); track note) {
+    <li class="ops-finish__item">
+      <i class="bi bi-info-circle" aria-hidden="true"></i>
+      <span class="ops-finish__text">{{ note }}</span>
+      <a class="btn btn-sm" routerLink="/index_settings" [queryParams]="linkTo({ index: name })">Index settings</a>
+    </li>
+  }
+</ng-template>

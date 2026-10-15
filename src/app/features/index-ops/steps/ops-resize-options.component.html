@@ -43,7 +43,7 @@
                     <strong>{{ state.covered | num }} of {{ state.total | num }}</strong> shards have a copy on {{ node }}
                   </span>
                   <span class="text-secondary tabular">
-                    {{ state.moving | num }} {{ state.moving === 1 ? 'copy' : 'copies' }} moving
+                    {{ state.moving | num }} {{ state.moving | plural: 'copy' : 'copies' }} moving
                   </span>
                 </div>
                 <cerebro-meter [value]="prepareProgress()" [warn]="101" [danger]="101" [label]="'Shards gathered on ' + node" />
@@ -74,7 +74,7 @@
             <div>
               {{ node }} already holds a copy of every shard, so no shard needs to move.
               @if (!source.writeBlocked) {
-                Writes still need to be blocked: use <strong>Block writes…</strong> in the checks, or prepare the source on {{ node }} to pin the copies there as well.
+                Writes still need to be blocked: use <strong>Block writes</strong> in the checks, or prepare the source on {{ node }} to pin the copies there as well.
               }
             </div>
           </div>
@@ -128,12 +128,16 @@
                     <span class="ops-node__meta">
                       Holds {{ node.shardsHere | num }} of {{ source.primaries | num }} shards ·
                       {{ node.diskAvailable | bytes }} free of {{ node.diskTotal | bytes }}
+                      @if (node.diskPercent !== null) {
+                        · {{ node.diskPercent }}% used
+                      }
                       @if (node.diskAvailable !== null && node.diskAvailable < diskNeed(node.name)) {
                         · <span class="text-danger">needs about {{ diskNeed(node.name) | bytes }}</span>
                       }
                     </span>
                     @if (node.diskPercent !== null) {
-                      <cerebro-meter [value]="node.diskPercent" [small]="true" [label]="'Disk used on ' + node.name" />
+                      <!-- The percentage is in the text above: the radio's name stays a sentence. -->
+                      <cerebro-meter [value]="node.diskPercent" [small]="true" aria-hidden="true" />
                     }
                     @if (node.excluded) {
                       <span [id]="'ops-node-note-' + node.id" class="ops-node__note text-danger">

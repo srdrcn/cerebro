@@ -38,9 +38,8 @@
 }
 
 .ops-section__head .section-title:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 2px;
   border-radius: var(--radius-xs);
+  box-shadow: var(--focus-ring);
 }
 
 .ops-section__head .count-label,

@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRend
 import { RouterLink } from '@angular/router';
 import { ConnectionService } from '../../../core/connection.service';
 import { formatNumber, pluralize } from '../../../core/format';
-import { BytesPipe, NumberPipe } from '../../../shared/format.pipes';
+import { BytesPipe, NumberPipe, PluralPipe } from '../../../shared/format.pipes';
 import { MeterComponent } from '../../../shared/meter.component';
 import { CheckFix } from '../index-ops.models';
 import { IndexOpsStore } from '../index-ops.store';
@@ -14,7 +14,7 @@ type ResizeField = 'target' | 'shards' | 'replicas' | 'aliases';
 /** Step 3 of shrink, split and clone: preparation, target and checks. */
 @Component({
   selector: 'cerebro-ops-resize-options',
-  imports: [BytesPipe, MeterComponent, NumberPipe, OpsChecksComponent, RouterLink],
+  imports: [BytesPipe, MeterComponent, NumberPipe, OpsChecksComponent, PluralPipe, RouterLink],
   templateUrl: './ops-resize-options.component.html',
   styleUrls: ['./ops-steps.css', './ops-resize-options.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,

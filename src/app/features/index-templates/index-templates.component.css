@@ -17,10 +17,6 @@
   opacity: 0.6;
 }
 
-.it-layout {
-  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-}
-
 /* ---- List ---- */
 
 .it-item {
@@ -280,12 +276,6 @@ button.it-chip:focus-visible {
 
 .it-preview .card-header {
   align-items: flex-start;
-}
-
-@media (max-width: 1180px) {
-  .it-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 760px) {

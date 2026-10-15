@@ -74,6 +74,8 @@ import {
 type DraftField = keyof AliasDraftErrors;
 
 const PAGE_SIZE = 20;
+/** A refresh tick lists the indices again only once the list is this old (milliseconds). */
+const INDEX_LIST_MAX_AGE = 60_000;
 
 @Component({
   selector: 'cerebro-aliases',
@@ -277,6 +279,7 @@ export class AliasesComponent implements PendingChangesAware {
 
   private loadSequence = 0;
   private loadedHost: string | undefined;
+  private indicesLoadedAt = 0;
 
   constructor() {
     effect(() => {
@@ -286,11 +289,13 @@ export class AliasesComponent implements PendingChangesAware {
         return;
       }
       untracked(() => {
-        if (this.loadedHost !== undefined && this.loadedHost !== host) {
+        const sameHost = this.loadedHost === host;
+        if (this.loadedHost !== undefined && !sameHost) {
           this.resetForHost();
         }
         this.loadedHost = host;
-        void this.load();
+        // Aliases follow the cluster (rollovers move them); the index list only once it is a minute old.
+        void this.load(sameHost ? 'if-stale' : 'reload');
       });
     });
 
@@ -312,13 +317,19 @@ export class AliasesComponent implements PendingChangesAware {
 
   // ---- Loading ------------------------------------------------------------
 
-  async load(): Promise<void> {
+  /**
+   * Loads the aliases and the index list. Listing indices makes every node
+   * compute index statistics, so a refresh tick (`if-stale`) lists them again
+   * only once the list is a minute old; opening, Reload and Apply always do.
+   */
+  async load(indexList: 'reload' | 'if-stale' = 'reload'): Promise<void> {
     const sequence = ++this.loadSequence;
     this.loading.set(true);
+    const listIndices = indexList === 'reload' || this.indices() === undefined || Date.now() - this.indicesLoadedAt >= INDEX_LIST_MAX_AGE;
     try {
       const [aliases, indices] = await Promise.allSettled([
         this.api.post<readonly RawAliasRecord[]>('aliases/get_aliases'),
-        this.api.post<readonly string[]>('commons/indices'),
+        listIndices ? this.api.post<readonly string[]>('commons/indices') : Promise.resolve(null),
       ]);
       if (sequence !== this.loadSequence) {
         return;
@@ -342,7 +353,10 @@ export class AliasesComponent implements PendingChangesAware {
         this.alerts.error(failureMessage('Could not load aliases', aliases.reason), aliases.reason);
       }
       if (indices.status === 'fulfilled') {
-        this.indices.set(sortIndexOptions(indices.value));
+        if (indices.value !== null) {
+          this.indices.set(sortIndexOptions(indices.value));
+          this.indicesLoadedAt = Date.now();
+        }
       } else if (aliasesLoaded) {
         this.alerts.error(failureMessage('Could not load the index list', indices.reason), indices.reason);
       }

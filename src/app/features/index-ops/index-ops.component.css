@@ -120,9 +120,8 @@
 }
 
 #ops-step-title:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 2px;
   border-radius: var(--radius-xs);
+  box-shadow: var(--focus-ring);
 }
 
 .ops-footer {
@@ -232,12 +231,14 @@
     padding: 6px 4px;
   }
 
-  .ops-stepper__text {
-    display: none;
-  }
-
-  .is-current .ops-stepper__text {
-    display: grid;
+  /* Only the current step shows its label; the others keep it for screen readers. */
+  .ops-stepper__item:not(.is-current) .ops-stepper__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .ops-stepper__list {

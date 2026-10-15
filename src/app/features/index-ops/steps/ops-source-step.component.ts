@@ -53,11 +53,8 @@ export class OpsSourceStepComponent {
     return this.groups().regular.filter((name) => !named.has(name));
   });
 
-  pickIndex(name: string): void {
-    void this.store.chooseSource(name);
-  }
-
-  pickTarget(name: string): void {
+  /** The source index (resize) or the alias / data stream (rollover). */
+  pickSource(name: string): void {
     void this.store.chooseSource(name);
   }
 

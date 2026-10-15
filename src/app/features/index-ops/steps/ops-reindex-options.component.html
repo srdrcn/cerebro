@@ -191,7 +191,7 @@
         @if (showError('requestsPerSecond'); as error) {
           <p id="ops-rps-error" class="field-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ error }}</p>
         } @else {
-          <p id="ops-rps-hint" class="field-hint">Spares a busy cluster (requests_per_second); a running reindex can be rethrottled under Tasks.</p>
+          <p id="ops-rps-hint" class="field-hint">Spares a busy cluster (requests_per_second).</p>
         }
       </div>
     </div>
@@ -203,14 +203,14 @@
       <button
         type="button"
         class="link-button text-sm ops-section__aside"
-        [attr.aria-expanded]="showAdvanced() || !!options().script"
+        [attr.aria-expanded]="showAdvanced()"
         aria-controls="ops-script-body"
         (click)="showAdvanced.set(!showAdvanced())"
       >
-        {{ showAdvanced() || options().script ? 'Hide' : 'Add a script' }}
+        {{ showAdvanced() ? 'Hide' : options().script.trim() ? 'Show script' : 'Add a script' }}
       </button>
     </div>
-    @if (showAdvanced() || options().script) {
+    @if (showAdvanced()) {
       <div id="ops-script-body" class="field">
         <span class="field-label">Painless script <span class="optional">optional</span></span>
         <cerebro-code-editor
@@ -228,6 +228,8 @@
           Runs on every document (<span class="mono">ctx._source</span>, <span class="mono">ctx._id</span>, <span class="mono">ctx.op</span>).
         </p>
       </div>
+    } @else if (options().script.trim()) {
+      <p id="ops-script-body" class="ops-section__hint">A script is set: it runs on every document while it is copied.</p>
     } @else {
       <p id="ops-script-body" class="ops-section__hint">Transform documents while they are copied, for example to rename a field.</p>
     }
