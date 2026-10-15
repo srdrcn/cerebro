@@ -1,0 +1,59 @@
+# Dependabot opens pull requests for outdated dependencies. They run the same
+# build-and-security workflow as every other pull request.
+#
+# sbt gets version updates only: Dependabot raises no security alerts or
+# security pull requests for build.sbt, so backend advisories still come from
+# the Trivy scans in CI (see "Updating dependencies" in CONTRIBUTING.md).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # The Angular packages must move in lockstep. The Angular compiler also
+      # accepts a single TypeScript minor version, so TypeScript moves with them.
+      angular:
+        patterns:
+          - "@angular/*"
+          - typescript
+      # Every other minor and patch update in one pull request. Major updates
+      # get a pull request each.
+      minor-and-patch:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@angular/*"
+          - typescript
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # The Dockerfile's three base images, pinned by digest on their FROM lines.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: sbt
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Play's libraries and its sbt plugin share one version.
+      play:
+        patterns:
+          - "org.playframework*"
+      # build.sbt keeps every Jackson module on one version (jacksonVersion).
+      jackson:
+        patterns:
+          - "com.fasterxml.jackson*"

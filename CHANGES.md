@@ -329,14 +329,16 @@ First cerebro release.
 #### Security updates
 - Bump socket.io to 2.4.1
 
-### Unreleased
+### v0.10.0 - Unreleased
+
+First release of this fork of [lmenezes/cerebro](https://github.com/lmenezes/cerebro). The web interface is rewritten from scratch, the server moves to Play 3 and Java 17, and the Docker image and the release packages are published from CI.
 
 #### New features
 
 - Live activity: the overview shows indexing and search rates, search latency, heap and CPU over the last minutes, and the nodes page adds per-node charts with thread pool queues and rejections (`/nodes?node=` opens a node).
 - Performance page: hot threads parsed into readable cards with the busiest pool explained, live thread pools with new rejections highlighted, the master's pending tasks, and a slow log threshold editor with presets that verifies what it applied.
 - Index operations wizard: shrink, split, clone, roll over and reindex with live preflight checks (write block, shard placement, disk, document limits, exact split counts), a review of the exact requests, and progress tracking with cancel and finishing actions; reachable from the Actions menu of index details.
-- Cluster doctor: a one click health check of the whole cluster. It finds unassigned shards, replicas that can never be allocated, indices without replicas, nodes above the disk watermarks (with headroom), read-only blocks, oversized and over-sharded indices, the shard limit, ILM errors, heap and old-generation memory pressure, garbage collection, tripped circuit breakers, disabled allocation, transient settings and upgrade deprecations, shows Elasticsearch's health report on 8.7+, explains each problem and offers a confirmed one-click fix or a link to the page that handles it.
+- Cluster doctor: a one-click health check of the whole cluster. It finds unassigned shards, replicas that can never be allocated, indices without replicas, nodes above the disk watermarks (with headroom), read-only blocks, oversized and over-sharded indices, the shard limit, ILM errors, heap and old-generation memory pressure, garbage collection, tripped circuit breakers, disabled allocation, transient settings and upgrade deprecations, shows Elasticsearch's health report on 8.7+, explains each problem and offers a confirmed one-click fix or a link to the page that handles it.
 - Shard allocation explain: why a shard is unassigned or stays on its node, with every node's deciders, reachable from the overview's shard menus and the unassigned-shards warning.
 - Index details page with overview, settings, mappings, statistics, aliases, shards and lifecycle tabs.
 - Composable index templates and component templates: list, edit, delete and preview the settings, mappings and aliases a template resolves to.
@@ -344,7 +346,7 @@ First cerebro release.
 - Ingest pipelines: list, edit, delete and simulate against sample documents, with per-processor results.
 - Tasks: running tasks with sub-tasks nested under their parent, details, and cancellation of cancellable tasks.
 - Recoveries: live progress of shard recoveries (files, bytes, translog, stage and source).
-- REST console saved requests: name, rename, duplicate and update favourites, with JSON export and import.
+- REST console saved requests: name, rename, duplicate and update favorites, with JSON export and import.
 
 #### User interface
 
@@ -362,7 +364,7 @@ First cerebro release.
 
 #### Bug fixes
 
-- Snapshot creation now honours "ignore unavailable indices" and "include global state" (the options were sent with the wrong field names and ignored by Elasticsearch).
+- Snapshot creation now honors "ignore unavailable indices" and "include global state" (the options were sent with the wrong field names and ignored by Elasticsearch).
 - Aliases report their write index and hidden flags.
 - The overview computes disk usage from the space available to Elasticsearch, matching the nodes view and the disk allocation thresholds.
 - Repeated identical errors (for example while the cluster is unreachable) no longer flood the screen.
@@ -378,7 +380,7 @@ First cerebro release.
 - Confirmation dialogs close when the page changes (Back/Forward included), so confirming can no longer act on a page that was left.
 - Notifications no longer stay paused after the hovered one is dismissed, and they rise above sticky Save / Apply bars instead of covering them.
 - Long error reasons and index names wrap instead of widening the page on phones.
-- Cancelling "Switch cluster" because of unsaved edits keeps the page connected.
+- Canceling "Switch cluster" because of unsaved edits keeps the page connected.
 - Requests without a target host are answered with 400 "Missing required parameter host" instead of a 500.
 
 #### Maintenance
@@ -388,6 +390,24 @@ First cerebro release.
 - CI runs on pushes and pull requests to `main`.
 - `public/js` is build output and no longer tracked in git; run `npm run build` before `sbt run` / `sbt stage`.
 - Docker examples and documentation use the in-repository image (`chosenwar/cerebro`).
+- Remove the Debian, RPM and systemd packaging from the build; it still pointed at the original project. Releases ship the `.zip` and `.tgz` server packages and the Docker image.
+- Add a Dependabot configuration (`.github/dependabot.yml`) with weekly checks for npm packages (the `@angular/*` packages and TypeScript in one group, every other minor and patch update in another), GitHub Actions, the Dockerfile's base images (now pinned on their `FROM` lines) and the sbt build (Play and Jackson each in one group).
+
+#### Releases
+
+- Version 0.10.0, set in `build.sbt` and `package.json`.
+- CI publishes the Docker image to Docker Hub as [`chosenwar/cerebro`](https://hub.docker.com/r/chosenwar/cerebro) for linux/amd64 and linux/arm64, with SBOM and provenance attestations, after the build, tests and security scans have passed. A push to `main` publishes the tags `latest` and `sha-<short commit>`; a version tag `vX.Y.Z` publishes `X.Y.Z` and `X.Y`. `latest` follows `main`, not the latest release.
+- CI also runs on version tags. A tag `vX.Y.Z` must match the version in `build.sbt`, and creates a GitHub release with the server packages `cerebro-X.Y.Z.zip` and `cerebro-X.Y.Z.tgz`; the release notes are the version's section of this file.
+- The Docker Compose examples use `chosenwar/cerebro:latest`.
+
+#### Documentation and community
+
+- Rewrite the README for this fork, with screenshots, installation from the Docker image or a release package, upgrade notes for users of the original project, configuration and authentication.
+- Rewrite the OpenLDAP examples (`examples/open_ldap` and `examples/open_ldap_group`) with step-by-step instructions to sign in and the correct group search filter.
+- Rewrite the contributing guide (`CONTRIBUTING.md`) for this fork: development setup, the checks to run before a pull request, updating dependencies and the release steps.
+- Add a code of conduct (`CODE_OF_CONDUCT.md`, Contributor Covenant 2.1).
+- Add a security policy (`SECURITY.md`): report vulnerabilities through GitHub's private vulnerability reporting; the latest release and `main` are supported.
+- Add issue forms for bug reports and feature requests, and a pull request template. Blank issues are turned off.
 
 #### Security updates
 
@@ -405,3 +425,12 @@ First cerebro release.
 
 - Preserve the existing cluster endpoints (except the unused `/commons/nodes`), response envelopes, SQLite REST history and all 13 UI workflows.
 - Preserve legacy `#!/...` bookmarks by rewriting them to Angular hash routes before startup.
+- The `secret` key of the original configuration files is still read (`CEREBRO_SECRET` and `-Dplay.http.secret.key` take precedence), but cerebro refuses to start with the value published in the original `conf/application.conf`, since anyone could sign a session cookie with it. The release packages and the Docker image do not start without a secret.
+- The secret must be at least 32 characters long (Play 3 signs the session cookie with HS256), for example `openssl rand -base64 48`. Changing it signs everyone out once.
+- Requests for any host other than `localhost`, `127.0.0.1` or a `.local` name are answered with 400. Allow more with `CEREBRO_ALLOWED_HOST` or `play.filters.hosts.allowed`; `["."]` allows every host.
+- Scripts that POST to cerebro's own endpoints with a cookie or an `Authorization` header (for example the basic auth of a reverse proxy) must send the `Csrf-Token` header with the session cookie it belongs to; the README section "Upgrading from lmenezes/cerebro" shows where to get both.
+- Responses carry `X-Frame-Options: DENY`. Set `play.filters.headers.frameOptions = "SAMEORIGIN"` to embed cerebro in a page of the same origin.
+- Settings under `akka.`, `play.akka.` and `play.server.akka.` are now `pekko.`, `play.pekko.` and `play.server.pekko.`.
+- Docker: options after the image name and in `JAVA_OPTS` are passed to Java, as with the original image (the `-J` prefix is not supported). The image sets `-Ddata.path=/var/lib/cerebro/cerebro.db`, which takes precedence over `data.path` in a mounted configuration file: move the old `cerebro.db` into the `/var/lib/cerebro` volume and `chown 65532:65532` it, or pass `-Ddata.path`. The image runs as UID 65532 instead of 1000.
+- LDAP: the original ignored `method` (`LDAP_METHOD`) and always made a simple bind. `none`, `anonymous` and an empty value still mean a simple bind with the user's password. `simple` and the SASL mechanisms `DIGEST-MD5`, `CRAM-MD5` and `PLAIN` are passed to JNDI; any other value, such as `EXTERNAL` or `GSSAPI`, which do not check the user's password, stops the start.
+- The README section "Upgrading from lmenezes/cerebro" describes these changes for existing installations.

@@ -7,12 +7,12 @@ design system every page must follow.
 
 ## Architecture
 
-```
+```text
 src/
   main.ts                 bootstraps AppComponent (and rewrites legacy #!/ URLs)
   styles.css              design system entry point (imports styles/*.css)
   styles/
-    tokens.css            colours, spacing, radii, shadows — light + dark
+    tokens.css            colors, spacing, radii, shadows — light + dark
     base.css              reset and element defaults
     components.css        reusable classes (buttons, cards, tables, …)
     shell.css             sidebar, top bar, toasts, command palette
@@ -32,22 +32,22 @@ src/
 | Service | Purpose |
 | --- | --- |
 | `ClusterApiService` | `post<T>(path, payload)` calls a Play endpoint. The connected host and credentials are merged into every payload. Resolves with the inner `body` for 2xx, rejects with `ClusterApiError` (`status`, `body`) otherwise. Network failures are already reported with a toast. An Elasticsearch 401 sends the user to the sign-in form of Connect once (also for concurrent requests), replacing the history entry and passing `returnUrl` so signing in returns to the page; nothing happens while already on Connect. The rejected `ClusterApiError` is marked as reported, so the page's own error toast is skipped. |
-| `ConnectionService` | `host()`, `connected()`, `hostQuery()` (query params every in-app link must carry), `connect()`, `disconnect()` (navigates to Connect first and only clears the connection when the navigation was not cancelled by unsaved edits), `followUrlHost()`. The `?host=` of the URL always wins: `requireConnection` switches to it (dropping credentials), cluster routes re-run their guards when only `host` changes (`hostOrParamsChange`) and `ClusterRouteReuseStrategy` (`cluster-route-reuse.ts`) then creates the page again, so pages never need to reset themselves for another cluster. |
+| `ConnectionService` | `host()`, `connected()`, `hostQuery()` (query params every in-app link must carry), `connect()`, `disconnect()` (navigates to Connect first and only clears the connection when the navigation was not canceled by unsaved edits), `followUrlHost()`. The `?host=` of the URL always wins: `requireConnection` switches to it (dropping credentials), cluster routes re-run their guards when only `host` changes (`hostOrParamsChange`) and `ClusterRouteReuseStrategy` (`cluster-route-reuse.ts`) then creates the page again, so pages never need to reset themselves for another cluster. |
 | `RefreshService` | `tick()` signal increments on every auto refresh / manual refresh. Views that show live data read it inside an `effect` to reload. `refresh()` forces a reload after a mutation. `setInterval()`, and `toggle()` / `resume()` that restore the interval used before pausing. |
 | `AlertService` | Toasts: `success(msg, details?)`, `info`, `warn`, `error(msg, error)`. Pass the caught error as the second argument so the user can expand the details. Identical toasts are folded together, and an error already reported by `ClusterApiService` ("Error connecting to the server") is not shown a second time. Errors stay until dismissed; other toasts time out, and hovering a toast or focusing the stack pauses them (`pauseAll()` / `resumeAll()`). The stack rises above sticky action bars (`--toast-offset`, see rule 12). |
 | `DialogService` | `confirm({ title, message?, items?, confirmLabel?, tone? })` → `Promise<boolean>`; `showJson(title, value, subtitle?)` opens a read-only JSON viewer (a compact dialog sized to short documents, a tall one from 30 lines). A dialog belongs to its page: a navigation (Back/Forward included) closes it and its confirmation resolves `false`; the discard-changes guard asks after that point. |
 | `ClipboardService` | `copyAndNotify(value, what)` copies and toasts with the app-wide wording: "Request body copied to the clipboard" / "Could not copy the request body: <reason>" (`what` in lower case). Use it for every copy action; `copy(text, onSuccess?, onFailure?)` is the low-level form. |
 | `ClusterStatusService` | Cluster health/name polled by the shell; also sets the document title and favicon. A new host clears the previous cluster's name, health and user until it answers. |
-| `ClusterChangesService` | Announces nodes that joined or left and indices created or deleted outside the app. Index changes made through `overview/delete_indices`, `create_index/create` and `snapshots/restore` are recognised automatically (via `ClusterApiService.onSuccess`); call `expect({ created, deleted })` after other endpoints that create or delete indices so the user is not told twice. |
+| `ClusterChangesService` | Announces nodes that joined or left and indices created or deleted outside the app. Index changes made through `overview/delete_indices`, `create_index/create` and `snapshots/restore` are recognized automatically (via `ClusterApiService.onSuccess`); call `expect({ created, deleted })` after other endpoints that create or delete indices so the user is not told twice. |
 | `ThemeService` | `preference()`, `resolved()`, `set()`, `cycle()`. |
 | `format.ts` | `formatBytes`, `formatNumber`, `formatCompact`, `formatDuration`, `formatDate`, `formatTimestamp`, `formatRelative`, `pluralize` ("3 nodes"), `plural` (the noun alone, for labels that style the number), `sentence`, `humanize`, `severity`, `clampPercent`, `textMatcher(query)` (compiles a filter once: case-insensitive regular expression when valid, substring otherwise; use it for every list or table filter), `listSample(names, limit)` ("logs, metrics and 4 more" in sentences), `sortByName`, `sortIndexNames` (regular indices first, dot-prefixed system and hidden ones last) and `groupIndexNames` (the same split as `{ regular, system }` for `<optgroup>`s). Never filter with a bare `includes()`: all filters accept the same queries. |
 | `errors.ts` | `elasticsearchReason(error)` extracts the most specific readable reason from a `ClusterApiError`, an Elasticsearch error body, a string or an `Error` (HTML error pages are ignored); `readableReason(error)` returns it as a sentence for error states; `failureMessage(action, error)` builds "Could not delete index: no such index [logs]"; `isUnknownEndpoint(error, endpoints?)` tells an Elasticsearch that does not know an API (404/405, "no handler found", `_data_stream` read as an invalid index name) from one that is down or refusing, for "needs Elasticsearch x.y" hints. |
-| `health.ts` | `healthTone(status)` (`green` / `yellow` / `red` / `gray`, case-insensitive) and `healthLabel(status)` for Elasticsearch health colours; `HealthTone` is the only health union; `healthFromShardCopies(copies)` derives an index's health from its shard copies by Elasticsearch's rules when the statistics do not say it. |
+| `health.ts` | `healthTone(status)` (`green` / `yellow` / `red` / `gray`, case-insensitive) and `healthLabel(status)` for Elasticsearch health colors; `HealthTone` is the only health union; `healthFromShardCopies(copies)` derives an index's health from its shard copies by Elasticsearch's rules when the statistics do not say it. |
 | `json.ts` | `isRecord`, `stringList`, `toNumber` (a number or numeric string, as `_cat` returns them) for defensive parsing of Elasticsearch responses; `stringifyForDisplay` (strings as they are, anything else as indented JSON) for JSON viewers and alert details. |
 | `layout.ts` | `STACKED_LAYOUT_QUERY` (the 1180px breakpoint of rule 11), `isStackedLayout()`, `revealWhenStacked(element, { onlyBelowFold? })`: after a pick in a master/detail list, scrolls the editor or detail into view when the layout is stacked. Never repeat the breakpoint in TypeScript. |
 | `names.ts` | `validateResourceName(name, noun)` (template, snapshot and repository names), `indexNameFormatError(name)` (the index name format rules, not whether the name is taken) and the invalid character list for index names (`INVALID_INDEX_NAME_CHARACTERS`). ILM policy and pipeline ids follow their own rules in their features. |
 | `shards.ts` | `unassignedReason(reason)`: label and explanation of an `unassigned.reason`. |
-| `tasks.ts` | `cancelFailure(response)`: why `_tasks/<id>/_cancel` cancelled nothing (Elasticsearch answers 200 with `node_failures` / `task_failures`), `null` when it did. |
+| `tasks.ts` | `cancelFailure(response)`: why `_tasks/<id>/_cancel` canceled nothing (Elasticsearch answers 200 with `node_failures` / `task_failures`), `null` when it did. |
 | `MetricsService` | Live node activity. `attach(destroyRef?)` returns a release function; it samples `metrics/nodes` on refresh ticks only while something is attached, keeps the history across pages and resets it on host change. Signals `history`, `nodes`, `latest`, `ready`, `sampling`, `failed`, `lastError`, `late`, `interval`, `paused`; `sampleNow()`. |
 | `metrics.ts` | Pure sampling logic: `parseNodeMetrics`, `buildHistory` (rates from each node's own timestamps, latencies Δtime/Δcount, cluster sums rates and averages gauges, counter resets and gaps give `null`), `METRICS` definitions (their labels are the names every page uses), `formatRate`, `formatLatency`, `metricParts`, `seriesTone`, `metricFormatter(key)` (one stable formatter per metric for chart `[format]` inputs), `answeredLabel(history)` ("2 of 3 nodes answered"). |
 | `node-attributes.ts` | `isInternalAttribute` (hides `ml.*`, `xpack.*`, `transform.*`). |
@@ -60,7 +60,7 @@ src/
 
 | Selector | Usage |
 | --- | --- |
-| `<cerebro-menu>` | Dropdown rendered in the top layer (never clipped). Project `<i trigger class="bi …">` (or any element with the `trigger` attribute) and `.menu-item` buttons/links, `.menu-label`, `.menu-separator`. Inputs: `label` (aria-label), `align="start|end"`, `triggerClass` (defaults to an icon button), `minWidth`. Clicking a `.menu-item` closes the menu. |
+| `<cerebro-menu>` | Dropdown rendered in the top layer (never clipped). Project `<i trigger class="bi …">` (or any element with the `trigger` attribute) and `.menu-item` buttons/links, `.menu-label`, `.menu-separator`. Inputs: `label` (aria-label), `align="start\|end"`, `triggerClass` (defaults to an icon button), `minWidth`. Clicking a `.menu-item` closes the menu. |
 | `<cerebro-code-editor>` | Ace JSON/text editor. `[(value)]`, `mode`, `readOnly`, `placeholder`, `minLines`/`maxLines` (auto height) or `fill` (fills the CSS height of the host), `flush`, `wrap`, `(submit)` on Ctrl/⌘+Enter. `invalid` and `describedBy` mark it invalid and link its field error. Call `format()` via a template reference to pretty-print. Tab and Shift+Tab move focus out of the editor (it never traps the keyboard); Ctrl+] and Ctrl+[ indent and outdent; Ctrl/⌘+K is left to the command palette. The page scrolls to keep the caret visible and clear of sticky bars (top bar, sticky card footers). `flush` editors draw an inset focus ring (they have no border, and read-only ones no caret). |
 | `<cerebro-search>` | Search field with icon and clear button: `[(value)]`, `placeholder`, `ariaLabel`, `small`. |
 | `<cerebro-empty>` | Empty/error state: `icon`, `heading`, `text`, optional projected action buttons, `compact`, `tone="success"` (green icon tile for "all good" states). Long reasons wrap. |
@@ -123,13 +123,13 @@ src/
 
 ## Design system
 
-The UI is a calm, data-dense console with a single accent colour (cerebro
-green) and semantic colours for cluster health. It must look right in **both
+The UI is a calm, data-dense console with a single accent color (cerebro
+green) and semantic colors for cluster health. It must look right in **both
 light and dark themes** and down to phone width.
 
 ### Rules
 
-1. Never hard-code colours, shadows or radii; use the tokens from
+1. Never hard-code colors, shadows or radii; use the tokens from
    `styles/tokens.css` (`var(--text-2)`, `var(--surface-2)`, `var(--red)`,
    `var(--radius-2xs)` for 2–3px indicator bars, `var(--radius-full)` for
    pills, …).
@@ -165,7 +165,7 @@ light and dark themes** and down to phone width.
    controls stack under 760px. Wide tables scroll horizontally inside
    `.table-wrap`.
 12. Sticky bars never hide keyboard focus (WCAG 2.4.11). Browsers only
-   honour the scroll container's `scroll-padding` when focus moves (not the
+   honor the scroll container's `scroll-padding` when focus moves (not the
    field's `scroll-margin`), so `html` carries it: `base.css` clears the top
    bar, and "Sticky bars and keyboard focus" in `components.css` widens it
    with `html:has(…)` while the settings toolbar, the pending-changes bar or

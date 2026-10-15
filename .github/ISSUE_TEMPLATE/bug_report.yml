@@ -1,0 +1,102 @@
+name: Bug report
+description: Report something in cerebro that does not work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a problem.
+
+        Do not report security vulnerabilities in a public issue. Follow the [security policy](https://github.com/srdrcn/cerebro/security/policy) instead.
+
+        This repository is a fork of [lmenezes/cerebro](https://github.com/lmenezes/cerebro) with its own releases and Docker image. Report problems with this version here.
+
+  - type: input
+    id: version
+    attributes:
+      label: cerebro version or image tag
+      description: |
+        The version is shown at the bottom of the connect screen. If you run the Docker image, also give its tag (for example `latest`, `sha-1a2b3c4` or `0.10.0`). If you built from source, give the commit.
+      placeholder: "v0.10.0, image chosenwar/cerebro:latest"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: How do you run cerebro?
+      options:
+        - Docker image (chosenwar/cerebro)
+        - Release package (zip or tgz)
+        - Built from source
+        - Other (describe it under "Steps to reproduce")
+    validations:
+      required: true
+
+  - type: input
+    id: elasticsearch
+    attributes:
+      label: Elasticsearch version
+      description: Also say whether security is enabled on the cluster.
+      placeholder: "8.15.3, security enabled"
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      description: For problems in the web interface. Say whether it happens in the light theme, the dark theme or at phone width.
+      placeholder: "Firefox 140 on Windows 11, dark theme"
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps that shows the problem.
+      placeholder: |
+        1. Connect to ...
+        2. Open the ... page
+        3. Click ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        The details of the error notification, messages from the browser console, and the server log. The server logs to its console (`docker logs <container>` for the Docker image) and to `logs/application.log` (`/opt/cerebro/logs/application.log` in the Docker image). This field is shown as a code block.
+      render: text
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: For visual problems. Drag images into this field.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched the [existing issues](https://github.com/srdrcn/cerebro/issues) and found none for this problem.
+          required: true
+        - label: I removed passwords, tokens, internal host names and other private data from this report.
+          required: true
