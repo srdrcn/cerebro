@@ -19,6 +19,14 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      # The two container builds, their archives and Trivy's vulnerability
+      # databases need more room than a hosted runner leaves free.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h /
+
       - name: Check out source
         uses: actions/checkout@v4
 
@@ -103,15 +111,6 @@ jobs:
           --output type=docker,dest=/tmp/cerebro-amd64.tar
           .
 
-      - name: Build arm64 container archive
-        run: >-
-          docker buildx build
-          --platform linux/arm64
-          --provenance=false
-          --sbom=false
-          --output type=docker,dest=/tmp/cerebro-arm64.tar
-          .
-
       - name: Scan complete amd64 image at every severity
         run: >-
           docker run --rm
@@ -128,6 +127,18 @@ jobs:
           --ignorefile /dev/null
           --exit-on-eol 1
           --exit-code 1
+
+      - name: Remove the amd64 archive
+        run: rm -f /tmp/cerebro-amd64.tar
+
+      - name: Build arm64 container archive
+        run: >-
+          docker buildx build
+          --platform linux/arm64
+          --provenance=false
+          --sbom=false
+          --output type=docker,dest=/tmp/cerebro-arm64.tar
+          .
 
       - name: Scan complete arm64 image at every severity
         run: >-
