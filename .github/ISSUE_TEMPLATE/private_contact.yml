@@ -1,0 +1,22 @@
+name: Private contact request
+description: Ask the maintainer for a private way to report a Code of Conduct concern.
+title: "Private contact request"
+labels: ["conduct"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to get a private way to send a report under the
+        [Code of Conduct](https://github.com/srdrcn/cerebro/blob/main/CODE_OF_CONDUCT.md).
+        This issue is public: do not describe the incident or name anyone here.
+        The maintainer will reply with a private contact.
+
+        For a security vulnerability, follow the
+        [security policy](https://github.com/srdrcn/cerebro/security/policy) instead.
+  - type: checkboxes
+    id: no-details
+    attributes:
+      label: Confirmation
+      options:
+        - label: This issue does not describe the incident or name anyone.
+          required: true

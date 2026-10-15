@@ -1,10 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-ARG NODE_IMAGE=node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d
-ARG SBT_IMAGE=sbtscala/scala-sbt:eclipse-temurin-17.0.20_8_1.13.0_2.13.18@sha256:d4792233706cda29a9c39569d915fc782c49268f25b9c72ac5b29f3002eb6959
-ARG RUNTIME_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:9cfb1be07b73a25a2a310d384cab6a9b6b74b6532f4892be9dccdc104eaf2628
-
-FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS frontend
+# Base images are pinned by digest on their FROM lines, where Dependabot
+# finds and updates them.
+FROM --platform=$BUILDPLATFORM node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d AS frontend
 WORKDIR /workspace
 
 COPY package.json package-lock.json angular.json tsconfig.json tsconfig.app.json tsconfig.spec.json ./
@@ -14,7 +12,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY src ./src
 RUN npm run typecheck && npm test && npm run build
 
-FROM --platform=$BUILDPLATFORM ${SBT_IMAGE} AS backend
+FROM --platform=$BUILDPLATFORM sbtscala/scala-sbt:eclipse-temurin-17.0.20_8_1.13.0_2.13.18@sha256:d4792233706cda29a9c39569d915fc782c49268f25b9c72ac5b29f3002eb6959 AS backend
 USER root
 WORKDIR /workspace
 
@@ -29,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/coursier \
 # A fixed name, so the entry point does not change with the version.
 RUN mv target/universal/stage/lib/cerebro.cerebro-*-launcher.jar target/universal/stage/lib/cerebro-launcher.jar
 
-FROM ${RUNTIME_IMAGE} AS runtime
+FROM cgr.dev/chainguard/wolfi-base@sha256:9cfb1be07b73a25a2a310d384cab6a9b6b74b6532f4892be9dccdc104eaf2628 AS runtime
 
 # Set by CI from build.sbt when it publishes the image.
 ARG APP_VERSION=dev

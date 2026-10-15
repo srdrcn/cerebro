@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a new feature or an improvement to an existing one.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the suggestion. Please search the [existing issues](https://github.com/srdrcn/cerebro/issues) first. If one already asks for the same thing, add your use case there.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what makes it hard or impossible today? Describe the problem before the solution.
+      placeholder: "When I ..., I have to ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How should cerebro solve it? If you know them, name the page it belongs on, the Elasticsearch APIs it needs and the Elasticsearch versions you use.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other solutions or workarounds you considered, for example a request in the REST console or another tool.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, mockups or links that help explain the idea.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to implement this myself (see [CONTRIBUTING.md](https://github.com/srdrcn/cerebro/blob/main/CONTRIBUTING.md)).
