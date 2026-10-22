@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/coursier \
 # A fixed name, so the entry point does not change with the version.
 RUN mv target/universal/stage/lib/cerebro.cerebro-*-launcher.jar target/universal/stage/lib/cerebro-launcher.jar
 
-FROM cgr.dev/chainguard/wolfi-base@sha256:9cfb1be07b73a25a2a310d384cab6a9b6b74b6532f4892be9dccdc104eaf2628 AS runtime
+FROM cgr.dev/chainguard/wolfi-base@sha256:bc76fa39ddd1482dd56a761b3331e03ba8f0e093ebb525618a56d014b480da88 AS runtime
 
 # Set by CI from build.sbt when it publishes the image.
 ARG APP_VERSION=dev
