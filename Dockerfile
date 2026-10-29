@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY src ./src
 RUN npm run typecheck && npm test && npm run build
 
-FROM --platform=$BUILDPLATFORM sbtscala/scala-sbt:eclipse-temurin-17.0.20_8_1.13.0_2.13.18@sha256:d4792233706cda29a9c39569d915fc782c49268f25b9c72ac5b29f3002eb6959 AS backend
+FROM --platform=$BUILDPLATFORM sbtscala/scala-sbt:eclipse-temurin-25.0.4_7_2.x@sha256:bc9af79b4c19d0c9383de635c0a509690a2d1408494a9243df3dab6331ea7eb0 AS backend
 USER root
 WORKDIR /workspace
 
